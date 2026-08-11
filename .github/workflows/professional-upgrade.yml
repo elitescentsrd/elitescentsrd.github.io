@@ -1,0 +1,208 @@
+name: Professional website upgrade
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare Python
+        run: python -m pip install --quiet pillow
+
+      - name: Apply upgrades step by step
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw, ImageFont
+          import subprocess, re, json, os, shutil
+
+          ROOT = Path('.')
+          INDEX = Path('index.html')
+          CATALOG = Path('catalogo.html')
+
+          subprocess.run(['git','config','user.name','github-actions[bot]'], check=True)
+          subprocess.run(['git','config','user.email','41898282+github-actions[bot]@users.noreply.github.com'], check=True)
+
+          def commit(msg):
+              subprocess.run(['git','add','-A'], check=True)
+              r = subprocess.run(['git','diff','--cached','--quiet'])
+              if r.returncode != 0:
+                  subprocess.run(['git','commit','-m',msg], check=True)
+
+          # ---------------------------------------------------------
+          # 1. Featured products become useful catalog entry points.
+          # ---------------------------------------------------------
+          s = INDEX.read_text(encoding='utf-8')
+          s = s.replace('.mini-link{font-weight:800;font-size:14px;color:var(--gold-deep)}', '.card-link{display:inline-flex;align-items:center;justify-content:center;margin-top:auto;padding-top:12px;color:var(--gold-deep);font-size:14px;font-weight:900}.card-link:hover{text-decoration:underline}.product-card{display:flex;flex-direction:column}')
+
+          featured = [
+              ('212 Sexy EDT Men', 'catalogo.html?page=2'),
+              ('212 VIP Black EDP Men', 'catalogo.html?page=2'),
+              ('9 PM EDP Men Afnan', 'catalogo.html?page=2'),
+              ('Acqua di Gio Profondo EDP Men', 'catalogo.html?page=3'),
+              ('Ariana Grande Cloud', 'catalogo.html'),
+              ('Armaf Lionheart Woman', 'catalogo.html'),
+          ]
+          for name, href in featured:
+              pat = rf'(<h3>{re.escape(name)}</h3>.*?<p>.*?</p>)(</article>)'
+              repl = rf'\1<a class="card-link" href="{href}" aria-label="Ver {name} en el catálogo">Ver en catálogo →</a>\2'
+              s, _ = re.subn(pat, repl, s, count=1, flags=re.S)
+          INDEX.write_text(s, encoding='utf-8')
+          commit('1. Make featured perfumes interactive')
+
+          # ---------------------------------------------------------
+          # 2. Split the four heavy catalog sheets into 36 pages and
+          #    replace the catalog with a page-by-page mobile viewer.
+          # ---------------------------------------------------------
+          pages = Path('pages')
+          pages.mkdir(exist_ok=True)
+          page_no = 1
+          for block_no in range(1, 5):
+              src = Path(f'catalogo-{block_no}.webp')
+              im = Image.open(src).convert('RGB')
+              w, h = im.size
+              crops = []
+              if h / max(w,1) > 2.2:
+                  for i in range(9):
+                      y0 = round(i*h/9); y1 = round((i+1)*h/9)
+                      crops.append(im.crop((0,y0,w,y1)))
+              elif w / max(h,1) > 2.2:
+                  for i in range(9):
+                      x0 = round(i*w/9); x1 = round((i+1)*w/9)
+                      crops.append(im.crop((x0,0,x1,h)))
+              else:
+                  for row in range(3):
+                      for col in range(3):
+                          x0 = round(col*w/3); x1 = round((col+1)*w/3)
+                          y0 = round(row*h/3); y1 = round((row+1)*h/3)
+                          crops.append(im.crop((x0,y0,x1,y1)))
+              for crop in crops:
+                  crop.save(pages / f'page-{page_no:02d}.webp', 'WEBP', quality=86, method=6)
+                  page_no += 1
+
+          catalog_html = '''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Catálogo 2026 | Elite Scents RD</title><meta name="description" content="Catálogo oficial 2026 de Elite Scents RD. Navega las 36 páginas de perfumes de forma rápida desde móvil o computadora."><meta name="theme-color" content="#0b0a0a"><meta name="robots" content="index,follow"><link rel="icon" href="logo.svg" type="image/svg+xml"><link rel="canonical" href="https://elitescentsrd.github.io/catalogo.html"><style>:root{--bg:#f8f4ea;--card:#fffdf8;--ink:#0b0a0a;--muted:#675f55;--gold:#d3a74d;--gold-deep:#9f741d;--line:#dfcb94;--black:#0b0a0a;--shadow:0 14px 40px rgba(11,10,10,.10)}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}a{text-decoration:none;color:inherit}.container{width:min(920px,92%);margin:auto}.nav{position:sticky;top:0;z-index:30;background:rgba(11,10,10,.97);border-bottom:1px solid rgba(211,167,77,.38)}.nav-inner{height:68px;display:flex;align-items:center;justify-content:space-between;gap:14px}.brand{display:flex;align-items:center;gap:9px;color:var(--gold);font-family:Georgia,serif;font-weight:700;font-size:21px}.brand img{width:36px;height:36px;border-radius:10px}.back{padding:10px 14px;border:1px solid var(--gold);color:var(--gold);border-radius:999px;font-weight:800;font-size:13px}.hero{padding:46px 0 34px;text-align:center;background:radial-gradient(circle at 50% 0%,rgba(211,167,77,.16),transparent 42%),linear-gradient(135deg,#060606,#17130d 55%,#090909);color:#fff}.eyebrow{color:var(--gold);font-weight:900;letter-spacing:.14em;font-size:11px;text-transform:uppercase}.hero h1{font-family:Georgia,'Times New Roman',serif;font-size:clamp(40px,8vw,66px);line-height:1;margin:10px auto 14px}.hero p{max-width:650px;margin:auto;color:#d9d1c3;font-size:16px}.quick{padding:28px 0 18px}.quick-label{text-align:center;color:var(--muted);font-size:13px;font-weight:800;margin-bottom:12px}.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.quick button,.control,.page-select{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--gold-deep);border-radius:14px;padding:12px 9px;font:inherit;font-size:13px;font-weight:900;cursor:pointer}.quick button:hover,.quick button.active{background:var(--black);color:var(--gold);border-color:var(--gold)}.viewer{padding:18px 0 82px}.viewer-head{display:flex;align-items:end;justify-content:space-between;gap:14px;margin-bottom:14px}.viewer-head h2{font-family:Georgia,serif;font-size:30px;margin:3px 0}.viewer-head small{color:var(--muted)}.jump{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;font-weight:800}.page-select{padding:9px 10px;background:#fff}.image-shell{position:relative;background:#fff;border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);min-height:260px;display:grid;place-items:center}.catalog-img{display:block;width:100%;height:auto;cursor:zoom-in}.loading{position:absolute;inset:0;display:grid;place-items:center;background:#fff;color:var(--muted);font-weight:800}.controls{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-top:16px}.control{padding:13px 14px}.control:last-child{justify-self:stretch}.control:disabled{opacity:.38;cursor:not-allowed}.counter{text-align:center;font-weight:900;color:var(--ink);white-space:nowrap}.note{text-align:center;color:var(--muted);font-size:12px;margin:17px 0 0}.whatsapp{position:fixed;right:14px;bottom:14px;z-index:50;background:var(--gold);color:var(--black);padding:13px 16px;border:1px solid #efd382;border-radius:999px;font-weight:900;box-shadow:0 12px 32px rgba(0,0,0,.25)}.lightbox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.95);display:none;align-items:center;justify-content:center;padding:62px 10px 24px}.lightbox.open{display:flex}.lightbox img{display:block;max-width:96vw;max-height:88vh;width:auto;height:auto;object-fit:contain;touch-action:pinch-zoom}.close{position:fixed;top:14px;right:14px;width:44px;height:44px;border-radius:50%;border:1px solid var(--gold);background:#111;color:var(--gold);font-size:26px;cursor:pointer}@media(max-width:700px){.quick-grid{grid-template-columns:repeat(2,1fr)}.hero{padding:36px 0 28px}.viewer-head{align-items:flex-start;flex-direction:column}.image-shell{border-radius:14px;min-height:200px}.controls{grid-template-columns:1fr 1fr}.counter{grid-column:1/-1;grid-row:1}.control{grid-row:2}.brand{font-size:18px}.whatsapp{right:12px;bottom:12px;font-size:14px}}@media(max-width:380px){.back{padding:9px 11px;font-size:12px}.brand{font-size:16px}}</style></head><body><header class="nav"><div class="container nav-inner"><a class="brand" href="index.html"><img src="logo.svg" alt="">Elite Scents RD</a><a class="back" href="index.html">← Inicio</a></div></header><section class="hero"><div class="container"><div class="eyebrow">Catálogo oficial 2026</div><h1>Catálogo completo</h1><p>Explora una página a la vez. Así el catálogo carga más rápido y consume menos datos en el móvil.</p></div></section><section class="quick"><div class="container"><div class="quick-label">Ir rápidamente a un bloque</div><div class="quick-grid"><button type="button" data-page="1">Páginas 1–9</button><button type="button" data-page="10">Páginas 10–18</button><button type="button" data-page="19">Páginas 19–27</button><button type="button" data-page="28">Páginas 28–36</button></div></div></section><main class="viewer"><div class="container"><div class="viewer-head"><div><small id="rangeLabel">Páginas 1–9</small><h2 id="pageTitle">Página 1</h2></div><label class="jump">Ir a página <select class="page-select" id="pageSelect" aria-label="Ir a una página del catálogo"></select></label></div><div class="image-shell"><div class="loading" id="loading">Cargando página…</div><img class="catalog-img" id="catalogImage" alt="Página 1 del catálogo Elite Scents RD"></div><div class="controls"><button class="control" id="prev" type="button">← Anterior</button><div class="counter" id="counter">Página 1 de 36</div><button class="control" id="next" type="button">Siguiente →</button></div><p class="note">Toca la página para verla a pantalla completa. Precios y disponibilidad sujetos a confirmación al momento del pedido.</p></div></main><a class="whatsapp" href="https://wa.me/18094333348?text=Hola%20Elite%20Scents%20RD%2C%20vi%20una%20fragancia%20en%20su%20web%20y%20quiero%20consultar%20disponibilidad%2C%20precio%20final%20y%20opciones%20de%20entrega." target="_blank" rel="noopener" aria-label="Pedir por WhatsApp">Pedir por WhatsApp</a><div class="lightbox" id="lightbox" aria-hidden="true"><button class="close" id="close" type="button" aria-label="Cerrar">×</button><img id="zoomImage" alt=""></div><script>(function(){const total=36,img=document.getElementById('catalogImage'),loading=document.getElementById('loading'),title=document.getElementById('pageTitle'),counter=document.getElementById('counter'),range=document.getElementById('rangeLabel'),prev=document.getElementById('prev'),next=document.getElementById('next'),select=document.getElementById('pageSelect'),quick=[...document.querySelectorAll('.quick button')],box=document.getElementById('lightbox'),zoom=document.getElementById('zoomImage'),close=document.getElementById('close');for(let i=1;i<=total;i++){const o=document.createElement('option');o.value=i;o.textContent=i;select.appendChild(o)}function clamp(n){return Math.max(1,Math.min(total,n||1))}function block(n){if(n<=9)return 'Páginas 1–9';if(n<=18)return 'Páginas 10–18';if(n<=27)return 'Páginas 19–27';return 'Páginas 28–36'}function file(n){return 'pages/page-'+String(n).padStart(2,'0')+'.webp'}function load(n,push=true){n=clamp(Number(n));loading.hidden=false;img.style.visibility='hidden';img.onload=()=>{loading.hidden=true;img.style.visibility='visible'};img.onerror=()=>{loading.textContent='No pudimos cargar esta página. Intenta nuevamente.'};img.src=file(n);img.alt='Página '+n+' del catálogo Elite Scents RD';title.textContent='Página '+n;counter.textContent='Página '+n+' de '+total;range.textContent=block(n);prev.disabled=n===1;next.disabled=n===total;prev.dataset.page=n-1;next.dataset.page=n+1;select.value=n;quick.forEach(b=>{const start=Number(b.dataset.page);b.classList.toggle('active',n>=start&&n<=start+8)});if(push){const u=new URL(location.href);u.searchParams.set('page',n);history.replaceState({},'',u)}}prev.addEventListener('click',()=>load(prev.dataset.page));next.addEventListener('click',()=>load(next.dataset.page));select.addEventListener('change',()=>load(select.value));quick.forEach(b=>b.addEventListener('click',()=>load(b.dataset.page)));img.addEventListener('click',()=>{zoom.src=img.src;zoom.alt=img.alt;box.classList.add('open');box.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'});function shut(){box.classList.remove('open');box.setAttribute('aria-hidden','true');zoom.src='';document.body.style.overflow=''}close.addEventListener('click',shut);box.addEventListener('click',e=>{if(e.target===box)shut()});document.addEventListener('keydown',e=>{if(e.key==='Escape')shut();if(!box.classList.contains('open')&&e.key==='ArrowLeft'&&!prev.disabled)load(prev.dataset.page);if(!box.classList.contains('open')&&e.key==='ArrowRight'&&!next.disabled)load(next.dataset.page)});const initial=clamp(Number(new URL(location.href).searchParams.get('page'))||1);load(initial,false)})();</script></body></html>'''
+          CATALOG.write_text(catalog_html, encoding='utf-8')
+          commit('2. Convert catalog to 36 lightweight pages')
+
+          # ---------------------------------------------------------
+          # 3. Keep Catalog visible in the mobile header.
+          # ---------------------------------------------------------
+          s = INDEX.read_text(encoding='utf-8')
+          if 'class="catalog-mobile"' not in s:
+              s = s.replace('</a><nav class="nav-links">', '</a><a class="catalog-mobile" href="catalogo.html">Catálogo</a><nav class="nav-links">', 1)
+          s = s.replace('@media(max-width:900px){.products{grid-template-columns:repeat(2,1fr)}.steps{grid-template-columns:1fr}.nav-links a:not(.nav-cta){display:none}}', '@media(max-width:900px){.products{grid-template-columns:repeat(2,1fr)}.steps{grid-template-columns:1fr}.nav-links{display:none}.catalog-mobile{display:inline-flex}}')
+          s = s.replace('.nav-links>a:not(.nav-cta):hover{color:var(--gold)}', '.nav-links>a:not(.nav-cta):hover{color:var(--gold)}.catalog-mobile{display:none;padding:9px 13px;border:1px solid var(--gold);border-radius:999px;color:var(--gold);font-size:13px;font-weight:900}')
+          INDEX.write_text(s, encoding='utf-8')
+          commit('3. Keep catalog access visible on mobile')
+
+          # ---------------------------------------------------------
+          # 4. Add a compact trust section.
+          # ---------------------------------------------------------
+          s = INDEX.read_text(encoding='utf-8')
+          trust_css = '.trust-strip{padding:20px 0;background:#fffdf8;border-bottom:1px solid var(--line)}.trust-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.trust-item{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 10px;text-align:center;font-size:13px;font-weight:900;color:var(--ink)}.trust-check{display:grid;place-items:center;width:25px;height:25px;flex:0 0 25px;border-radius:50%;background:#f5e9c7;color:var(--gold-deep);font-weight:900}@media(max-width:700px){.trust-grid{grid-template-columns:repeat(2,1fr)}.trust-item{justify-content:flex-start;text-align:left}}'
+          if '.trust-strip{' not in s:
+              s = s.replace('</style>', trust_css + '</style>', 1)
+          trust_html = '<section class="trust-strip" aria-label="Razones para comprar en Elite Scents RD"><div class="container trust-grid"><div class="trust-item"><span class="trust-check">✓</span>Fragancias originales</div><div class="trust-item"><span class="trust-check">✓</span>Venta bajo pedido</div><div class="trust-item"><span class="trust-check">✓</span>Envíos en RD</div><div class="trust-item"><span class="trust-check">✓</span>Atención personalizada</div></div></section>'
+          if 'class="trust-strip"' not in s:
+              s = s.replace('</section><section class="section" id="destacados">', '</section>'+trust_html+'<section class="section" id="destacados">', 1)
+          INDEX.write_text(s, encoding='utf-8')
+          commit('4. Add trust signals to the homepage')
+
+          # ---------------------------------------------------------
+          # 5. Professional footer + useful information pages.
+          # ---------------------------------------------------------
+          s = INDEX.read_text(encoding='utf-8')
+          footer_css = '.footer-grid{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:34px;text-align:left}.footer-brand-name{display:flex;align-items:center;gap:10px;color:var(--gold);font-family:Georgia,serif;font-size:24px;font-weight:700}.footer-brand-name img{width:42px;height:42px}.footer h3{margin:0 0 14px;color:#fff;font-size:18px}.footer-grid p{margin:6px 0;color:#bdb5aa;font-size:14px}.footer-links{display:flex;flex-direction:column;gap:9px}.footer-links a{color:#d5cec4;font-size:14px;font-weight:700}.footer-links a:hover{color:var(--gold)}.footer-bottom{margin-top:38px;padding-top:20px;border-top:1px solid rgba(211,167,77,.22);color:#8f887e;font-size:12px;text-align:center}@media(max-width:800px){.footer-grid{grid-template-columns:1fr 1fr}}@media(max-width:520px){.footer-grid{grid-template-columns:1fr}.footer{padding:52px 0}.footer-brand-name{justify-content:center}.footer-grid{text-align:center}.footer-links{align-items:center}}'
+          if '.footer-grid{' not in s:
+              s = s.replace('</style>', footer_css + '</style>', 1)
+          footer = '''<footer class="footer"><div class="container"><div class="footer-grid"><div><div class="footer-brand-name"><img src="logo.svg" alt="">Elite Scents RD</div><p>Perfumes originales bajo pedido para cada ocasión, con atención directa en República Dominicana.</p></div><div><h3>Navega</h3><div class="footer-links"><a href="index.html">Inicio</a><a href="#destacados">Destacados</a><a href="catalogo.html">Catálogo completo</a><a href="#como-pedir">Cómo pedir</a></div></div><div><h3>Información</h3><div class="footer-links"><a href="pedidos-envios.html">Pedidos y entregas</a><a href="privacidad.html">Aviso de privacidad</a></div></div><div><h3>Elite Scents RD</h3><p>República Dominicana</p><p>Venta bajo pedido</p><p>Envíos disponibles</p><p>Catálogo oficial 2026</p></div></div><div class="footer-bottom">© 2026 Elite Scents RD · Todos los derechos reservados.</div></div></footer>'''
+          s = re.sub(r'<footer class="footer">.*?</footer>', footer, s, count=1, flags=re.S)
+          INDEX.write_text(s, encoding='utf-8')
+
+          page_style = ''':root{--bg:#f8f4ea;--ink:#0b0a0a;--muted:#675f55;--gold:#d3a74d;--line:#dfcb94;--black:#0b0a0a}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Helvetica,sans-serif;line-height:1.65}a{color:inherit;text-decoration:none}.container{width:min(850px,92%);margin:auto}.nav{background:#0b0a0a;border-bottom:1px solid rgba(211,167,77,.4)}.nav-inner{height:68px;display:flex;align-items:center;justify-content:space-between}.brand{display:flex;align-items:center;gap:9px;color:var(--gold);font-family:Georgia,serif;font-weight:700;font-size:21px}.brand img{width:36px;height:36px}.back{color:var(--gold);font-weight:900}.hero{padding:54px 0 38px;background:linear-gradient(135deg,#060606,#17130d);color:#fff;text-align:center}.hero h1{font-family:Georgia,serif;font-size:clamp(38px,7vw,58px);margin:6px 0}.hero p{color:#d7d0c5}.content{padding:52px 0 80px}.card{background:#fffdf8;border:1px solid var(--line);border-radius:22px;padding:30px;box-shadow:0 14px 40px rgba(11,10,10,.08)}h2{font-family:Georgia,serif;margin-top:30px}h2:first-child{margin-top:0}.muted{color:var(--muted)}.whatsapp{position:fixed;right:14px;bottom:14px;background:var(--gold);color:var(--black);padding:13px 16px;border-radius:999px;font-weight:900;box-shadow:0 12px 32px rgba(0,0,0,.25)}@media(max-width:520px){.card{padding:22px}.brand{font-size:17px}}'''
+          wa = 'https://wa.me/18094333348?text=Hola%20Elite%20Scents%20RD%2C%20vi%20una%20fragancia%20en%20su%20web%20y%20quiero%20consultar%20disponibilidad%2C%20precio%20final%20y%20opciones%20de%20entrega.'
+          pedidos = f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pedidos y entregas | Elite Scents RD</title><meta name="description" content="Información sobre pedidos, disponibilidad y entregas de Elite Scents RD en República Dominicana."><link rel="canonical" href="https://elitescentsrd.github.io/pedidos-envios.html"><link rel="icon" href="logo.svg" type="image/svg+xml"><style>{page_style}</style></head><body><header class="nav"><div class="container nav-inner"><a class="brand" href="index.html"><img src="logo.svg" alt="">Elite Scents RD</a><a class="back" href="index.html">← Inicio</a></div></header><section class="hero"><div class="container"><h1>Pedidos y entregas</h1><p>Información clara antes de confirmar tu fragancia.</p></div></section><main class="content"><div class="container"><div class="card"><h2>Venta bajo pedido</h2><p>Las fragancias se gestionan bajo pedido. Antes de confirmar, verificamos contigo la disponibilidad y el precio final.</p><h2>Entrega</h2><p>Tenemos envíos disponibles en República Dominicana. La modalidad, el costo y los datos necesarios para la entrega se coordinan contigo antes de confirmar el pedido.</p><h2>Disponibilidad</h2><p>La disponibilidad puede variar. Por eso, cualquier perfume mostrado en el catálogo queda sujeto a confirmación al momento de solicitarlo.</p><h2>Antes de finalizar</h2><p class="muted">Cualquier condición específica de tu pedido se confirma directamente contigo antes de completar la solicitud.</p></div></div></main><a class="whatsapp" href="{wa}" target="_blank" rel="noopener">Pedir por WhatsApp</a></body></html>'''
+          privacidad = f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aviso de privacidad | Elite Scents RD</title><meta name="description" content="Aviso de privacidad del sitio web de Elite Scents RD."><link rel="canonical" href="https://elitescentsrd.github.io/privacidad.html"><link rel="icon" href="logo.svg" type="image/svg+xml"><style>{page_style}</style></head><body><header class="nav"><div class="container nav-inner"><a class="brand" href="index.html"><img src="logo.svg" alt="">Elite Scents RD</a><a class="back" href="index.html">← Inicio</a></div></header><section class="hero"><div class="container"><h1>Aviso de privacidad</h1><p>Cómo funciona este sitio respecto a tus datos.</p></div></section><main class="content"><div class="container"><div class="card"><h2>Este sitio no tiene formularios de registro</h2><p>Actualmente la web de Elite Scents RD no crea cuentas, no solicita contraseñas y no procesa pagos directamente dentro del sitio.</p><h2>Contacto por WhatsApp</h2><p>Cuando decides escribirnos, eres redirigido a WhatsApp. La información que compartas allí se utiliza para atender tu consulta y gestionar tu pedido.</p><h2>Datos técnicos</h2><p>El servicio utilizado para alojar la web puede procesar información técnica necesaria para servir la página, de acuerdo con sus propias políticas y funcionamiento.</p><h2>Actualizaciones</h2><p class="muted">Este aviso puede actualizarse si en el futuro añadimos formularios, pagos u otras funciones que manejen información directamente en la web.</p></div></div></main><a class="whatsapp" href="{wa}" target="_blank" rel="noopener">Pedir por WhatsApp</a></body></html>'''
+          Path('pedidos-envios.html').write_text(pedidos, encoding='utf-8')
+          Path('privacidad.html').write_text(privacidad, encoding='utf-8')
+          commit('5. Add professional footer and customer information pages')
+
+          # ---------------------------------------------------------
+          # 7. SEO, social preview, sitemap, robots, structured data,
+          #    and a branded 404 page. (Number 6 intentionally skipped.)
+          # ---------------------------------------------------------
+          W,H = 1200,630
+          card = Image.new('RGB',(W,H),'#0b0a0a')
+          d = ImageDraw.Draw(card)
+          gold = '#d3a74d'; cream = '#f8f4ea'
+          d.rounded_rectangle((28,28,W-28,H-28), radius=34, outline=gold, width=4)
+          # Simple perfume bottle mark
+          bx,by=106,147
+          d.rounded_rectangle((bx,by+55,bx+190,by+260),radius=24,outline=gold,width=7)
+          d.rectangle((bx+55,by+15,bx+135,by+70),outline=gold,width=7)
+          d.line((bx+42,by+135,bx+148,by+135),fill=gold,width=6)
+          d.line((bx+42,by+175,bx+148,by+175),fill=gold,width=6)
+          def font(sz,bold=False):
+              paths=['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']
+              for fp in paths:
+                  if Path(fp).exists(): return ImageFont.truetype(fp,sz)
+              return ImageFont.load_default()
+          d.text((370,160),'ELITE SCENTS RD',font=font(66,True),fill=gold)
+          d.text((372,252),'PERFUMES ORIGINALES',font=font(33,True),fill=cream)
+          d.text((372,316),'Catálogo 2026 · República Dominicana',font=font(27),fill='#d8d0c3')
+          d.text((372,396),'Elegancia en cada esencia',font=font(30),fill=gold)
+          card.save('social-card.png','PNG',optimize=True)
+
+          def enhance_head(path, canonical, title, desc):
+              text = Path(path).read_text(encoding='utf-8')
+              if 'property="og:image"' not in text:
+                  insertion = f'<meta property="og:image" content="https://elitescentsrd.github.io/social-card.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{title}"><meta name="twitter:description" content="{desc}"><meta name="twitter:image" content="https://elitescentsrd.github.io/social-card.png">'
+                  if '<meta property="og:site_name" content="Elite Scents RD">' in text:
+                      text = text.replace('<meta property="og:site_name" content="Elite Scents RD">','<meta property="og:site_name" content="Elite Scents RD">'+insertion,1)
+                  else:
+                      text = text.replace('</head>', insertion+'</head>',1)
+              if 'application/ld+json' not in text and path == 'index.html':
+                  data = {'@context':'https://schema.org','@graph':[{'@type':'Organization','@id':'https://elitescentsrd.github.io/#organization','name':'Elite Scents RD','url':'https://elitescentsrd.github.io/','logo':'https://elitescentsrd.github.io/logo.svg','telephone':'+1-809-433-3348','areaServed':{'@type':'Country','name':'República Dominicana'}},{'@type':'WebSite','@id':'https://elitescentsrd.github.io/#website','url':'https://elitescentsrd.github.io/','name':'Elite Scents RD','publisher':{'@id':'https://elitescentsrd.github.io/#organization'},'inLanguage':'es-DO'}]}
+                  text = text.replace('</head>', '<script type="application/ld+json">'+json.dumps(data,ensure_ascii=False,separators=(',',':'))+'</script></head>',1)
+              Path(path).write_text(text, encoding='utf-8')
+
+          enhance_head('index.html','https://elitescentsrd.github.io/','Elite Scents RD | Perfumes Originales','Perfumes originales bajo pedido y catálogo 2026 en República Dominicana.')
+          enhance_head('catalogo.html','https://elitescentsrd.github.io/catalogo.html','Catálogo 2026 | Elite Scents RD','Explora las 36 páginas del catálogo oficial de Elite Scents RD.')
+
+          Path('sitemap.xml').write_text('''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://elitescentsrd.github.io/</loc><lastmod>2026-08-10</lastmod><priority>1.0</priority></url>\n  <url><loc>https://elitescentsrd.github.io/catalogo.html</loc><lastmod>2026-08-10</lastmod><priority>0.9</priority></url>\n  <url><loc>https://elitescentsrd.github.io/pedidos-envios.html</loc><lastmod>2026-08-10</lastmod><priority>0.6</priority></url>\n  <url><loc>https://elitescentsrd.github.io/privacidad.html</loc><lastmod>2026-08-10</lastmod><priority>0.4</priority></url>\n</urlset>\n''',encoding='utf-8')
+          Path('robots.txt').write_text('User-agent: *\nAllow: /\nSitemap: https://elitescentsrd.github.io/sitemap.xml\n',encoding='utf-8')
+          not_found = f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Página no encontrada | Elite Scents RD</title><meta name="robots" content="noindex"><link rel="icon" href="/logo.svg" type="image/svg+xml"><style>body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0a0a;color:#f8f4ea;font-family:Arial,sans-serif;text-align:center;padding:24px}}main{{max-width:650px}}img{{width:82px;height:82px}}h1{{font-family:Georgia,serif;font-size:clamp(54px,12vw,100px);color:#d3a74d;margin:12px 0 4px}}h2{{font-family:Georgia,serif;font-size:30px;margin:0 0 12px}}p{{color:#c9c0b3}}a{{display:inline-flex;margin-top:14px;padding:13px 20px;border-radius:999px;background:#d3a74d;color:#0b0a0a;text-decoration:none;font-weight:900}}</style></head><body><main><img src="/logo.svg" alt="Elite Scents RD"><h1>404</h1><h2>Esta página no existe.</h2><p>Vuelve al inicio o continúa explorando nuestro catálogo.</p><a href="/">Volver a Elite Scents RD</a></main></body></html>'''
+          Path('404.html').write_text(not_found,encoding='utf-8')
+          commit('7. Improve SEO, sharing preview and site discovery')
+
+          # ---------------------------------------------------------
+          # 8. Technical cleanup and documentation.
+          # ---------------------------------------------------------
+          s = INDEX.read_text(encoding='utf-8')
+          s = s.replace('.btn-light{background:var(--card);border-color:var(--line);color:var(--black)}','')
+          s = re.sub(r'\.nav-cta\{[^}]*\}\.nav-cta:hover\{[^}]*\}', '', s)
+          s = re.sub(r'\.hero \.actions \.btn-light\{[^}]*\}\.hero \.actions \.btn-light:hover\{[^}]*\}', '', s)
+          s = re.sub(r'\.footer \.btn-light\{[^}]*\}', '', s)
+          s = re.sub(r'\.nav-cta\{padding:10px 14px;font-size:13px\}', '', s)
+          s = s.replace('.nav-links>a:not(.nav-cta){transition:.2s}.nav-links>a:not(.nav-cta):hover{color:var(--gold)}','.nav-links>a{transition:.2s}.nav-links>a:hover{color:var(--gold)}')
+          INDEX.write_text(s, encoding='utf-8')
+
+          readme = '''# Elite Scents RD\n\nSitio oficial de Elite Scents RD.\n\n## Estructura\n- `index.html`: página principal\n- `catalogo.html`: visor del catálogo página por página\n- `pages/`: 36 páginas optimizadas del catálogo\n- `pedidos-envios.html`: información de pedidos y entregas\n- `privacidad.html`: aviso de privacidad\n- `social-card.png`: vista previa al compartir\n- `sitemap.xml` y `robots.txt`: descubrimiento para buscadores\n- `404.html`: página de error personalizada\n\nEl sitio está optimizado para móvil y computadora y mantiene un único acceso visible a WhatsApp.\n'''
+          Path('README.md').write_text(readme,encoding='utf-8')
+          for wf in [Path('.github/workflows/localize-assets.yml'), Path('.github/workflows/professional-upgrade.yml')]:
+              if wf.exists(): wf.unlink()
+          commit('8. Clean technical leftovers and document the site')
+          PY
+
+      - name: Push completed upgrade
+        run: git push origin main
