@@ -1,0 +1,53 @@
+name: Simplify WhatsApp entry points
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    if: ${{ !contains(github.event.head_commit.message, '[whatsapp-clean]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep one visible WhatsApp CTA
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          wa = 'https://wa.me/18094333348?text=Hola%20Elite%20Scents%20RD%2C%20vi%20una%20fragancia%20en%20su%20web%20y%20quiero%20consultar%20disponibilidad%2C%20precio%20final%20y%20opciones%20de%20entrega.'
+          floating = f'<a class="whatsapp" href="{wa}" target="_blank" rel="noopener" aria-label="Pedir por WhatsApp">Pedir por WhatsApp</a>'
+          anchor = re.compile(r'<a\b[^>]*href="https://wa\.me/18094333348[^"]*"[^>]*>.*?</a>', re.S)
+
+          for name in ('index.html', 'catalogo.html'):
+              p = Path(name)
+              s = p.read_text(encoding='utf-8')
+
+              def replace_anchor(m):
+                  tag = m.group(0)
+                  if 'class="whatsapp"' in tag:
+                      return floating
+                  return ''
+
+              s = anchor.sub(replace_anchor, s)
+
+              if name == 'catalogo.html':
+                  s = s.replace(",wa=document.getElementById('whatsappLink')", '')
+                  s = re.sub(r"wa\.href='https://wa\.me/18094333348\?text='\+encodeURIComponent\(r\.msg\);", '', s)
+
+              p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Remove one-time workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/simplify-whatsapp.yml
+          git add index.html catalogo.html
+          git commit -m "Keep one WhatsApp CTA [whatsapp-clean]"
+          git push
