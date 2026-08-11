@@ -1,0 +1,51 @@
+name: Localize catalog assets
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  localize:
+    if: ${{ !contains(github.event.head_commit.message, '[assets-local]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download catalog assets from previous repository
+        run: |
+          set -e
+          base="https://raw.githubusercontent.com/gabrielpdrd05/elite-scents-rd/main"
+          curl -fL "$base/featured.webp" -o featured.webp
+          curl -fL "$base/catalogo-1.webp" -o catalogo-1.webp
+          curl -fL "$base/catalogo-2.webp" -o catalogo-2.webp
+          curl -fL "$base/catalogo-3.webp" -o catalogo-3.webp
+          curl -fL "$base/catalogo-4.webp" -o catalogo-4.webp
+
+      - name: Point site to local assets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = 'https://raw.githubusercontent.com/gabrielpdrd05/elite-scents-rd/main/'
+          s = s.replace(old + 'featured.webp', 'featured.webp')
+          for i in range(1, 5):
+              s = s.replace(old + f'catalogo-{i}.webp', f'catalogo-{i}.webp')
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit localized assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add featured.webp catalogo-1.webp catalogo-2.webp catalogo-3.webp catalogo-4.webp index.html
+          if git diff --cached --quiet; then
+            echo "No changes needed"
+          else
+            git commit -m "Localize catalog assets [assets-local]"
+            git push
+          fi
