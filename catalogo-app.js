@@ -85,3 +85,10 @@ logoStyle.textContent=`
   }
 `;
 document.head.appendChild(logoStyle);
+
+// Use a new asset URL so browsers do not keep showing an older cached logo.
+document.querySelectorAll('img[src*="logo.webp"]').forEach(img=>{img.src='logo-oficial.webp?v=1';});
+const favicon=document.querySelector('link[rel="icon"]');
+if(favicon){favicon.href='logo-oficial.webp?v=1';favicon.type='image/webp';}
+const appleIcon=document.querySelector('link[rel="apple-touch-icon"]');
+if(appleIcon)appleIcon.href='logo-oficial.webp?v=1';
