@@ -4,7 +4,7 @@ Sitio público alojado en GitHub Pages. El sitio anterior de Sites permanece ind
 
 ## Estado
 
-El proyecto Supabase `ozowziumksrudrotulll` está conectado. La base contiene 420 perfumes y el sitio público carga solo los productos visibles desde ella. Si falla la conexión, la tienda muestra un aviso en lugar de precios o productos posiblemente desactualizados. El panel está en `/admin.html`. El primer usuario administrador ya se creó, confirmó su correo y recibió acceso. Puede iniciar sesión en `/admin.html` con la contraseña que configuró en Supabase.
+El proyecto Supabase `ozowziumksrudrotulll` está conectado. La base contiene 420 perfumes. El catálogo se pre-renderiza desde Supabase durante el build y el navegador consulta una versión actualizada con un timeout de 8 segundos. Si la consulta falla, la tienda conserva la última versión estática publicada y muestra un aviso claro. El panel está en `/admin.html`. El primer usuario administrador ya se creó, confirmó su correo y recibió acceso. Puede iniciar sesión en `/admin.html` con la contraseña que configuró en Supabase.
 
 ## Activación segura del backend
 
@@ -23,3 +23,21 @@ La tabla `admin_users` controla la membresía y solo puede modificarse con permi
 ## SEO y publicación
 
 `index.html` contiene metadatos, canonical, Open Graph y datos estructurados. `robots.txt` y `sitemap.xml` referencian el dominio GitHub Pages. El catálogo visual está en `catalogo.html`. Los precios y la disponibilidad deben confirmarse antes de cerrar la venta.
+
+## Build estático del catálogo
+
+El proyecto usa Node.js 20 sin dependencias externas. `scripts/build-catalog.mjs` consulta los productos públicos en Supabase, lee `src/index.template.html` y genera `index.html` con:
+
+- Las 420 tarjetas visibles en HTML estático.
+- Un bloque `Product` JSON-LD por producto.
+- Una copia JSON de los productos para que los filtros funcionen inmediatamente.
+
+Ejecuta `npm run build` antes de revisar cambios locales. El workflow `.github/workflows/pages.yml` repite el build y publica el resultado en GitHub Pages después de cada push a `main`. También puede ejecutarse manualmente.
+
+## Validación de datos estructurados
+
+1. Publica primero la rama en una URL de prueba o abre un pull request.
+2. Entra a https://search.google.com/test/rich-results.
+3. Selecciona **URL**, pega la dirección pública y ejecuta la prueba.
+4. Revisa los elementos **Product snippets** detectados. Una advertencia no siempre bloquea el resultado; los errores rojos sí deben corregirse antes del merge.
+5. Como comprobación adicional, abre el código fuente de la página y busca `"@type":"Product"`: debe aparecer sin depender de JavaScript.
