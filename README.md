@@ -8,13 +8,13 @@ El proyecto Supabase `ozowziumksrudrotulll` está conectado. La base contiene 42
 
 ## Activación segura del backend
 
-1. **Ya realizado.** Proyecto gratuito creado, `supabase/schema.sql`, `supabase/20260914_private_admin_check.sql` y `supabase/20260914_product_images.sql` aplicados, 420 perfumes importados. Los tres archivos representan el historial reproducible de la base; no los ejecutes de nuevo en este proyecto.
+1. **Ya realizado.** Proyecto gratuito creado, `supabase/schema.sql`, `supabase/20260914_private_admin_check.sql`, `supabase/20260914_product_images.sql` y `supabase/20260914_product_availability.sql` aplicados, 420 perfumes importados. Los archivos representan el historial reproducible de la base; no los ejecutes de nuevo en este proyecto.
 2. **Ya realizado.** Usuario administrador creado y correo confirmado. Recomendado: desactivar registro público en Authentication Settings, pues el panel no lo necesita.
 3. **Ya realizado.** La cuenta autorizada se registró en `public.admin_users`. Para dar acceso a otra persona, revisa su identidad antes de añadir su ID de Auth a esa tabla.
 4. **Ya realizado.** La URL y la clave pública están en `supabase-config.js`; esa clave está diseñada para el navegador y las reglas RLS protegen los datos. **Jamás** coloques la `secret` o `service_role` en GitHub, HTML o JavaScript.
 5. Abre `https://elitescentsrd.github.io/admin.html`, inicia sesión y comprueba que puedes editar un producto y registrar un pedido. Verifica desde una ventana privada que el catálogo público solo ve productos activos y que los pedidos no son accesibles sin iniciar sesión.
 
-GitHub Pages solo sirve HTML/CSS/JS; la autorización ocurre en Supabase Auth y Postgres RLS. **No uses pedidos de prueba con datos reales hasta comprobar las políticas.** El panel registra manualmente los pedidos confirmados por WhatsApp; no lee conversaciones ni procesa pagos. Productos con `page` y `slot` usan recortes del catálogo original; productos nuevos pueden usar una URL HTTPS o subir fotos JPG, PNG o WebP de hasta 3 MB. Solo administradores pueden subir fotos al bucket público `product-images`. Puedes eliminar productos y pedidos desde el panel con confirmación. Las fotos previamente subidas no se borran automáticamente cuando eliminas un producto; revisa el espacio de Storage periódicamente.
+GitHub Pages solo sirve HTML/CSS/JS; la autorización ocurre en Supabase Auth y Postgres RLS. **No uses pedidos de prueba con datos reales hasta comprobar las políticas.** El panel registra manualmente los pedidos confirmados por WhatsApp; no lee conversaciones ni procesa pagos. Productos con `page` y `slot` usan recortes del catálogo original; productos nuevos pueden usar una URL HTTPS o subir fotos JPG, PNG o WebP de hasta 3 MB. Solo administradores pueden subir fotos al bucket público `product-images`. Puedes cambiar precios, marcar productos como Disponible, Agotado o Solo por encargo, y eliminar productos o pedidos desde el panel con confirmación. Las fotos previamente subidas no se borran automáticamente cuando eliminas un producto; revisa el espacio de Storage periódicamente.
 
 ## Seguridad y datos
 
