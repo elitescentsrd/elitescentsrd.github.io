@@ -4,13 +4,13 @@ Sitio público alojado en GitHub Pages. El sitio anterior de Sites permanece ind
 
 ## Estado
 
-El proyecto Supabase `ozowziumksrudrotulll` está conectado. La base contiene 420 perfumes y el sitio público carga productos visibles desde ella; si falla la conexión, aún existe una copia local del catálogo. El panel está en `/admin.html`. Falta crear y autorizar el primer usuario administrador para poder iniciar sesión.
+El proyecto Supabase `ozowziumksrudrotulll` está conectado. La base contiene 420 perfumes y el sitio público carga productos visibles desde ella; si falla la conexión, aún existe una copia local del catálogo. El panel está en `/admin.html`. El primer usuario administrador ya se creó, confirmó su correo y recibió acceso. Puede iniciar sesión en `/admin.html` con la contraseña que configuró en Supabase.
 
 ## Activación segura del backend
 
 1. **Ya realizado.** Proyecto gratuito creado, `supabase/schema.sql` y `supabase/20260914_private_admin_check.sql` aplicados, 420 perfumes importados. Ambos archivos representan el historial reproducible de la base; no los ejecutes de nuevo en este proyecto.
-2. En **Authentication → Users**, crea tu usuario administrador con correo y contraseña de acceso. Confirma el correo si Supabase lo solicita. Recomendado: desactivar registro público en Authentication Settings, pues el panel no lo necesita.
-3. En SQL Editor, ejecuta: `insert into public.admin_users(user_id) select id from auth.users where email = 'TU_CORREO_ADMIN' on conflict do nothing;` sustituyendo el correo por el tuyo. Comprueba que inserta exactamente una fila.
+2. **Ya realizado.** Usuario administrador creado y correo confirmado. Recomendado: desactivar registro público en Authentication Settings, pues el panel no lo necesita.
+3. **Ya realizado.** La cuenta autorizada se registró en `public.admin_users`. Para dar acceso a otra persona, revisa su identidad antes de añadir su ID de Auth a esa tabla.
 4. **Ya realizado.** La URL y la clave pública están en `supabase-config.js`; esa clave está diseñada para el navegador y las reglas RLS protegen los datos. **Jamás** coloques la `secret` o `service_role` en GitHub, HTML o JavaScript.
 5. Abre `https://elitescentsrd.github.io/admin.html`, inicia sesión y comprueba que puedes editar un producto y registrar un pedido. Verifica desde una ventana privada que el catálogo público solo ve productos activos y que los pedidos no son accesibles sin iniciar sesión.
 
