@@ -89,7 +89,7 @@
   function renderOrders() {
     ordersBody.replaceChildren(...orders.map(o => {
       const tr=document.createElement('tr');
-      [new Date(o.created_at).toLocaleDateString('es-DO'),o.customer_name||'—',o.contact||'—',o.product_name||o.product_id||'—',o.status||'nuevo'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});
+      [new Date(o.created_at).toLocaleDateString('es-DO'),o.customer_name||'—',o.phone||'—',o.items||'—',o.status||'nuevo'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});
       const td=document.createElement('td'), del=document.createElement('button'); del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
       del.addEventListener('click',async()=>{if(!confirm('¿Eliminar este pedido?'))return;try{await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});orders=orders.filter(x=>x.id!==o.id);renderOrders()}catch(err){alert(err.message)}});
       td.append(del);tr.append(td);return tr;
@@ -124,12 +124,21 @@
       for(const file of files) gallery.push(await upload(file,'gallery'));
       gallery=[...new Set(gallery)].slice(0,3);
       const rawPrice=Number(String(fd.get('price')).replace(/[^0-9.]/g,''));
-      const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:rawPrice,size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,page:Number(fd.get('page'))||null,slot:Number(fd.get('slot'))||null,image_url:imageUrl,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
+      const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:money(rawPrice),size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,page:Number(fd.get('page'))||null,slot:Number(fd.get('slot'))||null,image_url:imageUrl,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
       if(!payload.name||!Number.isFinite(rawPrice)) throw new Error('Completa el nombre y un precio válido.');
       const path=id?'/rest/v1/products?id=eq.'+encodeURIComponent(id):'/rest/v1/products';
       await api(path,{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
       status(productStatus,'Producto guardado.','success'); resetForm(); await loadAll();
     } catch(err){status(productStatus,err.message,'error')}
+  });
+  $('#order-form').addEventListener('submit', async e => {
+    e.preventDefault(); const el=$('#order-status'); status(el,'Guardando…');
+    try {
+      const fd=new FormData(e.currentTarget);
+      const payload={customer_name:String(fd.get('customer_name')).trim(),phone:String(fd.get('phone')).trim(),amount:String(fd.get('amount')||'').trim(),status:String(fd.get('status')),items:String(fd.get('items')).trim(),notes:String(fd.get('notes')||'').trim()};
+      await api('/rest/v1/orders',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
+      e.currentTarget.reset(); status(el,'Pedido guardado.','success'); await loadAll();
+    } catch(err){status(el,err.message,'error')}
   });
   async function deleteProduct(p) {
     if(!confirm('¿Eliminar definitivamente “'+p.name+'”?'))return;

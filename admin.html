@@ -34,7 +34,7 @@
           <label>Marca<input name="brand" maxlength="120"></label>
           <label>Precio (RD$)<input name="price" required inputmode="decimal" placeholder="7,500"></label>
           <label>Tamaño<input name="size" placeholder="100 ML"></label>
-          <label>Género<select name="gender"><option>HOMBRE</option><option>MUJER</option><option>UNISEX</option></select></label>
+          <label>Género<select name="gender"><option value="hombre">Hombre</option><option value="mujer">Mujer</option><option value="unisex">Unisex</option></select></label>
           <label>Disponibilidad<select name="availability"><option value="disponible">Disponible</option><option value="encargo">Solo por encargo</option><option value="agotado">Agotado</option></select></label>
           <label>Orden<input name="sort_order" type="number" value="0"></label>
           <label>Página original<input name="page" type="number" min="1"></label>
@@ -58,6 +58,18 @@
         <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Imagen</th><th>Producto</th><th>Marca</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="products-body"></tbody></table></div>
       </section>
 
+      <section class="admin-card">
+        <p class="eyebrow">Nuevo pedido</p><h2>Registrar pedido confirmado</h2>
+        <form id="order-form" class="admin-form">
+          <label>Cliente<input name="customer_name" maxlength="150" required></label>
+          <label>Teléfono<input name="phone" type="tel" maxlength="40" required></label>
+          <label>Importe acordado<input name="amount" maxlength="70"></label>
+          <label>Estado<select name="status"><option value="nuevo">Nuevo</option><option value="confirmado">Confirmado</option><option value="entregado">Entregado</option><option value="cancelado">Cancelado</option></select></label>
+          <label class="span-2">Productos<textarea name="items" maxlength="2000" required></textarea></label>
+          <label class="span-2">Notas internas<textarea name="notes" maxlength="2000"></textarea></label>
+          <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar pedido</button><span id="order-status" aria-live="polite"></span></div>
+        </form>
+      </section>
       <section class="admin-card">
         <p class="eyebrow">Solicitudes</p><h2>Pedidos</h2>
         <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Contacto</th><th>Producto</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="orders-body"></tbody></table></div>
