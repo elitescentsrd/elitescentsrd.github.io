@@ -26,10 +26,8 @@ jobs:
           node-version: 20
       - name: Generate static catalog and Product JSON-LD
         run: npm run build
-      - name: Verify generated HTML
-        run: |
-          test "$(grep -o '"@type":"Product"' index.html | wc -l)" -gt 0
-          test "$(grep -o 'data-product-id=' index.html | wc -l)" -gt 0
+      - name: Verify generated site
+        run: npm test
       - name: Configure Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5

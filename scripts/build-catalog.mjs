@@ -1,8 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 const SITE_URL = 'https://elitescentsrd.github.io';
+const USD_RATE_DOP = 63;
 const FIELDS = 'id,name,price,size,gender,page,slot,image_url,sort_order,availability,brand,notes_top,notes_heart,notes_base,gallery_urls,description';
 const template = await readFile('src/index.template.html', 'utf8');
+const enrichment = JSON.parse(await readFile('data/product-enrichment.json', 'utf8'));
 const config = await readFile('supabase-config.js', 'utf8');
 const url = config.match(/url:\s*['"]([^'"]+)['"]/)?.[1];
 const key = process.env.SUPABASE_PUBLISHABLE_KEY || config.match(/publishableKey:\s*['"]([^'"]+)['"]/)?.[1];
@@ -14,7 +16,11 @@ const endpoint = url.replace(/\/$/, '') + '/rest/v1/products?select=' + encodeUR
 const response = await fetch(endpoint, { headers: { apikey: key }, signal: controller.signal });
 clearTimeout(timer);
 if (!response.ok) throw new Error('Supabase respondió HTTP ' + response.status);
-const products = await response.json();
+const databaseProducts = await response.json();
+const products = databaseProducts.map(product => {
+  const extra = enrichment[String(product.id)];
+  return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
+});
 if (!Array.isArray(products) || products.length === 0) throw new Error('El catálogo llegó vacío; se conserva el despliegue anterior.');
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -25,6 +31,10 @@ const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 
 const productUrl = p => SITE_URL + '/#producto-' + p.id;
 const imageUrl = p => p.image_url || (SITE_URL + '/pages/page-' + String(p.page || 1).padStart(2, '0') + '.webp');
 const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
+const usdPrice = p => {
+  const value = nums(p.price)[0];
+  return value ? 'US$' + Math.round(value / USD_RATE_DOP) + ' aprox.' : '';
+};
 const whatsapp = p => 'https://wa.me/18094333348?text=' + encodeURIComponent('Hola Elite Scents RD, me interesa: ' + p.name + ' (' + (p.size || 'tamaño por confirmar') + ', ' + (p.price || 'precio por confirmar') + '). ¿Puedes ayudarme?');
 
 function visual(p) {
@@ -41,7 +51,7 @@ function card(p) {
   return '<article class="perfume" id="producto-' + esc(p.id) + '" data-product-id="' + esc(p.id) + '">' +
     visual(p) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
-    '<h3>' + esc(p.name) + '</h3><div class="size">' + esc(notes) + '</div><div class="price">' + esc(p.price || 'Precio a confirmar') + '</div>' +
+    '<h3>' + esc(p.name) + '</h3><div class="size">' + esc(notes) + '</div><div class="price"><strong>' + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
     '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><a href="' + esc(whatsapp(p)) + '" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a></div></article>';
 }
 function schema(p) {
