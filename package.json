@@ -1,0 +1,13 @@
+{
+  "name": "elite-scents-rd-static",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-catalog.mjs",
+    "test": "node scripts/test-site.mjs",
+    "verify": "npm run build && npm test",
+    "check:generated": "npm run build && git diff --exit-code -- index.html"
+  },
+  "engines": { "node": ">=20" }
+}
