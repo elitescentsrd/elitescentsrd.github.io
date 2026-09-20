@@ -17,11 +17,17 @@ const response = await fetch(endpoint, { headers: { apikey: key }, signal: contr
 clearTimeout(timer);
 if (!response.ok) throw new Error('Supabase respondió HTTP ' + response.status);
 const databaseProducts = await response.json();
-const products = databaseProducts.map(product => {
+if (!Array.isArray(databaseProducts) || databaseProducts.length === 0) throw new Error('El catálogo llegó vacío; se conserva el despliegue anterior.');
+// page/slot son datos internos de la auditoría de precios: se guardan aparte
+// en data/product-positions.json (que nunca se publica) y no llegan al HTML
+// ni al JSON público del catálogo.
+const positions = {};
+const products = databaseProducts.map(({ page, slot, ...product }) => {
+  positions[product.id] = { page, slot };
   const extra = enrichment[String(product.id)];
   return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
 });
-if (!Array.isArray(products) || products.length === 0) throw new Error('El catálogo llegó vacío; se conserva el despliegue anterior.');
+await writeFile('data/product-positions.json', JSON.stringify(positions, null, 1) + '\n');
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const nums = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Number(v.replace(/[,.]/g, ''))).filter(Number.isFinite);
@@ -33,7 +39,10 @@ const productUrl = p => SITE_URL + '/#producto-' + p.id;
 // lámina completa de /pages/: esa lámina muestra hasta 12 productos distintos
 // y jamás debe declararse como la foto de un producto en datos estructurados
 // (ver hallazgo de la auditoría sobre JSON-LD e imágenes de producto).
-const imageUrl = p => (p.image_url && /^https:\/\//i.test(p.image_url)) ? p.image_url : null;
+const validImage = url => typeof url === 'string' && /^https:\/\//i.test(url) && !/\/pages\/page-/i.test(url);
+const imageUrl = p => validImage(p.image_url) ? p.image_url : null;
+// Defensa en profundidad: una URL de lámina (o no HTTPS) en la base nunca llega al HTML público.
+for (const p of products) { p.image_url = imageUrl(p); p.gallery_urls = (p.gallery_urls || []).filter(validImage); }
 const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
 const usdPrice = p => {
   const value = nums(p.price)[0];
@@ -42,12 +51,9 @@ const usdPrice = p => {
 const whatsapp = p => 'https://wa.me/18094333348?text=' + encodeURIComponent('Hola Elite Scents RD, me interesa: ' + p.name + ' (' + (p.size || 'tamaño por confirmar') + ', ' + (p.price || 'precio por confirmar') + '). ¿Puedes ayudarme?');
 
 function visual(p) {
-  if (p.image_url && /^https:\/\//i.test(p.image_url)) return '<div class="photo custom" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" style="background-image:url(&quot;' + esc(p.image_url) + '&quot;);background-size:contain;background-position:center"></div>';
-  const page = Number(p.page), slot = Number(p.slot);
-  const style = Number.isInteger(page) && page >= 1 && page <= 36 && Number.isInteger(slot) && slot >= 0 && slot < 12
-    ? ' style="background-image:url(&quot;/pages/page-' + String(page).padStart(2,'0') + '.webp&quot;);background-position:' + (slot % 3 * 50) + '% ' + (Math.floor(slot / 3) * 30.13).toFixed(2) + '%"'
-    : '';
-  return '<div class="photo" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '"' + style + '></div>';
+  if (imageUrl(p)) return '<div class="photo custom" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" style="background-image:url(&quot;' + esc(p.image_url) + '&quot;);background-size:contain;background-position:center"></div>';
+  // Sin foto propia: placeholder neutro. Nunca se recorta una lámina del catálogo original.
+  return '<div class="photo placeholder" role="img" aria-label="' + esc('Foto próximamente de ' + p.name) + '"></div>';
 }
 function card(p) {
   const availability = status[p.availability] ? p.availability : 'disponible';
@@ -63,7 +69,7 @@ function schema(p) {
   // Solo URLs HTTPS reales (foto individual + galería); nunca la lámina
   // completa. Si el producto todavía no tiene foto propia, se omite el campo
   // "image" en vez de inventar una imagen que no le pertenece.
-  const images = [imageUrl(p), ...(p.gallery_urls || [])].filter(url => url && /^https:\/\//i.test(url)).slice(0, 3);
+  const images = [imageUrl(p), ...(p.gallery_urls || [])].filter(validImage).slice(0, 3);
   const data = {
     '@context':'https://schema.org','@type':'Product',
     name:p.name,
