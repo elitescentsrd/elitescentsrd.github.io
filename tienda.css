@@ -25,3 +25,23 @@
 
 /* carrito v3 */
 .cart-nav{display:inline-flex;align-items:center;gap:7px;text-decoration:none;padding:9px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink);font-size:.85rem;font-weight:700}.cart-nav span{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--dark);color:#fff;font-size:.72rem}.dialog-order-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.dialog-order-actions .button{flex:1;min-width:180px}.cart-toast{position:fixed;right:18px;bottom:18px;z-index:1000;background:var(--dark);color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.22)}
+
+/* Static content pages (privacidad, pedidos-envios, 404) */
+.collection-doc{max-width:850px;min-height:65vh}
+.doc-title{font:400 clamp(38px,5vw,60px) Georgia,serif;margin:10px 0 22px}
+.doc-h2{font:400 26px Georgia,serif;margin:30px 0 10px}
+.doc-updated{color:var(--muted);font-size:12px;margin-top:34px}
+.link-underline{text-decoration:underline}
+.error-title{font:400 54px Georgia,serif}
+.error-page{min-height:80vh}
+.visual-pages-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
+
+/* Foto próximamente: reemplaza los antiguos recortes de láminas del catálogo. */
+.photo.placeholder,.dialog-catalogue-image.placeholder{display:grid;place-items:center;aspect-ratio:1/1;background-color:var(--surface-soft);background-image:url("/logo-oficial.webp");background-repeat:no-repeat;background-position:center 40%;background-size:34% auto}
+.photo.placeholder::after,.dialog-catalogue-image.placeholder::after{content:"Foto próximamente";align-self:end;margin-bottom:12%;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dialog-catalogue-image.placeholder{width:100%;height:auto!important;min-height:0!important;max-height:520px}
+
+/* Móvil (375 px): la cabecera pasa a dos filas en vez de desbordar y recortar el botón de WhatsApp. */
+@media(max-width:560px){.header{flex-wrap:wrap;row-gap:8px;padding:10px 4vw;gap:8px}.header-actions{width:100%;justify-content:space-between}.header-actions>*{flex:0 0 auto}.brand small{display:none}}
+/* Listas dentro de páginas de texto (privacidad). */
+.collection-doc ul{padding-left:22px;margin:10px 0 16px}.collection-doc li{margin:6px 0}

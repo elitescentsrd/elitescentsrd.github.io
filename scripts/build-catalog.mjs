@@ -1,4 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 const SITE_URL = 'https://elitescentsrd.github.io';
 const USD_RATE_DOP = 63;
@@ -17,11 +18,17 @@ const response = await fetch(endpoint, { headers: { apikey: key }, signal: contr
 clearTimeout(timer);
 if (!response.ok) throw new Error('Supabase respondió HTTP ' + response.status);
 const databaseProducts = await response.json();
-const products = databaseProducts.map(product => {
+if (!Array.isArray(databaseProducts) || databaseProducts.length === 0) throw new Error('El catálogo llegó vacío; se conserva el despliegue anterior.');
+// page/slot son datos internos de la auditoría de precios: se guardan aparte
+// en data/product-positions.json (que nunca se publica) y no llegan al HTML
+// ni al JSON público del catálogo.
+const positions = {};
+const products = databaseProducts.map(({ page, slot, ...product }) => {
+  positions[product.id] = { page, slot };
   const extra = enrichment[String(product.id)];
   return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
 });
-if (!Array.isArray(products) || products.length === 0) throw new Error('El catálogo llegó vacío; se conserva el despliegue anterior.');
+await writeFile('data/product-positions.json', JSON.stringify(positions, null, 1) + '\n');
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const nums = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Number(v.replace(/[,.]/g, ''))).filter(Number.isFinite);
@@ -29,7 +36,28 @@ const gender = { hombre: 'Hombre', mujer: 'Mujer', unisex: 'Unisex' };
 const status = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'Solo por encargo' };
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
 const productUrl = p => SITE_URL + '/#producto-' + p.id;
-const imageUrl = p => p.image_url || (SITE_URL + '/pages/page-' + String(p.page || 1).padStart(2, '0') + '.webp');
+// Solo devuelve una URL de imagen individual real. A propósito NO cae a la
+// lámina completa de /pages/: esa lámina muestra hasta 12 productos distintos
+// y jamás debe declararse como la foto de un producto en datos estructurados
+// (ver hallazgo de la auditoría sobre JSON-LD e imágenes de producto).
+// Foto válida: HTTPS (p. ej. Supabase Storage) o una foto del propio sitio en /img/productos/. Nunca una lámina.
+const validImage = url => typeof url === 'string' && !/\/pages\/page-/i.test(url) && (/^https:\/\//i.test(url) || /^\/img\/productos\/[0-9]{4,}-[a-z0-9-]+\.(jpe?g|png|webp)$/i.test(url));
+const absolute = url => url.startsWith('/') ? SITE_URL + url : url;
+const imageUrl = p => validImage(p.image_url) ? p.image_url : null;
+// Fotos individuales guardadas en el repositorio: img/productos/<ID con 4 dígitos>-<nombre>.jpg.
+// Una foto subida por el panel (image_url en Supabase) tiene prioridad; estas cubren a los demás productos.
+const localPhotos = new Map();
+if (existsSync('img/productos')) {
+  for (const file of await readdir('img/productos')) {
+    const match = /^([0-9]{4,})-[a-z0-9-]+\.(jpe?g|png|webp)$/i.exec(file);
+    if (match) localPhotos.set(Number(match[1]), '/img/productos/' + file);
+  }
+}
+// Defensa en profundidad: una URL de lámina (o no válida) en la base nunca llega al HTML público.
+for (const p of products) {
+  p.image_url = imageUrl(p) || localPhotos.get(Number(p.id)) || null;
+  p.gallery_urls = (p.gallery_urls || []).filter(validImage);
+}
 const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
 const usdPrice = p => {
   const value = nums(p.price)[0];
@@ -38,12 +66,9 @@ const usdPrice = p => {
 const whatsapp = p => 'https://wa.me/18094333348?text=' + encodeURIComponent('Hola Elite Scents RD, me interesa: ' + p.name + ' (' + (p.size || 'tamaño por confirmar') + ', ' + (p.price || 'precio por confirmar') + '). ¿Puedes ayudarme?');
 
 function visual(p) {
-  if (p.image_url && /^https:\/\//i.test(p.image_url)) return '<div class="photo custom" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" style="background-image:url(&quot;' + esc(p.image_url) + '&quot;);background-size:contain;background-position:center"></div>';
-  const page = Number(p.page), slot = Number(p.slot);
-  const style = Number.isInteger(page) && page >= 1 && page <= 36 && Number.isInteger(slot) && slot >= 0 && slot < 12
-    ? ' style="background-image:url(&quot;/pages/page-' + String(page).padStart(2,'0') + '.webp&quot;);background-position:' + (slot % 3 * 50) + '% ' + (Math.floor(slot / 3) * 30.13).toFixed(2) + '%"'
-    : '';
-  return '<div class="photo" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '"' + style + '></div>';
+  if (imageUrl(p)) return '<div class="photo custom" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" style="background-image:url(&quot;' + esc(p.image_url) + '&quot;);background-size:contain;background-position:center"></div>';
+  // Sin foto propia: placeholder neutro. Nunca se recorta una lámina del catálogo original.
+  return '<div class="photo placeholder" role="img" aria-label="' + esc('Foto próximamente de ' + p.name) + '"></div>';
 }
 function card(p) {
   const availability = status[p.availability] ? p.availability : 'disponible';
@@ -56,14 +81,19 @@ function card(p) {
 }
 function schema(p) {
   const value = nums(p.price)[0];
-  return '<script type="application/ld+json">' + JSON.stringify({
+  // Solo URLs HTTPS reales (foto individual + galería); nunca la lámina
+  // completa. Si el producto todavía no tiene foto propia, se omite el campo
+  // "image" en vez de inventar una imagen que no le pertenece.
+  const images = [imageUrl(p), ...(p.gallery_urls || [])].filter(validImage).map(absolute).slice(0, 3);
+  const data = {
     '@context':'https://schema.org','@type':'Product',
     name:p.name,
-    image:[imageUrl(p), ...(p.gallery_urls || [])].slice(0,3),
     description:description(p),
     brand:{'@type':'Brand',name:p.brand || 'Elite Scents RD'},
     offers:{'@type':'Offer',price:value ? String(value) : undefined,priceCurrency:'DOP',availability:schemaAvailability[p.availability] || schemaAvailability.disponible,url:productUrl(p)}
-  }).replace(/</g, '\\u003c') + '<\/script>';
+  };
+  if (images.length) data.image = images;
+  return '<script type="application/ld+json">' + JSON.stringify(data).replace(/</g, '\\u003c') + '<\/script>';
 }
 
 const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="grid" aria-busy="false">\n' + products.map(card).join('\n') + '\n</div>\n' +
@@ -73,4 +103,23 @@ const output = template
   .replace(/<!-- PRODUCT_CATALOG_START -->[\s\S]*?<!-- PRODUCT_CATALOG_END -->/, catalog)
   .replace(/<!-- PRODUCT_JSON_LD_START -->[\s\S]*?<!-- PRODUCT_JSON_LD_END -->/, schemas);
 await writeFile('index.html', output);
+
+// Regenera sitemap.xml en cada build: la portada cambia con el catálogo, así
+// que su lastmod es siempre la fecha del build. Las páginas estáticas
+// conservan la fecha de su último cambio real de contenido; actualízala a
+// mano en STATIC_PAGES cuando edites privacidad.html o pedidos-envios.html.
+const today = new Date().toISOString().slice(0, 10);
+const STATIC_PAGES = [
+  { path: 'pedidos-envios.html', lastmod: '2026-09-20', changefreq: 'monthly', priority: '0.6' },
+  { path: 'privacidad.html', lastmod: '2026-09-20', changefreq: 'yearly', priority: '0.3' },
+];
+const sitemapUrl = (loc, lastmod, changefreq, priority) =>
+  '  <url><loc>' + SITE_URL + loc + '</loc><lastmod>' + lastmod + '</lastmod><changefreq>' + changefreq + '</changefreq><priority>' + priority + '</priority></url>';
+const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+  sitemapUrl('/', today, 'weekly', '1.0') + '\n' +
+  STATIC_PAGES.map(p => sitemapUrl('/' + p.path, p.lastmod, p.changefreq, p.priority)).join('\n') + '\n' +
+  '</urlset>\n';
+await writeFile('sitemap.xml', sitemap);
+
 console.log('Catálogo pre-renderizado: ' + products.length + ' productos con JSON-LD.');
+console.log('sitemap.xml actualizado (lastmod de portada: ' + today + ').');

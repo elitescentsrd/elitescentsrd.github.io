@@ -2,7 +2,7 @@ name: Build and deploy GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/**', 'feature/**', 'fix/**']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,6 +19,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Antes de esta fecha solo se validan las fotos ya cargadas; desde ella se exigen las 420.
+      IMAGE_CUTOFF: '2026-10-20'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,17 +31,32 @@ jobs:
         run: npm run build
       - name: Verify generated site
         run: npm test
+      - name: Validate product photos (HTTP 200, type, size, dimensions)
+        run: npm run test:images
+      - name: Anonymous access checks against Supabase (RLS and permissions, read-only)
+        run: npm run test:security
+      - name: Build clean public artifact (_site/)
+        run: npm run site
+      # Revisión privada: en ramas y pull requests el artefacto _site/ se puede
+      # descargar desde la ejecución del workflow (no se despliega a producción).
+      - name: Upload review artifact (branches and pull requests)
+        if: github.ref != 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-review-${{ github.run_number }}
+          path: _site
+          retention-days: 14
       - name: Configure Pages
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
       - name: Upload static site
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
   deploy:
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

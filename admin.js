@@ -13,6 +13,12 @@
   function status(el, message, kind = '') { el.textContent = message; el.className = kind; }
   function normalizeArray(value) { return String(value || '').split(/[\n,]/).map(v => v.trim()).filter(Boolean); }
   function money(value) { return 'RD$' + new Intl.NumberFormat('es-DO').format(Number(String(value).replace(/[^0-9.]/g, '')) || 0); }
+  // Conserva presentaciones múltiples ("RD$3,550 / RD$4,150"): antes se concatenaban en un solo número.
+  function normalizePrice(value) {
+    const amounts = (String(value || '').match(/\d[\d,]*(?:\.\d+)?/g) || []).map(v => Number(v.replace(/,/g, ''))).filter(n => Number.isFinite(n) && n > 0);
+    return amounts.length ? amounts.map(money).join(' / ') : '';
+  }
+  const MAX_IMAGE_BYTES = 3 * 1024 * 1024, MIN_IMAGE_SIDE = 500, BATCH_MAX = 36;
   function authHeaders(json = true) {
     const headers = { apikey: key, Authorization: 'Bearer ' + session.access_token };
     if (json) headers['Content-Type'] = 'application/json';
@@ -147,7 +153,7 @@
     productQuery=e.target.value.trim().toLocaleLowerCase('es'); renderProducts(productQuery?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(productQuery)):products);
   });
   function editProduct(p) {
-    for (const name of ['id','name','brand','price','size','gender','availability','sort_order','page','slot','description','image_url']) if (form.elements[name]) form.elements[name].value=p[name]??'';
+    for (const name of ['id','name','brand','price','size','gender','availability','sort_order','description','image_url']) if (form.elements[name]) form.elements[name].value=p[name]??'';
     form.elements.notes_top.value=(p.notes_top||[]).join(', '); form.elements.notes_heart.value=(p.notes_heart||[]).join(', '); form.elements.notes_base.value=(p.notes_base||[]).join(', ');
     form.elements.gallery_urls.value=(p.gallery_urls||[]).join('\n'); form.elements.active.checked=p.active!==false;
     $('#form-title').textContent='Editar perfume'; $('#cancel-edit').classList.remove('hidden'); form.scrollIntoView({behavior:'smooth'});
@@ -155,7 +161,7 @@
   function resetForm() { form.reset(); form.elements.id.value=''; form.elements.active.checked=true; form.elements.sort_order.value=0; $('#form-title').textContent='Agregar perfume'; $('#cancel-edit').classList.add('hidden'); }
   $('#cancel-edit').addEventListener('click', resetForm);
   async function upload(file, prefix) {
-    if (file.size > 6 * 1024 * 1024) throw new Error('Cada imagen debe pesar menos de 6 MB.');
+    if (file.size > MAX_IMAGE_BYTES) throw new Error('Cada imagen debe pesar menos de 3 MB.');
     const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase();
     const path=prefix+'/'+Date.now()+'-'+crypto.randomUUID()+'.'+ext;
     const res=await fetch(base+'/storage/v1/object/product-images/'+path,{method:'POST',headers:{...authHeaders(false),'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});
@@ -171,13 +177,60 @@
       const files=[...form.elements.gallery_files.files]; if(files.length>3) throw new Error('Selecciona un máximo de 3 imágenes para la galería.');
       for(const file of files) gallery.push(await upload(file,'gallery'));
       gallery=[...new Set(gallery)].slice(0,3);
-      const rawPrice=Number(String(fd.get('price')).replace(/[^0-9.]/g,''));
-      const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:money(rawPrice),size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,page:Number(fd.get('page'))||null,slot:Number(fd.get('slot'))||null,image_url:imageUrl||null,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
+      const priceText=normalizePrice(fd.get('price')), rawPrice=priceText?1:NaN;
+      const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:priceText,size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,image_url:imageUrl||null,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
       if(!payload.name||!Number.isFinite(rawPrice)) throw new Error('Completa el nombre y un precio válido.');
       const path=id?'/rest/v1/products?id=eq.'+encodeURIComponent(id):'/rest/v1/products';
       await api(path,{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
       status(productStatus,'Producto guardado.','success'); resetForm(); await loadAll();
     } catch(err){status(productStatus,err.message,'error')}
+  });
+  // --- Carga de fotos por lote: el ID del producto sale del nombre del archivo (0012-nombre.jpg). ---
+  const batchForm = $('#batch-form'), batchStatus = $('#batch-status'), batchLog = $('#batch-log'), batchReport = $('#batch-report');
+  function batchId(name) { const m = /^(\d{1,9})[-_.]/.exec(String(name)); return m ? Number(m[1]) : null; }
+  async function imageSize(file) {
+    const bitmap = await createImageBitmap(file);
+    const size = { width: bitmap.width, height: bitmap.height }; bitmap.close?.(); return size;
+  }
+  function batchRow(file, product, message, kind) {
+    const tr = document.createElement('tr'), cells = [document.createElement('td'), document.createElement('td'), document.createElement('td')];
+    cells[0].textContent = file.name; cells[1].textContent = product ? '#' + product.id + ' ' + product.name : '—'; cells[2].textContent = message; cells[2].className = kind || '';
+    tr.append(...cells); batchLog.append(tr);
+  }
+  async function processBatchFile(file, replace) {
+    const id = batchId(file.name), product = id ? products.find(p => Number(p.id) === id) : null;
+    if (!id) return ['El nombre debe empezar con el ID y un guion.', 'error', null];
+    if (!product) return ['No existe un producto con ese ID.', 'error', null];
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return ['Formato no permitido (usa JPG, PNG o WebP).', 'error', product];
+    if (file.size > MAX_IMAGE_BYTES) return ['Pesa más de 3 MB.', 'error', product];
+    if (product.image_url && !replace) return ['Ya tiene foto; se omitió.', 'muted', product];
+    let dims; try { dims = await imageSize(file); } catch { return ['La imagen no se puede leer.', 'error', product]; }
+    if (dims.width < MIN_IMAGE_SIDE || dims.height < MIN_IMAGE_SIDE) return ['Mide ' + dims.width + '×' + dims.height + '; el mínimo es 500×500.', 'error', product];
+    const url = await upload(file, 'products/' + id);
+    await api('/rest/v1/products?id=eq.' + encodeURIComponent(id), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ image_url: url }) });
+    product.image_url = url;
+    return ['Foto actualizada ✓', 'success', product];
+  }
+  batchForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const files = [...$('#batch-files').files], replace = $('#batch-replace').checked, button = batchForm.querySelector('button[type="submit"]');
+    if (!files.length) return;
+    if (files.length > BATCH_MAX) { status(batchStatus, 'Máximo ' + BATCH_MAX + ' fotos por lote.', 'error'); return; }
+    const ids = files.map(f => batchId(f.name)).filter(Boolean);
+    if (new Set(ids).size !== ids.length) { status(batchStatus, 'Hay dos archivos con el mismo ID de producto.', 'error'); return; }
+    button.disabled = true; batchLog.replaceChildren(); batchReport.classList.remove('hidden');
+    let ok = 0, skipped = 0, failed = 0;
+    for (const [index, file] of files.entries()) {
+      status(batchStatus, 'Procesando ' + (index + 1) + ' de ' + files.length + '…');
+      try {
+        const [message, kind, product] = await processBatchFile(file, replace);
+        batchRow(file, product, message, kind);
+        if (kind === 'success') ok++; else if (kind === 'muted') skipped++; else failed++;
+      } catch (err) { failed++; batchRow(file, null, err.message, 'error'); }
+    }
+    button.disabled = false;
+    status(batchStatus, 'Lote terminado: ' + ok + ' actualizadas, ' + skipped + ' omitidas, ' + failed + ' con error.', failed ? 'error' : 'success');
+    await loadAll();
   });
   $('#order-form').addEventListener('submit', async e => {
     e.preventDefault(); const el=$('#order-status'); status(el,'Guardando…');

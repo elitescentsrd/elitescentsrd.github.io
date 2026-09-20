@@ -5,9 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-catalog.mjs",
-    "test": "node scripts/test-site.mjs",
-    "verify": "npm run build && npm test",
-    "check:generated": "npm run build && git diff --exit-code -- index.html"
+    "test": "node scripts/test-site.mjs && node scripts/test-photos-render.mjs",
+    "test:images": "node scripts/check-product-images.mjs",
+    "test:security": "node scripts/check-supabase-security.mjs",
+    "check:batch": "node scripts/check-photo-batch.mjs",
+    "verify": "npm run build && npm test && npm run test:images && npm run test:security",
+    "check:generated": "npm run build && git diff --exit-code -- index.html",
+    "site": "node scripts/build-site-artifact.mjs",
+    "serve": "npm run build && npm run site && node scripts/serve.mjs"
   },
   "engines": { "node": ">=20" }
 }
+
