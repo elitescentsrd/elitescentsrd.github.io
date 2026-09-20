@@ -8,7 +8,7 @@
   const loginCard = $('#login-card'), content = $('#admin-content'), logout = $('#logout');
   const loginStatus = $('#login-status'), productStatus = $('#product-status');
   const form = $('#product-form'), productsBody = $('#products-body'), ordersBody = $('#orders-body');
-  let session = null, products = [], orders = [], productQuery = '';
+  let session = null, products = [], orders = [], productQuery = '', knownOrderIds = new Set(), orderPoll = null;
 
   function status(el, message, kind = '') { el.textContent = message; el.className = kind; }
   function normalizeArray(value) { return String(value || '').split(/[\n,]/).map(v => v.trim()).filter(Boolean); }
@@ -48,8 +48,30 @@
   }
   function showAdmin() {
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
-    loadAll();
+    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
+    if(!orderPoll) orderPoll=setInterval(checkNewOrders,30000);
   }
+  async function checkNewOrders(){
+    if(!session)return;
+    try{
+      const latest=await api('/rest/v1/orders?select=*&order=created_at.desc&limit=20');
+      const fresh=latest.filter(o=>!knownOrderIds.has(String(o.id)));
+      latest.forEach(o=>knownOrderIds.add(String(o.id)));
+      if(fresh.length){
+        orders=latest;renderOrders();
+        if('Notification' in window && Notification.permission==='granted'){
+          new Notification('Nuevo pedido - Elite Scents RD',{body:(fresh[0].customer_name||'Cliente')+' realizó un pedido.'});
+        }
+        document.title='('+fresh.length+') Nuevo pedido | Elite Scents RD';
+      }
+    }catch{}
+  }
+  const notifyBtn=$('#enable-order-notifications');
+  if(notifyBtn) notifyBtn.addEventListener('click',async()=>{
+    if(!('Notification' in window)){alert('Este navegador no admite notificaciones.');return;}
+    const permission=await Notification.requestPermission();
+    notifyBtn.textContent=permission==='granted'?'Notificaciones activadas':'Activar notificaciones';
+  });
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault(); status(loginStatus, 'Verificando…');
     const data = Object.fromEntries(new FormData(e.currentTarget));
@@ -62,7 +84,7 @@
   });
   logout.addEventListener('click', async () => {
     try { await api('/auth/v1/logout', { method: 'POST' }); } catch {}
-    sessionStorage.removeItem(tokenKey); location.reload();
+    if(orderPoll){clearInterval(orderPoll);orderPoll=null;} sessionStorage.removeItem(tokenKey); location.reload();
   });
 
   async function loadAll() {
