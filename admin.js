@@ -108,13 +108,39 @@
       cells[5].className='admin-actions'; cells[5].append(edit,del); tr.append(...cells); return tr;
     }));
   }
+  function orderWhatsapp(o) {
+    const eta=o.estimated_delivery?(' Entrega estimada: '+o.estimated_delivery+'.'):'';
+    const text='Hola '+(o.customer_name||'')+', recibimos tu pedido #'+o.id+' en Elite Scents RD.'+eta+'\n\n'+(o.items||'')+'\n\nTotal: '+(o.amount||'Por confirmar');
+    return 'https://wa.me/'+String(o.phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent(text);
+  }
   function renderOrders() {
     ordersBody.replaceChildren(...orders.map(o => {
       const tr=document.createElement('tr');
-      [new Date(o.created_at).toLocaleDateString('es-DO'),o.customer_name||'—',o.phone||'—',o.items||'—',o.status||'nuevo'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});
-      const td=document.createElement('td'), del=document.createElement('button'); del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
+      const date=document.createElement('td');date.textContent=new Date(o.created_at).toLocaleString('es-DO');
+      const customer=document.createElement('td');customer.textContent=o.customer_name||'—';
+      if(o.cedula) customer.title='Cédula: '+o.cedula+' · Dirección: '+(o.shipping_address||'');
+      const phone=document.createElement('td');phone.textContent=o.phone||'—';
+      const items=document.createElement('td');items.textContent=o.items||'—';
+      const total=document.createElement('td');total.textContent=o.amount||'—';
+      const manage=document.createElement('td');manage.className='admin-actions';
+      const statusSelect=document.createElement('select');
+      ['nuevo','confirmado','en_preparacion','en_camino','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
+      const eta=document.createElement('input');eta.type='text';eta.maxLength=120;eta.placeholder='Ej. 2-3 días';eta.value=o.estimated_delivery||'';eta.setAttribute('aria-label','Entrega estimada del pedido '+o.id);
+      const save=document.createElement('button');save.type='button';save.className='btn btn-secondary';save.textContent='Guardar';
+      save.addEventListener('click',async()=>{
+        save.disabled=true;
+        try{
+          await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:statusSelect.value,estimated_delivery:eta.value.trim()||null,updated_at:new Date().toISOString()})});
+          o.status=statusSelect.value;o.estimated_delivery=eta.value.trim()||null;save.textContent='Guardado ✓';setTimeout(()=>save.textContent='Guardar',1400);
+        }catch(err){alert(err.message)}finally{save.disabled=false}
+      });
+      manage.append(statusSelect,eta,save);
+      const actions=document.createElement('td');actions.className='admin-actions';
+      const wa=document.createElement('a');wa.className='btn btn-secondary';wa.target='_blank';wa.rel='noopener noreferrer';wa.href=orderWhatsapp(o);wa.textContent='WhatsApp';
+      const del=document.createElement('button');del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
       del.addEventListener('click',async()=>{if(!confirm('¿Eliminar este pedido?'))return;try{await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});orders=orders.filter(x=>x.id!==o.id);renderOrders()}catch(err){alert(err.message)}});
-      td.append(del);tr.append(td);return tr;
+      actions.append(wa,del);
+      tr.append(date,customer,phone,items,total,manage,actions);return tr;
     }));
   }
   $('#admin-search').addEventListener('input', e => {
