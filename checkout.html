@@ -49,6 +49,13 @@
             <div id="authStatus" class="order-status" aria-live="polite"></div>
             <button id="resendConfirm" class="button outline hidden" type="button">Reenviar correo de confirmación</button>
           </form>
+          <form id="mfaLoginForm" class="stack hidden">
+            <p class="security-note">Tu cuenta tiene la verificación en dos pasos activada. Abre tu app de autenticación y escribe el código de 6 dígitos de <strong>Elite Scents</strong>.</p>
+            <label>Código de 6 dígitos<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
+            <button class="button gold" type="submit">Verificar y entrar</button>
+            <button id="mfaLoginCancel" class="button outline" type="button">Cancelar</button>
+            <div id="mfaLoginStatus" class="order-status" aria-live="polite"></div>
+          </form>
         </div>
 
         <div id="customerArea" class="hidden">
@@ -65,13 +72,19 @@
 
           <div class="mfa-box">
             <h3>Seguridad de la cuenta</h3>
-            <p class="security-note">Puedes activar autenticación multifactor (TOTP) con Google Authenticator, Authy, 1Password o una app compatible.</p>
+            <p class="security-note">Verificación en dos pasos (opcional): además de tu contraseña, al entrar se pide un código de 6 dígitos que genera tu celular. Funciona con Google Authenticator, Authy, 1Password o una app compatible.</p>
             <div id="mfaInactive">
               <button id="enableMfa" class="button outline" type="button">Activar MFA</button>
             </div>
+            <div id="mfaActive" class="hidden">
+              <button id="disableMfa" class="button outline" type="button">Desactivar MFA</button>
+            </div>
             <div id="mfaSetup" class="hidden stack">
+              <p class="security-note">1) En tu app de autenticación elige "Añadir cuenta" y escanea este código desde <strong>otro dispositivo</strong>. Si estás entrando desde el mismo celular, usa el botón "Abrir en mi app" o escribe la clave manual.</p>
               <img id="mfaQr" class="mfa-qr" alt="Código QR para activar MFA">
+              <a id="mfaLink" class="button outline hidden" href="#">Abrir en mi app de autenticación</a>
               <p>Clave manual: <code id="mfaSecret"></code></p>
+              <p class="security-note">2) Escribe abajo el código de 6 dígitos que muestra la app y confirma.</p>
               <label>Código de 6 dígitos<input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8"></label>
               <button id="verifyMfa" class="button outline" type="button">Confirmar MFA</button>
             </div>

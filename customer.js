@@ -37,7 +37,30 @@ function renderCart(){
  $('#clearCart').disabled=!items.length;
 }
 function setMode(next,keepStatus){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';if(!keepStatus)$('#authStatus').textContent=''}
-async function login(email,password){const res=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await json(res);saveSession(data);await afterLogin()}
+// Verificación en dos pasos al entrar: si la cuenta tiene un factor TOTP verificado, tras la contraseña se pide el código.
+let mfaPending=null;
+async function verifiedTotp(data){
+ let user=data.user;
+ if(!user||!Array.isArray(user.factors)){const res=await fetch(base+'/auth/v1/user',{headers:{apikey:key,Authorization:'Bearer '+data.access_token}});user=await json(res)}
+ return (user.factors||[]).find(f=>f.factor_type==='totp'&&f.status==='verified')||null;
+}
+async function login(email,password){
+ const res=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+ const data=await json(res);
+ const factor=await verifiedTotp(data);
+ if(factor){mfaPending={session:data,factorId:factor.id};$('#authForm').classList.add('hidden');$('#mfaLoginForm').classList.remove('hidden');$('#mfaLoginStatus').textContent='';$('#mfaLoginForm [name=code]').value='';$('#mfaLoginForm [name=code]').focus();return}
+ saveSession(data);await afterLogin();
+}
+async function finishMfaLogin(code){
+ if(!mfaPending)throw new Error('Vuelve a iniciar sesión.');
+ if(!/^\d{6,8}$/.test(code))throw new Error('Escribe el código de 6 dígitos de tu app.');
+ const headers={apikey:key,Authorization:'Bearer '+mfaPending.session.access_token,'Content-Type':'application/json'},id=encodeURIComponent(mfaPending.factorId);
+ const challenge=await json(await fetch(base+'/auth/v1/factors/'+id+'/challenge',{method:'POST',headers,body:'{}'}));
+ const verified=await json(await fetch(base+'/auth/v1/factors/'+id+'/verify',{method:'POST',headers,body:JSON.stringify({challenge_id:challenge.id,code})}));
+ saveSession({...verified,user:verified.user||mfaPending.session.user});mfaPending=null;
+ $('#mfaLoginForm').classList.add('hidden');$('#authForm').classList.remove('hidden');
+ await afterLogin();
+}
 // El enlace del correo de confirmación vuelve a esta misma página (debe estar en la lista de URLs permitidas de Supabase Auth).
 const SITE_URL='https://elitescentsrd.github.io';
 function redirectUrl(){return (location.protocol==='https:'?location.origin:SITE_URL)+'/checkout.html'}
@@ -47,6 +70,9 @@ function friendly(message){
  if(/invalid login credentials/i.test(m))return 'Correo o contraseña incorrectos.';
  if(/already registered/i.test(m))return 'Ese correo ya tiene una cuenta. Inicia sesión.';
  if(/rate limit|too many/i.test(m))return 'Se hicieron demasiados intentos o correos. Espera unos minutos e inténtalo otra vez.';
+ if(/invalid totp|mfa verification|verification failed/i.test(m))return 'Código incorrecto o vencido. Escribe el código actual que muestra tu app (cambia cada 30 segundos).';
+ if(/aal2/i.test(m))return 'Para este cambio inicia sesión de nuevo con tu código de verificación y vuelve a intentarlo.';
+ if(/friendly name|already exists/i.test(m))return 'Ya había una configuración a medias. Pulsa "Activar MFA" otra vez.';
  if(/password should be at least|weak/i.test(m))return 'La contraseña es demasiado débil: usa al menos 8 caracteres.';
  return m;
 }
@@ -94,14 +120,33 @@ async function saveProfile(fd){
 }
 function renderMfaState(user){
  const verified=(user?.factors||[]).some(f=>f.factor_type==='totp'&&f.status==='verified');
- $('#mfaInactive').classList.toggle('hidden',verified);$('#mfaSetup').classList.add('hidden');$('#mfaStatus').textContent=verified?'MFA activado en esta cuenta.':'MFA opcional: todavía no está activado.';
+ $('#mfaInactive').classList.toggle('hidden',verified);$('#mfaActive').classList.toggle('hidden',!verified);$('#mfaSetup').classList.add('hidden');$('#mfaStatus').textContent=verified?'MFA activado en esta cuenta: al entrar se pedirá el código de tu app.':'MFA opcional: todavía no está activado.';
+}
+// Supabase entrega el QR como un SVG (a veces ya dentro de una URL data: sin codificar); se normaliza para que el <img> lo dibuje.
+function qrSource(qr){
+ const s=String(qr||'');const i=s.indexOf('<svg');
+ if(i>=0)return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s.slice(i));
+ return /^data:image\//i.test(s)?s:'';
 }
 async function enableMfa(){
  $('#mfaStatus').textContent='Preparando MFA…';
- const data=await authFetch('/auth/v1/factors',{method:'POST',body:JSON.stringify({factor_type:'totp',friendly_name:'Elite Scents RD'})});
- mfaEnrollment=data;let qr=data?.totp?.qr_code||'';
- if(qr&&qr.trim().startsWith('<svg'))qr='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(qr);
- $('#mfaQr').src=qr;$('#mfaSecret').textContent=data?.totp?.secret||'';$('#mfaSetup').classList.remove('hidden');$('#mfaInactive').classList.add('hidden');$('#mfaStatus').textContent='Escanea el QR y escribe el código de tu app.';
+ // Un intento anterior sin terminar deja un factor "unverified" que bloquea uno nuevo: se elimina antes.
+ const current=await authFetch('/auth/v1/user',{method:'GET'});
+ for(const f of (current.factors||[]))if(f.factor_type==='totp'&&f.status!=='verified')await authFetch('/auth/v1/factors/'+encodeURIComponent(f.id),{method:'DELETE'}).catch(()=>{});
+ const data=await authFetch('/auth/v1/factors',{method:'POST',body:JSON.stringify({factor_type:'totp',friendly_name:'Elite Scents '+Date.now().toString(36)})});
+ mfaEnrollment=data;
+ const img=$('#mfaQr'),src=qrSource(data?.totp?.qr_code);
+ img.classList.toggle('hidden',!src);if(src)img.src=src;
+ img.onerror=()=>{img.classList.add('hidden');$('#mfaStatus').textContent='No se pudo dibujar el QR. Usa el botón "Abrir en mi app" o escribe la clave manual en tu app.'};
+ const uri=String(data?.totp?.uri||''),link=$('#mfaLink');
+ if(/^otpauth:\/\//i.test(uri)){link.href=uri;link.classList.remove('hidden')}else link.classList.add('hidden');
+ $('#mfaSecret').textContent=data?.totp?.secret||'';$('#mfaCode').value='';$('#mfaSetup').classList.remove('hidden');$('#mfaInactive').classList.add('hidden');$('#mfaStatus').textContent='Escanea el QR (o usa la clave manual) y escribe el código de tu app.';
+}
+async function disableMfa(){
+ const factor=(session?.user?.factors||[]).find(f=>f.factor_type==='totp'&&f.status==='verified');
+ if(!factor)return;if(!confirm('¿Desactivar la verificación en dos pasos de esta cuenta?'))return;
+ await authFetch('/auth/v1/factors/'+encodeURIComponent(factor.id),{method:'DELETE'});
+ const user=await authFetch('/auth/v1/user',{method:'GET'});session.user=user;saveSession(session);renderMfaState(user);$('#mfaStatus').textContent='MFA desactivado.';
 }
 async function verifyMfa(){
  if(!mfaEnrollment?.id)throw new Error('Primero inicia la configuración MFA.');
@@ -140,8 +185,11 @@ $('#authForm').addEventListener('submit',async e=>{e.preventDefault();const fd=n
 $('#resendConfirm').addEventListener('click',()=>resendConfirmation().catch(err=>$('#authStatus').textContent=friendly(err.message)));
 $('#profileForm').addEventListener('submit',async e=>{e.preventDefault();$('#profileStatus').textContent='Guardando…';try{await saveProfile(new FormData(e.currentTarget));$('#profileStatus').textContent='Datos guardados.'}catch(err){$('#profileStatus').textContent=err.message}});
 $('#signOut').addEventListener('click',()=>{saveSession(null);location.reload()});
-$('#enableMfa').addEventListener('click',()=>enableMfa().catch(err=>$('#mfaStatus').textContent=err.message));
-$('#verifyMfa').addEventListener('click',()=>verifyMfa().catch(err=>$('#mfaStatus').textContent=err.message));
+$('#enableMfa').addEventListener('click',()=>enableMfa().catch(err=>{$('#mfaStatus').textContent=friendly(err.message);$('#mfaInactive').classList.remove('hidden')}));
+$('#verifyMfa').addEventListener('click',()=>verifyMfa().catch(err=>$('#mfaStatus').textContent=friendly(err.message)));
+$('#disableMfa').addEventListener('click',()=>disableMfa().catch(err=>$('#mfaStatus').textContent=friendly(err.message)));
+$('#mfaLoginForm').addEventListener('submit',async e=>{e.preventDefault();$('#mfaLoginStatus').textContent='Verificando…';try{await finishMfaLogin(String(new FormData(e.currentTarget).get('code')).trim())}catch(err){$('#mfaLoginStatus').textContent=friendly(err.message)}});
+$('#mfaLoginCancel').addEventListener('click',()=>{mfaPending=null;$('#mfaLoginForm').classList.add('hidden');$('#authForm').classList.remove('hidden');$('#authStatus').textContent='';$('#authForm').elements.password.value=''});
 $('#placeOrder').addEventListener('click',async()=>{
  const profile=$('#profileForm');
  if(!profile.reportValidity())return;

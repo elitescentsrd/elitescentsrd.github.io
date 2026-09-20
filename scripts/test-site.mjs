@@ -187,6 +187,21 @@ assert(customer.includes("https://wa.me/'+WA+'?text='+encodeURIComponent('Hola E
 assert(adminHtml.includes('id="pending-count"')&&adminJs.includes('function updatePending()')&&adminJs.includes('function beep()'),'El panel debe mostrar pendientes y sonar');
 assert(adminJs.includes('async function refreshSession()')&&adminJs.includes('grant_type=refresh_token'),'El panel debe renovar la sesión');
 assert(adminJs.includes("digits.length===10)digits='1'+digits"),'WhatsApp del panel debe añadir el código de país 1 a números de 10 dígitos');
+// --- MFA (TOTP): QR legible, reintentos y código al entrar ---
+{
+  const start=customer.indexOf('function qrSource(qr){'),end=customer.indexOf('\n}',start)+2;
+  const qrSource=new Function(customer.slice(start,end)+'; return qrSource;')();
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path d="M0 0h10v10H0z" fill="#000"/></svg>';
+  for(const input of [svg,'data:image/svg+xml;utf-8,'+svg,'data:image/svg+xml;charset=UTF-8,'+svg]){
+    const out=qrSource(input); assert(out.startsWith('data:image/svg+xml;charset=utf-8,%3Csvg'),'El QR debe convertirse a una URL data: codificada');
+    assert.equal(decodeURIComponent(out.slice(out.indexOf(',')+1)),svg,'El SVG del QR debe conservarse íntegro');
+  }
+  assert.equal(qrSource('data:image/png;base64,AAAA'),'data:image/png;base64,AAAA');
+  assert.equal(qrSource('javascript:alert(1)'),'','Un valor no permitido no debe usarse como imagen');
+}
+assert(customer.includes("f.status!=='verified')await authFetch('/auth/v1/factors/'"),'Debe eliminar factores sin verificar antes de activar de nuevo');
+assert(customer.includes('async function finishMfaLogin(code)')&&customer.includes("/challenge'")&&customer.includes("/verify'"),'Al entrar con MFA activo debe pedirse el código');
+assert(checkout.includes('id="mfaLoginForm"')&&checkout.includes('id="disableMfa"')&&checkout.includes('id="mfaLink"'),'checkout.html debe incluir el código al entrar, desactivar y abrir en la app');
 const lockMigration=await readFile('supabase/migrations/20260920120000_lock_down_place_customer_order.sql','utf8');
 assert(/revoke execute on function public\.place_customer_order\(jsonb\) from public, anon/i.test(lockMigration)&&/grant\s+execute on function public\.place_customer_order\(jsonb\) to authenticated/i.test(lockMigration),'La migración versionada debe revocar anon y conceder authenticated');
 assert(lockMigration.includes('to_regprocedure'),'La migración debe ser idempotente y no fallar si la función no existe');
