@@ -46,3 +46,10 @@ assert(Object.values(enrichment).every(item => /^https:\/\//.test(item.source)),
 console.log('Pruebas superadas: 420 productos con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
 
 
+
+// Admin order notification regression checks
+const adminHtml=await readFile('admin.html','utf8');
+const adminJs=await readFile('admin.js','utf8');
+assert(adminHtml.includes('id="enable-order-notifications"'),'Admin debe ofrecer activar notificaciones');
+assert(adminJs.includes('function checkNewOrders()'),'Admin debe comprobar pedidos nuevos');
+assert(adminJs.includes("Notification.permission==='granted'"),'Admin debe respetar permiso de notificaciones');
