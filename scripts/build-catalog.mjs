@@ -52,7 +52,7 @@ function card(p) {
     visual(p) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
     '<h3>' + esc(p.name) + '</h3><div class="size">' + esc(notes) + '</div><div class="price"><strong>' + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
-    '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><a href="' + esc(whatsapp(p)) + '" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a></div></article>';
+    '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><button type="button" data-add-cart="' + esc(p.id) + '">Agregar al carrito</button></div></article>';
 }
 function schema(p) {
   const value = nums(p.price)[0];
