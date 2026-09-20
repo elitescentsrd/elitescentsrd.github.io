@@ -30,8 +30,20 @@
     if (!res.ok) throw new Error((data && (data.message || data.error_description || data.error)) || 'Error ' + res.status);
     return data;
   }
+  // La sesión de Supabase dura ~1 hora: al recibir 401 se renueva con el refresh token para que el panel
+  // siga avisando de pedidos nuevos durante todo el día sin volver a iniciar sesión.
+  async function refreshSession() {
+    if (!session?.refresh_token) return false;
+    try {
+      const res = await fetch(base + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.refresh_token }) });
+      if (!res.ok) return false;
+      const data = await res.json(); saveSession({ ...data, user: data.user || session.user }); return true;
+    } catch { return false; }
+  }
   async function api(path, options = {}) {
-    const res = await fetch(base + path, { ...options, headers: { ...authHeaders(options.json !== false), ...(options.headers || {}) } });
+    const send = () => fetch(base + path, { ...options, headers: { ...authHeaders(options.json !== false), ...(options.headers || {}) } });
+    let res = await send();
+    if (res.status === 401 && !path.startsWith('/auth/v1/logout') && await refreshSession()) res = await send();
     return parse(res);
   }
   function saveSession(data) {
@@ -55,7 +67,23 @@
   function showAdmin() {
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
     loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
-    if(!orderPoll) orderPoll=setInterval(checkNewOrders,30000);
+    if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
+  }
+  // Pedidos sin atender (estado "nuevo"): contador visible y en el título de la pestaña.
+  function updatePending() {
+    const pending=orders.filter(o=>(o.status||'nuevo')==='nuevo').length;
+    const label=$('#pending-count');
+    if(label){label.textContent=pending?pending+(pending===1?' pedido nuevo por atender':' pedidos nuevos por atender'):'No hay pedidos nuevos por atender.';label.classList.toggle('has-pending',pending>0)}
+    document.title=(pending?'('+pending+') ':'')+'Panel | Elite Scents RD';
+  }
+  // Sonido corto de aviso (el navegador solo permite audio después de que hayas hecho clic en la página).
+  function beep() {
+    try{
+      const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;
+      const ctx=new Ctx(),now=ctx.currentTime;
+      [[880,0],[1175,0.22]].forEach(([freq,delay])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=freq;osc.connect(gain);gain.connect(ctx.destination);gain.gain.setValueAtTime(0.0001,now+delay);gain.gain.exponentialRampToValueAtTime(0.25,now+delay+0.02);gain.gain.exponentialRampToValueAtTime(0.0001,now+delay+0.3);osc.start(now+delay);osc.stop(now+delay+0.32)});
+      setTimeout(()=>ctx.close(),1000);
+    }catch{}
   }
   async function checkNewOrders(){
     if(!session)return;
@@ -63,12 +91,14 @@
       const latest=await api('/rest/v1/orders?select=*&order=created_at.desc&limit=20');
       const fresh=latest.filter(o=>!knownOrderIds.has(String(o.id)));
       latest.forEach(o=>knownOrderIds.add(String(o.id)));
+      // Se conservan los pedidos más antiguos ya cargados; los 20 recientes se actualizan (estado, entrega).
+      const recent=new Set(latest.map(o=>String(o.id)));
+      orders=[...latest,...orders.filter(o=>!recent.has(String(o.id)))];renderOrders();
       if(fresh.length){
-        orders=latest;renderOrders();
+        beep();
         if('Notification' in window && Notification.permission==='granted'){
           new Notification('Nuevo pedido - Elite Scents RD',{body:(fresh[0].customer_name||'Cliente')+' realizó un pedido.'});
         }
-        document.title='('+fresh.length+') Nuevo pedido | Elite Scents RD';
       }
     }catch{}
   }
@@ -117,9 +147,12 @@
   function orderWhatsapp(o) {
     const eta=o.estimated_delivery?(' Entrega estimada: '+o.estimated_delivery+'.'):'';
     const text='Hola '+(o.customer_name||'')+', recibimos tu pedido #'+o.id+' en Elite Scents RD.'+eta+'\n\n'+(o.items||'')+'\n\nTotal: '+(o.amount||'Por confirmar');
-    return 'https://wa.me/'+String(o.phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent(text);
+    // wa.me exige el código de país: un número dominicano de 10 dígitos (809/829/849) lleva 1 delante.
+    let digits=String(o.phone||'').replace(/\D/g,'');if(digits.length===10)digits='1'+digits;
+    return 'https://wa.me/'+digits+'?text='+encodeURIComponent(text);
   }
   function renderOrders() {
+    updatePending();
     ordersBody.replaceChildren(...orders.map(o => {
       const tr=document.createElement('tr');
       const date=document.createElement('td');date.textContent=new Date(o.created_at).toLocaleString('es-DO');

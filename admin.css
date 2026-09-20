@@ -31,3 +31,5 @@ body.admin-light input[type="file"]{color:#171714!important}
 
 /* Utilidad que reemplaza el style="" en línea del buscador de inventario. */
 .admin-search-input{width:100%;max-width:560px;padding:12px;margin-bottom:14px}
+
+.pending-count{font-weight:700;margin:6px 0 0}.pending-count.has-pending{color:#9f2929;background:#fff0ed;border:1px solid #e8c3be;padding:8px 12px;display:inline-block}

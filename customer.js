@@ -36,9 +36,46 @@ function renderCart(){
  $('#cartWhatsapp').classList.toggle('hidden',!items.length);
  $('#clearCart').disabled=!items.length;
 }
-function setMode(next){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';$('#authStatus').textContent=''}
+function setMode(next,keepStatus){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';if(!keepStatus)$('#authStatus').textContent=''}
 async function login(email,password){const res=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await json(res);saveSession(data);await afterLogin()}
-async function signup(email,password){const res=await fetch(base+'/auth/v1/signup',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await json(res);if(data.access_token){saveSession(data);await afterLogin()}else{$('#authStatus').textContent='Cuenta creada. Revisa tu correo si Supabase solicita confirmar el email y luego inicia sesión.';setMode('login')}}
+// El enlace del correo de confirmación vuelve a esta misma página (debe estar en la lista de URLs permitidas de Supabase Auth).
+const SITE_URL='https://elitescentsrd.github.io';
+function redirectUrl(){return (location.protocol==='https:'?location.origin:SITE_URL)+'/checkout.html'}
+function friendly(message){
+ const m=String(message||'');
+ if(/email not confirmed/i.test(m))return 'Tu correo todavía no está confirmado. Abre el enlace que te enviamos (revisa también spam) o reenvía el correo.';
+ if(/invalid login credentials/i.test(m))return 'Correo o contraseña incorrectos.';
+ if(/already registered/i.test(m))return 'Ese correo ya tiene una cuenta. Inicia sesión.';
+ if(/rate limit|too many/i.test(m))return 'Se hicieron demasiados intentos o correos. Espera unos minutos e inténtalo otra vez.';
+ if(/password should be at least|weak/i.test(m))return 'La contraseña es demasiado débil: usa al menos 8 caracteres.';
+ return m;
+}
+let pendingEmail='';
+function offerResend(email){pendingEmail=email;$('#resendConfirm').classList.remove('hidden')}
+async function resendConfirmation(){
+ if(!pendingEmail)return;$('#authStatus').textContent='Reenviando…';
+ const res=await fetch(base+'/auth/v1/resend?redirect_to='+encodeURIComponent(redirectUrl()),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({type:'signup',email:pendingEmail})});
+ await json(res);$('#authStatus').textContent='Te enviamos otro correo a '+pendingEmail+'. Abre el enlace más reciente.';
+}
+async function signup(email,password){const res=await fetch(base+'/auth/v1/signup?redirect_to='+encodeURIComponent(redirectUrl()),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await json(res);if(data.access_token){saveSession(data);await afterLogin()}else{$('#authStatus').textContent='Cuenta creada. Te enviamos un correo a '+email+': abre el enlace para confirmarla y volverás a esta página para completar tu pedido.';offerResend(email);setMode('login',true)}}
+// Al volver del enlace del correo, Supabase añade la sesión (o un error) en el fragmento # de la URL.
+async function handleAuthRedirect(){
+ const hash=location.hash.replace(/^#/,'');if(!hash)return false;
+ const q=new URLSearchParams(hash);
+ if(q.get('error')||q.get('error_code')){
+  history.replaceState(null,'',location.pathname+location.search);
+  $('#authStatus').textContent=q.get('error_code')==='otp_expired'?'El enlace ya se usó o expiró. Inicia sesión con tu correo y contraseña; si aún no puedes, pide otro correo de confirmación.':friendly(q.get('error_description')||'No se pudo confirmar el correo.');
+  return true;
+ }
+ if(q.get('access_token')){
+  saveSession({access_token:q.get('access_token'),refresh_token:q.get('refresh_token'),expires_in:Number(q.get('expires_in'))||3600,token_type:q.get('token_type')||'bearer'});
+  history.replaceState(null,'',location.pathname+location.search);
+  await afterLogin();
+  if(q.get('type')==='signup'||q.get('type')==='email')$('#profileStatus').textContent='Correo confirmado. Completa tus datos y pulsa "Pedir / Ordenar carrito".';
+  return true;
+ }
+ return false;
+}
 async function afterLogin(){
  $('#authArea').classList.add('hidden');$('#customerArea').classList.remove('hidden');
  try{const user=await authFetch('/auth/v1/user',{method:'GET'});session.user=user;saveSession(session);await loadProfile();renderMfaState(user);await loadOrders()}catch(err){$('#profileStatus').textContent=err.message}
@@ -79,7 +116,14 @@ async function placeOrder(){
  $('#orderStatus').textContent='Registrando pedido…';
  const payload=items.map(i=>({product_id:Number(i.product_id),qty:Number(i.qty)||1,unit_price:selectedPrice(i),size:i.size||''}));
  const data=await authFetch('/rest/v1/rpc/place_customer_order',{method:'POST',body:JSON.stringify({p_items:payload})});
- $('#orderStatus').textContent='Pedido #'+data.order_id+' recibido. Te contactaremos por WhatsApp para confirmar disponibilidad y el tiempo estimado de entrega.';
+ const status=$('#orderStatus');
+ status.textContent='Pedido #'+data.order_id+' recibido. Te contactaremos por WhatsApp para confirmar disponibilidad y el tiempo estimado de entrega. Para avisarnos de inmediato, envíanos tu pedido por WhatsApp:';
+ // Aviso inmediato a la tienda: el cliente abre WhatsApp con el pedido ya escrito y solo pulsa enviar.
+ const lines=items.map(i=>(Number(i.qty)||1)+'× '+i.name+(i.size?' · '+i.size:'')+' · '+money(selectedPrice(i)));
+ const total=items.reduce((sum,i)=>sum+selectedPrice(i)*(Number(i.qty)||1),0);
+ const link=document.createElement('a');link.className='button gold';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Enviar mi pedido #'+data.order_id+' por WhatsApp ↗';
+ link.href='https://wa.me/'+WA+'?text='+encodeURIComponent('Hola Elite Scents RD, acabo de hacer el pedido #'+data.order_id+' en la web:\n\n'+lines.join('\n')+'\n\nTotal estimado: '+money(total)+'\nQuedo atento(a) a la confirmación.');
+ status.append(document.createElement('br'),link);
  saveCart([]);await loadOrders();
 }
 async function loadOrders(){
@@ -92,7 +136,8 @@ async function loadOrders(){
  }catch(err){$('#myOrders').textContent=err.message}
 }
 $('#loginTab').addEventListener('click',()=>setMode('login'));$('#signupTab').addEventListener('click',()=>setMode('signup'));
-$('#authForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),email=String(fd.get('email')).trim(),password=String(fd.get('password'));$('#authStatus').textContent='Procesando…';try{mode==='login'?await login(email,password):await signup(email,password)}catch(err){$('#authStatus').textContent=err.message}});
+$('#authForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),email=String(fd.get('email')).trim(),password=String(fd.get('password'));$('#authStatus').textContent='Procesando…';try{mode==='login'?await login(email,password):await signup(email,password)}catch(err){$('#authStatus').textContent=friendly(err.message);if(/email not confirmed/i.test(err.message))offerResend(email)}});
+$('#resendConfirm').addEventListener('click',()=>resendConfirmation().catch(err=>$('#authStatus').textContent=friendly(err.message)));
 $('#profileForm').addEventListener('submit',async e=>{e.preventDefault();$('#profileStatus').textContent='Guardando…';try{await saveProfile(new FormData(e.currentTarget));$('#profileStatus').textContent='Datos guardados.'}catch(err){$('#profileStatus').textContent=err.message}});
 $('#signOut').addEventListener('click',()=>{saveSession(null);location.reload()});
 $('#enableMfa').addEventListener('click',()=>enableMfa().catch(err=>$('#mfaStatus').textContent=err.message));
@@ -103,5 +148,6 @@ $('#placeOrder').addEventListener('click',async()=>{
  try{await saveProfile(new FormData(profile));await placeOrder()}catch(err){$('#orderStatus').textContent=err.message}
 });
 $('#clearCart').addEventListener('click',()=>{if(confirm('¿Vaciar el carrito?'))saveCart([])});
-renderCart();setMode('login');if(session?.access_token)afterLogin();
+renderCart();setMode('login');
+handleAuthRedirect().then(handled=>{if(!handled&&session?.access_token)afterLogin()}).catch(err=>{$('#authStatus').textContent=friendly(err.message)});
 })();
