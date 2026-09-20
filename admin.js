@@ -75,7 +75,8 @@
     } catch (err) { status(productStatus, err.message, 'error'); }
   }
   function renderProducts(list = products) {
-    productsBody.replaceChildren(...list.map(p => {
+    const visible=list.slice(0,6);
+    productsBody.replaceChildren(...visible.map(p => {
       const tr = document.createElement('tr');
       const img = document.createElement('img'); img.src = p.image_url || '/logo-oficial.webp'; img.alt = '';
       const cells = [document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td')];
@@ -96,7 +97,7 @@
     }));
   }
   $('#admin-search').addEventListener('input', e => {
-    const q=e.target.value.toLocaleLowerCase('es'); renderProducts(products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(q)));
+    const q=e.target.value.trim().toLocaleLowerCase('es'); const filtered=q?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(q)):products; renderProducts(filtered);
   });
   function editProduct(p) {
     for (const name of ['id','name','brand','price','size','gender','availability','sort_order','page','slot','description','image_url']) if (form.elements[name]) form.elements[name].value=p[name]??'';
