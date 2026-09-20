@@ -175,6 +175,18 @@ assert(workflow.includes('npm run site'),'El workflow debe generar el artefacto 
 const lockSql=await readFile('supabase/proposed/04_lock_down_order_rpc.sql','utf8');
 assert(/revoke execute on function public\.place_customer_order\(jsonb\) from public, anon/i.test(lockSql),'La RPC debe revocar EXECUTE a anon');
 assert(/grant execute on function public\.place_customer_order\(jsonb\) to authenticated/i.test(lockSql),'La RPC debe conservar EXECUTE para authenticated');
+// --- Cuenta de cliente: el correo de confirmación debe volver a la web real, nunca a localhost ---
+assert(customer.includes("/auth/v1/signup?redirect_to='+encodeURIComponent(redirectUrl())"),'El registro debe indicar redirect_to');
+assert(customer.includes("const SITE_URL='https://elitescentsrd.github.io'"),'Debe existir la URL pública como respaldo');
+assert(!/localhost/i.test(customer),'customer.js no debe mencionar localhost');
+assert(customer.includes('async function handleAuthRedirect()')&&customer.includes("q.get('access_token')")&&customer.includes('history.replaceState'),'Debe procesar la sesión del enlace de confirmación y limpiar la URL');
+assert(customer.includes('/auth/v1/resend?redirect_to='),'Debe poder reenviar el correo de confirmación');
+assert(checkout.includes('id="resendConfirm"'),'checkout.html debe incluir el botón de reenvío');
+assert(customer.includes("https://wa.me/'+WA+'?text='+encodeURIComponent('Hola Elite Scents RD, acabo de hacer el pedido #'"),'Tras ordenar debe ofrecerse enviar el pedido por WhatsApp');
+// Panel: contador de pendientes, sonido y renovación de sesión para no perder avisos tras 1 hora.
+assert(adminHtml.includes('id="pending-count"')&&adminJs.includes('function updatePending()')&&adminJs.includes('function beep()'),'El panel debe mostrar pendientes y sonar');
+assert(adminJs.includes('async function refreshSession()')&&adminJs.includes('grant_type=refresh_token'),'El panel debe renovar la sesión');
+assert(adminJs.includes("digits.length===10)digits='1'+digits"),'WhatsApp del panel debe añadir el código de país 1 a números de 10 dígitos');
 const lockMigration=await readFile('supabase/migrations/20260920120000_lock_down_place_customer_order.sql','utf8');
 assert(/revoke execute on function public\.place_customer_order\(jsonb\) from public, anon/i.test(lockMigration)&&/grant\s+execute on function public\.place_customer_order\(jsonb\) to authenticated/i.test(lockMigration),'La migración versionada debe revocar anon y conceder authenticated');
 assert(lockMigration.includes('to_regprocedure'),'La migración debe ser idempotente y no fallar si la función no existe');
