@@ -1,5 +1,5 @@
 // Copies only the files GitHub Pages should actually serve into _site/.
-// Keeps fuentes internas (data/, supabase/, scripts/, src/, catalogo-data-*.js,
+// Keeps fuentes internas (data/, supabase/, scripts/, src/, archive/,
 // documentación, etc.) fuera del sitio publicado, aunque sigan versionadas en Git.
 import { cp, mkdir, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -28,20 +28,18 @@ const FILES = [
   'social-card.png',
 ];
 
-// Carpetas completas que el sitio necesita en tiempo de ejecución.
-// `pages/` sigue siendo necesaria: mientras no existan las 420 fotos
-// individuales (ver hallazgo I-01), las tarjetas del catálogo recortan estas
-// láminas con CSS background-position. No incluye catalogo.html (el visor
-// completo de las 36 láminas), que se retira intencionalmente del artefacto.
-const DIRS = ['pages'];
+// El sitio ya no necesita carpetas completas: las fotos de producto viven en
+// Supabase Storage y el catálogo antiguo (láminas) quedó archivado en
+// archive/, fuera del artefacto.
+const DIRS = [];
 
 // Nunca deben aparecer en el artefacto publicado, aunque alguien los
 // reintroduzca sin querer en FILES/DIRS más arriba.
 const FORBIDDEN_SUBSTRINGS = [
-  'supabase/', 'scripts/', 'data/', 'src/', '.github/', '.git/',
-  'catalogo-data-', 'catalogo.html', 'prepared-product-images/',
+  'supabase/', 'scripts/', 'data/', 'src/', 'archive/', '.github/', '.git/',
+  'pages/', 'catalogo', 'prepared-product-images/', 'fotos-preparadas/',
   'README', 'package.json', 'package-lock.json', 'node_modules/',
-  '.md', '.sql', '.csv',
+  '.md', '.sql', '.csv', '.mjs', '.cjs',
 ];
 
 await rm(OUT, { recursive: true, force: true });
@@ -73,4 +71,16 @@ if (leaked.length) {
   throw new Error('El artefacto de _site/ contiene rutas internas que no deben publicarse: ' + leaked.join(', '));
 }
 
-console.log('Artefacto _site/ listo: ' + shipped.length + ' archivos, sin rutas internas.');
+// Búsqueda global: ningún archivo público puede referir a las láminas antiguas.
+const { readFile } = await import('node:fs/promises');
+const TEXT = /\.(html|js|css|xml|txt|json)$/;
+const offenders = [];
+for (const path of shipped.filter(p => TEXT.test(p))) {
+  const body = await readFile(OUT + '/' + path, 'utf8');
+  if (/\/pages\/page-\d|catalogo\.html|catalogo-app|catalogo-viewer|catalogo-data-/.test(body)) offenders.push(path);
+}
+if (offenders.length) {
+  throw new Error('Referencias a láminas/catálogo antiguo en la salida pública: ' + offenders.join(', '));
+}
+
+console.log('Artefacto _site/ listo: ' + shipped.length + ' archivos, sin rutas internas ni referencias a láminas.');

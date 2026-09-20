@@ -1,0 +1,7 @@
+_site/
+node_modules/
+fotos-preparadas/
+prepared-product-images/
+.DS_Store
+Thumbs.db
+
