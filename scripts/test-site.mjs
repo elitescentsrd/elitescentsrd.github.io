@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Script } from 'node:vm';
 
-const [html, template, css, js, enrichmentText] = await Promise.all([
+const [html, template, css, js, enrichmentText, pricingText] = await Promise.all([
   readFile('index.html', 'utf8'),
   readFile('src/index.template.html', 'utf8'),
   readFile('tienda.css', 'utf8'),
   readFile('tienda.js', 'utf8'),
-  readFile('data/product-enrichment.json', 'utf8')
+  readFile('data/product-enrichment.json', 'utf8'),
+  readFile('data/la-grada-pricing-2026.json', 'utf8')
 ]);
 const enrichment = JSON.parse(enrichmentText);
+const pricing = JSON.parse(pricingText);
 new Script(js,{filename:'tienda.js'});
 
 const products = JSON.parse(html.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1] || '[]');
@@ -53,3 +55,27 @@ const adminJs=await readFile('admin.js','utf8');
 assert(adminHtml.includes('id="enable-order-notifications"'),'Admin debe ofrecer activar notificaciones');
 assert(adminJs.includes('function checkNewOrders()'),'Admin debe comprobar pedidos nuevos');
 assert(adminJs.includes("Notification.permission==='granted'"),'Admin debe respetar permiso de notificaciones');
+
+function numericPrices(value){return (String(value).match(/[0-9][0-9,.]*/g)||[]).map(v=>Number(v.replace(/[,.]/g,''))).filter(Number.isFinite)}
+function expectedMarkup(cost){
+  const row=pricing.pricing_rule.find(rule=>rule.max_cost===null || cost<=rule.max_cost);
+  assert(row,'Debe existir una regla de precio para costo '+cost);
+  return row.markup;
+}
+assert.equal(pricing.items,420,'La auditoría de La Grada debe cubrir 420 productos');
+assert.equal(Object.values(pricing.costs_by_page).reduce((n,row)=>n+row.length,0),420,'El mapa de costos debe tener 420 posiciones');
+for(const p of products){
+  const page=pricing.costs_by_page[String(p.page)];
+  assert(page,'Falta página de costo para '+p.name);
+  const raw=page[Number(p.slot)];
+  assert(raw!==undefined,'Falta costo para '+p.name);
+  const costs=Array.isArray(raw)?raw:[raw];
+  const sells=numericPrices(p.price);
+  assert.equal(sells.length,costs.length,'Presentaciones no coinciden para '+p.name);
+  costs.forEach((cost,i)=>assert.equal(sells[i],cost+expectedMarkup(cost),'Precio fuera de política para '+p.name));
+}
+assert(checkout.includes('name="cedula" maxlength="30" autocomplete="off" required'),'La cédula debe ser obligatoria');
+assert(customer.includes('profile.reportValidity()'),'El checkout debe validar los datos antes de ordenar');
+assert(adminJs.includes("'preparando'") && adminJs.includes("'enviado'"),'Admin debe usar estados válidos');
+assert(adminJs.includes('estimated_delivery'),'Admin debe permitir guardar entrega estimada');
+assert(adminJs.includes('orderWhatsapp(o)'),'Admin debe permitir contactar el pedido por WhatsApp');
