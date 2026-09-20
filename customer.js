@@ -97,7 +97,11 @@ $('#profileForm').addEventListener('submit',async e=>{e.preventDefault();$('#pro
 $('#signOut').addEventListener('click',()=>{saveSession(null);location.reload()});
 $('#enableMfa').addEventListener('click',()=>enableMfa().catch(err=>$('#mfaStatus').textContent=err.message));
 $('#verifyMfa').addEventListener('click',()=>verifyMfa().catch(err=>$('#mfaStatus').textContent=err.message));
-$('#placeOrder').addEventListener('click',async()=>{try{await saveProfile(new FormData($('#profileForm')));await placeOrder()}catch(err){$('#orderStatus').textContent=err.message}});
+$('#placeOrder').addEventListener('click',async()=>{
+ const profile=$('#profileForm');
+ if(!profile.reportValidity())return;
+ try{await saveProfile(new FormData(profile));await placeOrder()}catch(err){$('#orderStatus').textContent=err.message}
+});
 $('#clearCart').addEventListener('click',()=>{if(confirm('¿Vaciar el carrito?'))saveCart([])});
 renderCart();setMode('login');if(session?.access_token)afterLogin();
 })();
