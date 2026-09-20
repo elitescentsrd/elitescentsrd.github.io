@@ -45,3 +45,4 @@ assert(Object.values(enrichment).every(item => /^https:\/\//.test(item.source)),
 
 console.log('Pruebas superadas: 420 productos con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
 
+
