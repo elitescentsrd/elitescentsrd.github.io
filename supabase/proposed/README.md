@@ -31,3 +31,29 @@ Orden sugerido:
    devuelve nada (la función no existe de verdad y los pedidos autenticados
    están fallando en producción), entonces sí puedes partir de esta plantilla,
    revisándola línea por línea primero.
+6. `06_fill_missing_sizes.sql` — plantilla (todo comentado) para completar el
+   tamaño de 3 productos. Confirma cada valor antes de descomentar.
+
+## Cómo crear una línea base real del esquema (pendiente de hacer con acceso a Supabase)
+
+Lo versionado aquí no representa por completo el backend en producción. Para
+poder reconstruirlo y auditarlo desde Git, exporta el esquema real **sin datos ni
+secretos** desde una computadora con la CLI de Supabase iniciada con tu cuenta:
+
+```bash
+supabase login
+supabase link --project-ref <REFERENCIA_DEL_PROYECTO>   # la referencia está en tus notas privadas
+supabase db dump --schema public,private,storage --file supabase/baseline/20260920_schema_baseline.sql
+supabase db dump --role-only --file supabase/baseline/20260920_roles.sql   # opcional
+```
+
+Revisa el archivo resultante (busca claves, correos o datos de clientes antes de
+subirlo), colócalo en `supabase/baseline/` y a partir de ahí crea cada cambio
+nuevo como una migración incremental e idempotente (`if not exists`,
+`drop policy if exists ...`). Cuando `supabase db diff` no muestre diferencias
+entre la base real y `supabase/`, la carpeta `proposed/` puede eliminarse.
+
+Comprobaciones de seguridad recomendadas tras aplicar `04_lock_down_order_rpc.sql`:
+una llamada anónima a `rpc/place_customer_order` debe responder 401/403 (hoy
+responde 400 porque el permiso `EXECUTE` de `anon` sigue activo), y `orders` y
+`admin_users` deben seguir devolviendo 401 sin sesión.
