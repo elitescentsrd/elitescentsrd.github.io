@@ -28,10 +28,9 @@ const FILES = [
   'social-card.png',
 ];
 
-// El sitio ya no necesita carpetas completas: las fotos de producto viven en
-// Supabase Storage y el catálogo antiguo (láminas) quedó archivado en
-// archive/, fuera del artefacto.
-const DIRS = [];
+// Única carpeta pública: las fotos individuales de producto (img/productos/).
+// El catálogo antiguo (láminas) quedó archivado en archive/, fuera del artefacto.
+const DIRS = ['img'];
 
 // Nunca deben aparecer en el artefacto publicado, aunque alguien los
 // reintroduzca sin querer en FILES/DIRS más arriba.

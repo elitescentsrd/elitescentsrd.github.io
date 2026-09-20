@@ -1,4 +1,5 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 const SITE_URL = 'https://elitescentsrd.github.io';
 const USD_RATE_DOP = 63;
@@ -39,10 +40,24 @@ const productUrl = p => SITE_URL + '/#producto-' + p.id;
 // lámina completa de /pages/: esa lámina muestra hasta 12 productos distintos
 // y jamás debe declararse como la foto de un producto en datos estructurados
 // (ver hallazgo de la auditoría sobre JSON-LD e imágenes de producto).
-const validImage = url => typeof url === 'string' && /^https:\/\//i.test(url) && !/\/pages\/page-/i.test(url);
+// Foto válida: HTTPS (p. ej. Supabase Storage) o una foto del propio sitio en /img/productos/. Nunca una lámina.
+const validImage = url => typeof url === 'string' && !/\/pages\/page-/i.test(url) && (/^https:\/\//i.test(url) || /^\/img\/productos\/[0-9]{4,}-[a-z0-9-]+\.(jpe?g|png|webp)$/i.test(url));
+const absolute = url => url.startsWith('/') ? SITE_URL + url : url;
 const imageUrl = p => validImage(p.image_url) ? p.image_url : null;
-// Defensa en profundidad: una URL de lámina (o no HTTPS) en la base nunca llega al HTML público.
-for (const p of products) { p.image_url = imageUrl(p); p.gallery_urls = (p.gallery_urls || []).filter(validImage); }
+// Fotos individuales guardadas en el repositorio: img/productos/<ID con 4 dígitos>-<nombre>.jpg.
+// Una foto subida por el panel (image_url en Supabase) tiene prioridad; estas cubren a los demás productos.
+const localPhotos = new Map();
+if (existsSync('img/productos')) {
+  for (const file of await readdir('img/productos')) {
+    const match = /^([0-9]{4,})-[a-z0-9-]+\.(jpe?g|png|webp)$/i.exec(file);
+    if (match) localPhotos.set(Number(match[1]), '/img/productos/' + file);
+  }
+}
+// Defensa en profundidad: una URL de lámina (o no válida) en la base nunca llega al HTML público.
+for (const p of products) {
+  p.image_url = imageUrl(p) || localPhotos.get(Number(p.id)) || null;
+  p.gallery_urls = (p.gallery_urls || []).filter(validImage);
+}
 const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
 const usdPrice = p => {
   const value = nums(p.price)[0];
@@ -69,7 +84,7 @@ function schema(p) {
   // Solo URLs HTTPS reales (foto individual + galería); nunca la lámina
   // completa. Si el producto todavía no tiene foto propia, se omite el campo
   // "image" en vez de inventar una imagen que no le pertenece.
-  const images = [imageUrl(p), ...(p.gallery_urls || [])].filter(validImage).slice(0, 3);
+  const images = [imageUrl(p), ...(p.gallery_urls || [])].filter(validImage).map(absolute).slice(0, 3);
   const data = {
     '@context':'https://schema.org','@type':'Product',
     name:p.name,

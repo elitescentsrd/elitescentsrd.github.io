@@ -108,6 +108,28 @@ for(const legacy of ['catalogo.html','catalogo-app.js','catalogo-viewer.js','sit
   assert(!existsSync(legacy),'El archivo legado debe estar archivado, no en la raíz pública: '+legacy);
 assert(existsSync('archive/catalogo-legacy/catalogo.html'),'La copia archivada del catálogo antiguo debe conservarse');
 
+// --- 420 fotos individuales guardadas en el sitio (img/productos/): una por producto, válidas y sin láminas ---
+{
+  const { readdir } = await import('node:fs/promises');
+  const files=(await readdir('img/productos')).filter(f=>/\.(jpe?g|png|webp)$/i.test(f)).sort();
+  const byId=new Map();
+  for(const f of files){
+    const m=/^([0-9]{4,})-[a-z0-9-]+\.(jpe?g|png|webp)$/i.exec(f); assert(m,'Nombre de foto no válido: '+f);
+    assert(!byId.has(Number(m[1])),'Foto duplicada para el ID '+Number(m[1])); byId.set(Number(m[1]),f);
+  }
+  assert.equal(files.length,420,'Debe haber 420 fotos individuales en img/productos');
+  for(const p of products){
+    const f=byId.get(Number(p.id)); assert(f,'Falta la foto de #'+p.id+' '+p.name);
+    const buf=await readFile('img/productos/'+f), size=imageSize(buf), kb=buf.length;
+    assert(size,'Foto ilegible: '+f); assert(size.width>=500&&size.height>=500,'Foto demasiado pequeña: '+f+' '+size.width+'x'+size.height);
+    assert(kb<=3*1024*1024,'Foto de más de 3 MB: '+f);
+    assert(p.image_url&&(p.image_url.endsWith('/'+f)||/^https:\/\//.test(p.image_url)),'La tarjeta de #'+p.id+' debe usar su foto');
+  }
+  assert.equal(withoutPhoto,0,'Ningún producto debe quedar con "Foto próximamente" (420 de 420 con foto)');
+  const localSchemas=productSchemas.filter(s=>s.image&&s.image.every(u=>/^https:\/\//.test(u)&&!u.includes('/pages/page-')));
+  assert.equal(localSchemas.length,420,'Los 420 Product JSON-LD deben tener imagen individual absoluta');
+}
+
 // Carga por lote en el panel administrativo.
 assert(adminHtml.includes('id="batch-form"')&&adminHtml.includes('id="batch-files"'),'Admin debe ofrecer carga de fotos por lote');
 assert(adminHtml.includes('accept="image/jpeg,image/png,image/webp"'));
