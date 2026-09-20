@@ -28,6 +28,8 @@ jobs:
         run: npm run build
       - name: Verify generated site
         run: npm test
+      - name: Build clean public artifact (_site/)
+        run: npm run site
       - name: Configure Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
@@ -35,7 +37,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
   deploy:
     if: github.event_name != 'pull_request'

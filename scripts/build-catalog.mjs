@@ -29,7 +29,11 @@ const gender = { hombre: 'Hombre', mujer: 'Mujer', unisex: 'Unisex' };
 const status = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'Solo por encargo' };
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
 const productUrl = p => SITE_URL + '/#producto-' + p.id;
-const imageUrl = p => p.image_url || (SITE_URL + '/pages/page-' + String(p.page || 1).padStart(2, '0') + '.webp');
+// Solo devuelve una URL de imagen individual real. A propósito NO cae a la
+// lámina completa de /pages/: esa lámina muestra hasta 12 productos distintos
+// y jamás debe declararse como la foto de un producto en datos estructurados
+// (ver hallazgo de la auditoría sobre JSON-LD e imágenes de producto).
+const imageUrl = p => (p.image_url && /^https:\/\//i.test(p.image_url)) ? p.image_url : null;
 const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
 const usdPrice = p => {
   const value = nums(p.price)[0];
@@ -56,14 +60,19 @@ function card(p) {
 }
 function schema(p) {
   const value = nums(p.price)[0];
-  return '<script type="application/ld+json">' + JSON.stringify({
+  // Solo URLs HTTPS reales (foto individual + galería); nunca la lámina
+  // completa. Si el producto todavía no tiene foto propia, se omite el campo
+  // "image" en vez de inventar una imagen que no le pertenece.
+  const images = [imageUrl(p), ...(p.gallery_urls || [])].filter(url => url && /^https:\/\//i.test(url)).slice(0, 3);
+  const data = {
     '@context':'https://schema.org','@type':'Product',
     name:p.name,
-    image:[imageUrl(p), ...(p.gallery_urls || [])].slice(0,3),
     description:description(p),
     brand:{'@type':'Brand',name:p.brand || 'Elite Scents RD'},
     offers:{'@type':'Offer',price:value ? String(value) : undefined,priceCurrency:'DOP',availability:schemaAvailability[p.availability] || schemaAvailability.disponible,url:productUrl(p)}
-  }).replace(/</g, '\\u003c') + '<\/script>';
+  };
+  if (images.length) data.image = images;
+  return '<script type="application/ld+json">' + JSON.stringify(data).replace(/</g, '\\u003c') + '<\/script>';
 }
 
 const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="grid" aria-busy="false">\n' + products.map(card).join('\n') + '\n</div>\n' +
@@ -73,4 +82,23 @@ const output = template
   .replace(/<!-- PRODUCT_CATALOG_START -->[\s\S]*?<!-- PRODUCT_CATALOG_END -->/, catalog)
   .replace(/<!-- PRODUCT_JSON_LD_START -->[\s\S]*?<!-- PRODUCT_JSON_LD_END -->/, schemas);
 await writeFile('index.html', output);
+
+// Regenera sitemap.xml en cada build: la portada cambia con el catálogo, así
+// que su lastmod es siempre la fecha del build. Las páginas estáticas
+// conservan la fecha de su último cambio real de contenido; actualízala a
+// mano en STATIC_PAGES cuando edites privacidad.html o pedidos-envios.html.
+const today = new Date().toISOString().slice(0, 10);
+const STATIC_PAGES = [
+  { path: 'pedidos-envios.html', lastmod: '2026-09-20', changefreq: 'monthly', priority: '0.6' },
+  { path: 'privacidad.html', lastmod: '2026-09-20', changefreq: 'yearly', priority: '0.3' },
+];
+const sitemapUrl = (loc, lastmod, changefreq, priority) =>
+  '  <url><loc>' + SITE_URL + loc + '</loc><lastmod>' + lastmod + '</lastmod><changefreq>' + changefreq + '</changefreq><priority>' + priority + '</priority></url>';
+const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+  sitemapUrl('/', today, 'weekly', '1.0') + '\n' +
+  STATIC_PAGES.map(p => sitemapUrl('/' + p.path, p.lastmod, p.changefreq, p.priority)).join('\n') + '\n' +
+  '</urlset>\n';
+await writeFile('sitemap.xml', sitemap);
+
 console.log('Catálogo pre-renderizado: ' + products.length + ' productos con JSON-LD.');
+console.log('sitemap.xml actualizado (lastmod de portada: ' + today + ').');

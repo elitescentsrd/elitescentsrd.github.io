@@ -24,8 +24,15 @@ for(const p of products){assert(p.id!=null);assert(String(p.name||'').trim());as
 assert.equal((html.match(/data-product-id=/g) || []).length, 420, 'Debe existir una tarjeta estática por producto');
 for(const p of products) assert(html.includes('data-open-product="'+p.id+'"'),'Falta Ver detalles: '+p.name);
 assert.equal(productSchemas.length, 420, 'Debe existir un Product JSON-LD por producto');
-assert(productSchemas.every(item => item.name && item.image?.length && item.brand?.name && item.offers?.priceCurrency === 'DOP'));
+assert(productSchemas.every(item => item.name && item.brand?.name && item.offers?.priceCurrency === 'DOP'));
+// El JSON-LD nunca debe declarar una lámina completa (/pages/page-XX.webp)
+// como foto de un producto individual. Mientras un producto no tenga foto
+// propia, "image" debe estar ausente, no apuntar a la lámina.
+assert(productSchemas.every(item => !item.image || item.image.every(url => !url.includes('/pages/page-'))), 'El JSON-LD no debe usar la lámina completa como imagen de producto');
 assert.equal((html.match(/US\$\d+ aprox\./g) || []).length, 420, 'Cada tarjeta debe mostrar el precio aproximado en USD');
+// catalogo.html (el visor de las 36 láminas completas) ya no se publica en
+// _site/; el enlace del footer no debe reaparecer por accidente.
+assert(!template.includes('/catalogo.html'), 'La plantilla no debe enlazar catalogo.html: ya no se publica');
 assert(template.includes('<option value="system">Sistema</option>'));
 assert(template.includes('<option value="light">Claro</option>'));
 assert(template.includes('<option value="dark">Oscuro</option>'));
