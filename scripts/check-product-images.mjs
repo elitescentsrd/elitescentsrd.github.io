@@ -6,7 +6,7 @@
 //  - el JSON-LD de index.html usa la misma URL individual que el producto;
 //  - a partir de la fecha de corte (IMAGE_CUTOFF, por defecto 2026-10-20) TODOS los productos activos deben tener foto.
 // Antes de la fecha de corte solo se validan las fotos que ya existan.
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
 export const MAX_BYTES = 3 * 1024 * 1024;
@@ -67,10 +67,14 @@ async function run() {
   if (!response.ok) throw new Error('Supabase respondió HTTP ' + response.status);
   const products = await response.json();
   const withImage = products.filter(p => p.image_url);
-  console.log('Fotos individuales registradas: ' + withImage.length + ' de ' + products.length + (strict ? ' (fecha de corte alcanzada: se exigen todas)' : ' (aún antes de la fecha de corte)'));
+  // Fotos guardadas en el sitio (img/productos/<ID>-<nombre>.jpg): también cuentan como foto individual.
+  const localIds = new Set();
+  try { for (const f of await readdir('img/productos')) { const m = /^([0-9]{4,})-[a-z0-9-]+\.(jpe?g|png|webp)$/i.exec(f); if (m) localIds.add(Number(m[1])); } } catch { /* sin carpeta */ }
+  const withoutAny = products.filter(p => !p.image_url && !localIds.has(Number(p.id)));
+  console.log('Fotos individuales: ' + (products.length - withoutAny.length) + ' de ' + products.length + ' (' + withImage.length + ' en Supabase, ' + localIds.size + ' en el sitio)' + (strict ? ' — fecha de corte alcanzada: se exigen todas' : ' — aún antes de la fecha de corte'));
 
   const failures = [];
-  if (strict && withImage.length !== products.length) failures.push('Faltan fotos: ' + (products.length - withImage.length) + ' productos sin image_url');
+  if (strict && withoutAny.length) failures.push('Faltan fotos: ' + withoutAny.length + ' productos sin foto (ni en Supabase ni en img/productos)');
 
   const queue = [...withImage];
   async function worker() {
