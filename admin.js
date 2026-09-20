@@ -124,7 +124,7 @@
       const total=document.createElement('td');total.textContent=o.amount||'—';
       const manage=document.createElement('td');manage.className='admin-actions';
       const statusSelect=document.createElement('select');
-      ['nuevo','confirmado','en_preparacion','en_camino','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
+      ['nuevo','confirmado','preparando','enviado','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
       const eta=document.createElement('input');eta.type='text';eta.maxLength=120;eta.placeholder='Ej. 2-3 días';eta.value=o.estimated_delivery||'';eta.setAttribute('aria-label','Entrega estimada del pedido '+o.id);
       const save=document.createElement('button');save.type='button';save.className='btn btn-secondary';save.textContent='Guardar';
       save.addEventListener('click',async()=>{
