@@ -33,3 +33,4 @@ assert(products.every(product => ![...product.notes_top, ...product.notes_heart,
 assert(Object.values(enrichment).every(item => /^https:\/\//.test(item.source)), 'Cada ficha debe registrar una fuente web');
 
 console.log('Pruebas superadas: 420 productos con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
+
