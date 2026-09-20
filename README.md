@@ -9,12 +9,14 @@ Sitio estático en HTML, CSS y JavaScript nativo (sin frameworks ni bundler). No
 ## Desarrollo
 
 ```bash
-npm run build   # genera index.html a partir de src/index.template.html
-npm test        # ejecuta las pruebas de regresión del sitio
-npm run verify  # build + test
+npm run build       # genera index.html a partir de src/index.template.html
+npm test            # pruebas de regresión del sitio
+npm run test:images # valida las fotos de producto ya publicadas
+npm run site        # genera _site/, el único directorio que se publica
+npm run verify      # build + test + test:images
 ```
 
-Un flujo de GitHub Actions repite `build` y `test` y publica el resultado en GitHub Pages tras cada cambio en `main`.
+Un flujo de GitHub Actions repite estos pasos. En `main` publica `_site/` en GitHub Pages; en ramas y pull requests solo construye y adjunta `_site/` como artefacto descargable para revisión.
 
 ## Licencia y contacto
 
