@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
 const cfg=window.ELITE_SUPABASE||{},base=String(cfg.url||'').replace(/\/$/,''),key=cfg.publishableKey||'';
-const WA='18094333348',CART_KEY='elite-scents-cart-v1',SESSION_KEY='elite-customer-session-v1';
+const WA='18094333348',CART_KEY='elite-scents-cart-v2',SESSION_KEY='elite-customer-session-v1';
 const $=(s)=>document.querySelector(s);
 let mode='login',session=readSession(),mfaEnrollment=null;
 
