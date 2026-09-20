@@ -8,7 +8,7 @@
   const loginCard = $('#login-card'), content = $('#admin-content'), logout = $('#logout');
   const loginStatus = $('#login-status'), productStatus = $('#product-status');
   const form = $('#product-form'), productsBody = $('#products-body'), ordersBody = $('#orders-body');
-  let session = null, products = [], orders = [];
+  let session = null, products = [], orders = [], knownOrderIds = new Set(), orderPoll = null;
 
   function status(el, message, kind = '') { el.textContent = message; el.className = kind; }
   function normalizeArray(value) { return String(value || '').split(/[\n,]/).map(v => v.trim()).filter(Boolean); }
@@ -47,8 +47,8 @@
     } catch { sessionStorage.removeItem(tokenKey); session = null; }
   }
   function showAdmin() {
-    loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
-    loadAll();
+    loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden'); $('#notify-orders')?.classList.remove('hidden');
+    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>o.id));startOrderPolling()});
   }
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault(); status(loginStatus, 'Verificando…');
@@ -62,7 +62,7 @@
   });
   logout.addEventListener('click', async () => {
     try { await api('/auth/v1/logout', { method: 'POST' }); } catch {}
-    sessionStorage.removeItem(tokenKey); location.reload();
+    sessionStorage.removeItem(tokenKey); if(orderPoll)clearInterval(orderPoll); location.reload();
   });
 
   async function loadAll() {
@@ -86,15 +86,52 @@
       cells[5].className='admin-actions'; cells[5].append(edit,del); tr.append(...cells); return tr;
     }));
   }
+  function orderWhatsapp(o) {
+    const msg='Hola '+(o.customer_name||'')+', te escribo de Elite Scents RD sobre tu pedido #'+o.id+'.'+(o.estimated_delivery?' Tu entrega estimada es: '+o.estimated_delivery+'.':'')+' ¿Podemos confirmar los detalles?';
+    const phone=String(o.phone||'').replace(/\D/g,'');
+    return 'https://wa.me/'+phone+'?text='+encodeURIComponent(msg);
+  }
+  async function updateOrder(o, patch) {
+    await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({...patch,updated_at:new Date().toISOString()})});
+    Object.assign(o,patch); renderOrders();
+  }
   function renderOrders() {
     ordersBody.replaceChildren(...orders.map(o => {
       const tr=document.createElement('tr');
-      [new Date(o.created_at).toLocaleDateString('es-DO'),o.customer_name||'—',o.phone||'—',o.items||'—',o.status||'nuevo'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});
-      const td=document.createElement('td'), del=document.createElement('button'); del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
+      const date=document.createElement('td');date.textContent=new Date(o.created_at).toLocaleString('es-DO');
+      const customer=document.createElement('td');customer.textContent=o.customer_name||'—';
+      const contact=document.createElement('td');contact.textContent=o.phone||'—';
+      const items=document.createElement('td');items.textContent=o.items||'—';
+      const amount=document.createElement('td');amount.textContent=o.amount||'—';
+      const statusTd=document.createElement('td'),statusSel=document.createElement('select');
+      ['nuevo','confirmado','preparando','enviado','entregado','cancelado'].forEach(value=>{const opt=document.createElement('option');opt.value=value;opt.textContent=value;opt.selected=value===(o.status||'nuevo');statusSel.append(opt)});
+      statusSel.addEventListener('change',()=>updateOrder(o,{status:statusSel.value}).catch(err=>alert(err.message)));statusTd.append(statusSel);
+      const etaTd=document.createElement('td'),eta=document.createElement('input');eta.value=o.estimated_delivery||'';eta.placeholder='Ej. 2–3 días';eta.maxLength=120;eta.style.minWidth='130px';
+      eta.addEventListener('change',()=>updateOrder(o,{estimated_delivery:eta.value.trim()}).catch(err=>alert(err.message)));etaTd.append(eta);
+      const actions=document.createElement('td');actions.className='admin-actions';
+      const wa=document.createElement('a');wa.className='btn btn-secondary';wa.href=orderWhatsapp(o);wa.target='_blank';wa.rel='noopener noreferrer';wa.textContent='WhatsApp';
+      const del=document.createElement('button');del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
       del.addEventListener('click',async()=>{if(!confirm('¿Eliminar este pedido?'))return;try{await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});orders=orders.filter(x=>x.id!==o.id);renderOrders()}catch(err){alert(err.message)}});
-      td.append(del);tr.append(td);return tr;
+      actions.append(wa,del);tr.append(date,customer,contact,items,amount,statusTd,etaTd,actions);return tr;
     }));
   }
+  function notifyNewOrders(nextOrders) {
+    const fresh=nextOrders.filter(o=>!knownOrderIds.has(o.id));
+    fresh.forEach(o=>{
+      knownOrderIds.add(o.id);
+      if('Notification' in window&&Notification.permission==='granted')new Notification('Nuevo pedido #'+o.id,{body:(o.customer_name||'Cliente')+' · '+(o.amount||'Total por confirmar'),icon:'/logo-oficial.webp'});
+    });
+    if(fresh.length){const newest=fresh[0];document.title='('+fresh.length+') Nuevo pedido | Elite Scents RD';setTimeout(()=>document.title='Panel | Elite Scents RD',8000)}
+  }
+  function startOrderPolling(){
+    if(orderPoll)clearInterval(orderPoll);
+    orderPoll=setInterval(async()=>{try{const next=await api('/rest/v1/orders?select=*&order=created_at.desc');notifyNewOrders(next);orders=next;renderOrders()}catch{}},15000);
+  }
+  $('#notify-orders')?.addEventListener('click',async()=>{
+    if(!('Notification' in window)){alert('Este navegador no admite notificaciones.');return}
+    const permission=await Notification.requestPermission();
+    $('#notify-orders').textContent=permission==='granted'?'Notificaciones activadas':'Activar notificaciones';
+  });
   $('#admin-search').addEventListener('input', e => {
     const q=e.target.value.toLocaleLowerCase('es'); renderProducts(products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(q)));
   });
