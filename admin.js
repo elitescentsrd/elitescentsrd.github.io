@@ -124,7 +124,7 @@
       for(const file of files) gallery.push(await upload(file,'gallery'));
       gallery=[...new Set(gallery)].slice(0,3);
       const rawPrice=Number(String(fd.get('price')).replace(/[^0-9.]/g,''));
-      const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:money(rawPrice),size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,page:Number(fd.get('page'))||null,slot:Number(fd.get('slot'))||null,image_url:imageUrl,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
+      const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:money(rawPrice),size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,page:Number(fd.get('page'))||null,slot:Number(fd.get('slot'))||null,image_url:imageUrl||null,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
       if(!payload.name||!Number.isFinite(rawPrice)) throw new Error('Completa el nombre y un precio válido.');
       const path=id?'/rest/v1/products?id=eq.'+encodeURIComponent(id):'/rest/v1/products';
       await api(path,{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
