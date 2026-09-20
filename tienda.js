@@ -24,7 +24,28 @@ function saveFavorites(){try{localStorage.setItem(FAVORITES_KEY,JSON.stringify([
 function readCart(){try{const v=JSON.parse(localStorage.getItem(CART_KEY)||'[]');return Array.isArray(v)?v:[]}catch{return []}}
 function saveCart(v){try{localStorage.setItem(CART_KEY,JSON.stringify(v))}catch{}updateCartCount()}
 function updateCartCount(){const el=$('#cartCount');if(el)el.textContent=readCart().reduce((n,x)=>n+(Number(x.qty)||1),0)}
-function addToCart(p){const prices=numbers(p.price);if(!prices.length)return;let idx=0;const sizes=String(p.size||'').split('/').map(x=>x.trim()).filter(Boolean);if(prices.length>1){const choice=prompt('Elige presentación:\n'+prices.map((v,i)=>(i+1)+'. '+(sizes[i]||sizes[0]||'Presentación')+' — RD
+function addToCart(p){
+  const prices=numbers(p.price);
+  if(!prices.length)return;
+  let idx=0;
+  const sizes=String(p.size||'').split('/').map(x=>x.trim()).filter(Boolean);
+  if(prices.length>1){
+    const options=prices.map((v,i)=>(i+1)+'. '+(sizes[i]||sizes[0]||'Presentación')+' — RD$'+v.toLocaleString('es-DO')).join('\n');
+    const choice=prompt('Elige presentación:\n'+options,'1');
+    if(choice===null)return;
+    idx=Math.max(0,Math.min(prices.length-1,(Number(choice)||1)-1));
+  }
+  const unit=prices[idx],size=sizes[idx]||sizes[0]||p.size||'',cart=readCart();
+  const key=[p.id,unit,size].join(':');
+  const found=cart.find(x=>x.key===key);
+  if(found)found.qty=Math.min(10,(Number(found.qty)||1)+1);
+  else cart.push({key,product_id:Number(p.id),name:p.name,brand:p.brand||'',price:p.price,size,unit_price:unit,qty:1});
+  saveCart(cart);
+  document.querySelector('.cart-toast')?.remove();
+  const toast=document.createElement('div');
+  toast.className='cart-toast';toast.textContent=p.name+' agregado al carrito';document.body.append(toast);
+  setTimeout(()=>toast.remove(),1800);
+}
 function updateFavoriteSummary(){const n=favoriteIds.size;favoritesSummary.textContent=n?n+' '+(n===1?'perfume guardado':'perfumes guardados')+' en este dispositivo.':'Pulsa el corazón de cualquier perfume para guardarlo en este dispositivo.'}
 function numbers(value){return (String(value).match(/[0-9][0-9,.]*/g)||[]).map(v=>Number(v.replace(/[,.]/g,''))).filter(Number.isFinite)}
 function maxPrice(p){const values=numbers(p.price);return values.length?Math.max(...values):0}
