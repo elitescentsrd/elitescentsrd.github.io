@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { Script } from 'node:vm';
 
 const [html, template, css, js, enrichmentText] = await Promise.all([
   readFile('index.html', 'utf8'),
@@ -9,6 +10,7 @@ const [html, template, css, js, enrichmentText] = await Promise.all([
   readFile('data/product-enrichment.json', 'utf8')
 ]);
 const enrichment = JSON.parse(enrichmentText);
+new Script(js, { filename: 'tienda.js' });
 
 const products = JSON.parse(html.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1] || '[]');
 const productSchemas = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
@@ -16,7 +18,15 @@ const productSchemas = [...html.matchAll(/<script type="application\/ld\+json">(
   .filter(item => item['@type'] === 'Product');
 
 assert.equal(products.length, 420, 'Deben pre-renderizarse los 420 productos');
+for (const product of products) {
+  assert(product.id != null, 'Cada producto debe tener ID');
+  assert(String(product.name || '').trim(), 'Cada producto debe tener nombre');
+  assert(String(product.price || '').match(/\d/), 'Cada producto debe tener precio: ' + product.name);
+}
 assert.equal((html.match(/data-product-id=/g) || []).length, 420, 'Debe existir una tarjeta estática por producto');
+for (const product of products) {
+  assert(html.includes('data-open-product="' + product.id + '"'), 'Debe existir Ver detalles para: ' + product.name);
+}
 assert.equal(productSchemas.length, 420, 'Debe existir un Product JSON-LD por producto');
 assert(productSchemas.every(item => item.name && item.image?.length && item.brand?.name && item.offers?.priceCurrency === 'DOP'));
 assert.equal((html.match(/US\$\d+ aprox\./g) || []).length, 420, 'Cada tarjeta debe mostrar el precio aproximado en USD');
@@ -27,6 +37,9 @@ assert(!template.toLowerCase().includes('confirmar la autenticidad'));
 assert(css.includes('aspect-ratio:4/3'), 'El recorte del modal debe excluir textos y precios del catálogo');
 assert(js.includes("applyTheme(preferredTheme())"), 'El tema elegido debe inicializarse');
 assert(js.includes("$('#dialogPriceUsd').textContent=usdPrice(p)"), 'El modal debe mostrar USD');
+assert(js.includes('function openProduct(p)'), 'Debe existir la función Ver detalles');
+assert(js.includes('function addToCart(p)'), 'Debe existir la función Agregar al carrito');
+assert(template.includes('id="dialogAddCart"'), 'El modal debe incluir el botón Agregar al carrito');
 assert.equal(Object.keys(enrichment).length, 420, 'Cada producto debe tener una ficha de notas con su fuente');
 assert.equal(products.filter(product => product.notes_top?.length && product.notes_heart?.length && product.notes_base?.length).length, 420, 'Los 420 productos deben tener salida, corazón y fondo');
 assert(products.every(product => ![...product.notes_top, ...product.notes_heart, ...product.notes_base].includes('Información pendiente')), 'No deben quedar notas pendientes');
