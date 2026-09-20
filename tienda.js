@@ -28,7 +28,15 @@ function addToCart(p){
  const prices=numbers(p.price);if(!prices.length)return;
  const sizes=String(p.size||'').split('/').map(x=>x.trim()).filter(Boolean);let idx=0;
  if(prices.length>1){
-  const options=prices.map((v,i)=>(i+1)+'. '+(sizes[i]||sizes[0]||'Presentación')+' — RD
+  const options=prices.map((v,i)=>(i+1)+'. '+(sizes[i]||sizes[0]||'Presentación')+' - RD$'+v.toLocaleString('es-DO')).join(String.fromCharCode(10));
+  const choice=prompt('Elige presentación:'+String.fromCharCode(10)+options,'1');if(choice===null)return;
+  idx=Math.max(0,Math.min(prices.length-1,(Number(choice)||1)-1));
+ }
+ const unit=prices[idx],size=sizes[idx]||sizes[0]||p.size||'',key=[p.id,unit,size].join(':'),cart=readCart(),found=cart.find(x=>x.key===key);
+ if(found)found.qty=Math.min(10,(Number(found.qty)||1)+1);else cart.push({key,product_id:Number(p.id),name:p.name,brand:p.brand||'',price:p.price,size,unit_price:unit,qty:1});
+ saveCart(cart);
+ document.querySelector('.cart-toast')?.remove();const toast=document.createElement('div');toast.className='cart-toast';toast.textContent=p.name+' agregado al carrito';document.body.append(toast);setTimeout(()=>toast.remove(),1800);
+}
 function updateFavoriteSummary(){const n=favoriteIds.size;favoritesSummary.textContent=n?n+' '+(n===1?'perfume guardado':'perfumes guardados')+' en este dispositivo.':'Pulsa el corazón de cualquier perfume para guardarlo en este dispositivo.'}
 function numbers(value){return (String(value).match(/[0-9][0-9,.]*/g)||[]).map(v=>Number(v.replace(/[,.]/g,''))).filter(Number.isFinite)}
 function maxPrice(p){const values=numbers(p.price);return values.length?Math.max(...values):0}
