@@ -8,7 +8,7 @@
   const loginCard = $('#login-card'), content = $('#admin-content'), logout = $('#logout');
   const loginStatus = $('#login-status'), productStatus = $('#product-status');
   const form = $('#product-form'), productsBody = $('#products-body'), ordersBody = $('#orders-body');
-  let session = null, products = [], orders = [];
+  let session = null, products = [], orders = [], productQuery = '';
 
   function status(el, message, kind = '') { el.textContent = message; el.className = kind; }
   function normalizeArray(value) { return String(value || '').split(/[\n,]/).map(v => v.trim()).filter(Boolean); }
@@ -71,11 +71,11 @@
         api('/rest/v1/products?select=*&order=sort_order.asc,name.asc'),
         api('/rest/v1/orders?select=*&order=created_at.desc')
       ]);
-      renderProducts(); renderOrders();
+      renderProducts(productQuery?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(productQuery)):products); renderOrders();
     } catch (err) { status(productStatus, err.message, 'error'); }
   }
   function renderProducts(list = products) {
-    productsBody.replaceChildren(...list.map(p => {
+    productsBody.replaceChildren(...list.slice(0,6).map(p => {
       const tr = document.createElement('tr');
       const img = document.createElement('img'); img.src = p.image_url || '/logo-oficial.webp'; img.alt = '';
       const cells = [document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td')];
@@ -96,7 +96,7 @@
     }));
   }
   $('#admin-search').addEventListener('input', e => {
-    const q=e.target.value.toLocaleLowerCase('es'); renderProducts(products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(q)));
+    productQuery=e.target.value.trim().toLocaleLowerCase('es'); renderProducts(productQuery?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(productQuery)):products);
   });
   function editProduct(p) {
     for (const name of ['id','name','brand','price','size','gender','availability','sort_order','page','slot','description','image_url']) if (form.elements[name]) form.elements[name].value=p[name]??'';
