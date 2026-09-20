@@ -8,7 +8,7 @@
   const loginCard = $('#login-card'), content = $('#admin-content'), logout = $('#logout');
   const loginStatus = $('#login-status'), productStatus = $('#product-status');
   const form = $('#product-form'), productsBody = $('#products-body'), ordersBody = $('#orders-body');
-  let session = null, products = [], orders = [], productQuery = '';
+  let session = null, products = [], orders = [], productQuery = '', knownOrderIds = new Set(), orderPoll = null;
 
   function status(el, message, kind = '') { el.textContent = message; el.className = kind; }
   function normalizeArray(value) { return String(value || '').split(/[\n,]/).map(v => v.trim()).filter(Boolean); }
@@ -48,8 +48,30 @@
   }
   function showAdmin() {
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
-    loadAll();
+    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
+    if(!orderPoll) orderPoll=setInterval(checkNewOrders,30000);
   }
+  async function checkNewOrders(){
+    if(!session)return;
+    try{
+      const latest=await api('/rest/v1/orders?select=*&order=created_at.desc&limit=20');
+      const fresh=latest.filter(o=>!knownOrderIds.has(String(o.id)));
+      latest.forEach(o=>knownOrderIds.add(String(o.id)));
+      if(fresh.length){
+        orders=latest;renderOrders();
+        if('Notification' in window && Notification.permission==='granted'){
+          new Notification('Nuevo pedido - Elite Scents RD',{body:(fresh[0].customer_name||'Cliente')+' realizó un pedido.'});
+        }
+        document.title='('+fresh.length+') Nuevo pedido | Elite Scents RD';
+      }
+    }catch{}
+  }
+  const notifyBtn=$('#enable-order-notifications');
+  if(notifyBtn) notifyBtn.addEventListener('click',async()=>{
+    if(!('Notification' in window)){alert('Este navegador no admite notificaciones.');return;}
+    const permission=await Notification.requestPermission();
+    notifyBtn.textContent=permission==='granted'?'Notificaciones activadas':'Activar notificaciones';
+  });
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault(); status(loginStatus, 'Verificando…');
     const data = Object.fromEntries(new FormData(e.currentTarget));
@@ -62,7 +84,7 @@
   });
   logout.addEventListener('click', async () => {
     try { await api('/auth/v1/logout', { method: 'POST' }); } catch {}
-    sessionStorage.removeItem(tokenKey); location.reload();
+    if(orderPoll){clearInterval(orderPoll);orderPoll=null;} sessionStorage.removeItem(tokenKey); location.reload();
   });
 
   async function loadAll() {
@@ -86,13 +108,39 @@
       cells[5].className='admin-actions'; cells[5].append(edit,del); tr.append(...cells); return tr;
     }));
   }
+  function orderWhatsapp(o) {
+    const eta=o.estimated_delivery?(' Entrega estimada: '+o.estimated_delivery+'.'):'';
+    const text='Hola '+(o.customer_name||'')+', recibimos tu pedido #'+o.id+' en Elite Scents RD.'+eta+'\n\n'+(o.items||'')+'\n\nTotal: '+(o.amount||'Por confirmar');
+    return 'https://wa.me/'+String(o.phone||'').replace(/\D/g,'')+'?text='+encodeURIComponent(text);
+  }
   function renderOrders() {
     ordersBody.replaceChildren(...orders.map(o => {
       const tr=document.createElement('tr');
-      [new Date(o.created_at).toLocaleDateString('es-DO'),o.customer_name||'—',o.phone||'—',o.items||'—',o.status||'nuevo'].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});
-      const td=document.createElement('td'), del=document.createElement('button'); del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
+      const date=document.createElement('td');date.textContent=new Date(o.created_at).toLocaleString('es-DO');
+      const customer=document.createElement('td');customer.textContent=o.customer_name||'—';
+      if(o.cedula) customer.title='Cédula: '+o.cedula+' · Dirección: '+(o.shipping_address||'');
+      const phone=document.createElement('td');phone.textContent=o.phone||'—';
+      const items=document.createElement('td');items.textContent=o.items||'—';
+      const total=document.createElement('td');total.textContent=o.amount||'—';
+      const manage=document.createElement('td');manage.className='admin-actions';
+      const statusSelect=document.createElement('select');
+      ['nuevo','confirmado','preparando','enviado','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
+      const eta=document.createElement('input');eta.type='text';eta.maxLength=120;eta.placeholder='Ej. 2-3 días';eta.value=o.estimated_delivery||'';eta.setAttribute('aria-label','Entrega estimada del pedido '+o.id);
+      const save=document.createElement('button');save.type='button';save.className='btn btn-secondary';save.textContent='Guardar';
+      save.addEventListener('click',async()=>{
+        save.disabled=true;
+        try{
+          await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:statusSelect.value,estimated_delivery:eta.value.trim()||null,updated_at:new Date().toISOString()})});
+          o.status=statusSelect.value;o.estimated_delivery=eta.value.trim()||null;save.textContent='Guardado ✓';setTimeout(()=>save.textContent='Guardar',1400);
+        }catch(err){alert(err.message)}finally{save.disabled=false}
+      });
+      manage.append(statusSelect,eta,save);
+      const actions=document.createElement('td');actions.className='admin-actions';
+      const wa=document.createElement('a');wa.className='btn btn-secondary';wa.target='_blank';wa.rel='noopener noreferrer';wa.href=orderWhatsapp(o);wa.textContent='WhatsApp';
+      const del=document.createElement('button');del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
       del.addEventListener('click',async()=>{if(!confirm('¿Eliminar este pedido?'))return;try{await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});orders=orders.filter(x=>x.id!==o.id);renderOrders()}catch(err){alert(err.message)}});
-      td.append(del);tr.append(td);return tr;
+      actions.append(wa,del);
+      tr.append(date,customer,phone,items,total,manage,actions);return tr;
     }));
   }
   $('#admin-search').addEventListener('input', e => {
