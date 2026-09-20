@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,follow">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://ozowziumksrudrotulll.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <title>Mi carrito y pedidos | Elite Scents RD</title>
+  <meta name="description" content="Revisa tu carrito, crea tu cuenta y solicita tu pedido en Elite Scents RD. No procesamos pagos en línea.">
+  <link rel="stylesheet" href="/tienda.css">
+  <link rel="icon" href="/logo-oficial.webp" type="image/webp">
+  <style>
+    .checkout-shell{width:min(1120px,calc(100% - 28px));margin:28px auto 70px}.checkout-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:22px;align-items:start}.checkout-card{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 12px 32px rgba(0,0,0,.05)}.checkout-card h1,.checkout-card h2{margin-top:0}.cart-row{display:grid;grid-template-columns:1fr auto;gap:14px;padding:15px 0;border-bottom:1px solid var(--line)}.cart-row:last-child{border-bottom:0}.cart-row h3{margin:0 0 5px;font-size:1rem}.cart-row p{margin:3px 0;color:var(--muted);font-size:.9rem}.cart-row-actions{display:flex;align-items:center;gap:8px}.qty{width:66px;padding:9px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}.cart-total{display:flex;justify-content:space-between;gap:15px;font-size:1.16rem;font-weight:700;padding-top:16px}.stack{display:grid;gap:11px}.stack label{display:grid;gap:6px;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em}.stack input,.stack textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}.stack textarea{min-height:92px;resize:vertical}.auth-tabs{display:flex;gap:8px;margin-bottom:14px}.auth-tabs button{flex:1}.auth-tabs .active{background:var(--dark);color:#fff}.order-status{padding:12px;border-radius:10px;background:var(--surface-soft);min-height:20px}.order-list{display:grid;gap:10px}.order-card{border:1px solid var(--line);border-radius:14px;padding:13px}.order-card p{margin:4px 0}.security-note{font-size:.86rem;color:var(--muted);line-height:1.5}.mfa-box{border-top:1px solid var(--line);margin-top:15px;padding-top:15px}.mfa-qr{max-width:220px;background:#fff;padding:10px;border-radius:10px}.hidden{display:none!important}@media(max-width:820px){.checkout-grid{grid-template-columns:1fr}} 
+  </style>
+</head>
+<body>
+  <div class="announcement">Carrito y pedidos · Sin pagos en línea</div>
+  <header class="header">
+    <a class="brand" href="/"><img src="/logo-oficial.webp" width="48" height="48" alt="Logotipo de Elite Scents RD"><span>ELITE <em>SCENTS</em><small>REPÚBLICA DOMINICANA</small></span></a>
+    <nav><a href="/">← Volver a la tienda</a></nav>
+  </header>
+
+  <main class="checkout-shell">
+    <div class="section-head"><div><p class="eyebrow">TU PEDIDO</p><h1>Carrito de <i>compras</i></h1><p>No cobramos en esta página. Puedes enviar tu carrito por WhatsApp o crear una orden para que la tienda la procese.</p></div></div>
+
+    <div class="checkout-grid">
+      <section class="checkout-card">
+        <h2>Tu carrito</h2>
+        <div id="cartItems"></div>
+        <p id="cartEmpty" class="empty" hidden>Tu carrito está vacío. <a href="/#coleccion">Explorar perfumes</a></p>
+        <div class="cart-total"><span>Total estimado</span><span id="cartTotal">RD$0</span></div>
+        <div class="admin-actions" style="margin-top:16px">
+          <a id="cartWhatsapp" class="button gold" target="_blank" rel="noopener noreferrer">Enviar carrito por WhatsApp ↗</a>
+          <button id="clearCart" class="button outline" type="button">Vaciar carrito</button>
+        </div>
+        <p class="security-note">El total es una referencia basada en los precios vigentes del catálogo. La disponibilidad y el tiempo de entrega se confirman antes de completar la venta.</p>
+      </section>
+
+      <section class="checkout-card">
+        <div id="authArea">
+          <p class="eyebrow">CUENTA DEL CLIENTE</p>
+          <h2 id="authTitle">Iniciar sesión</h2>
+          <div class="auth-tabs">
+            <button id="loginTab" class="button outline active" type="button">Entrar</button>
+            <button id="signupTab" class="button outline" type="button">Crear cuenta</button>
+          </div>
+          <form id="authForm" class="stack">
+            <label>Correo electrónico<input name="email" type="email" autocomplete="email" required></label>
+            <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="current-password" required></label>
+            <button class="button gold" type="submit" id="authSubmit">Entrar</button>
+            <div id="authStatus" class="order-status" aria-live="polite"></div>
+          </form>
+        </div>
+
+        <div id="customerArea" class="hidden">
+          <div class="admin-actions" style="justify-content:space-between"><div><p class="eyebrow">MI CUENTA</p><h2 style="margin-bottom:0">Datos del pedido</h2></div><button id="signOut" type="button" class="button outline">Salir</button></div>
+          <form id="profileForm" class="stack" style="margin-top:16px">
+            <label>Nombre<input name="first_name" maxlength="80" required></label>
+            <label>Apellidos<input name="last_name" maxlength="120" required></label>
+            <label>Cédula<input name="cedula" maxlength="30" autocomplete="off"></label>
+            <label>Teléfono / WhatsApp<input name="phone" type="tel" maxlength="40" required></label>
+            <label>Dirección<textarea name="address" maxlength="500" required></textarea></label>
+            <button class="button outline" type="submit">Guardar mis datos</button>
+            <div id="profileStatus" class="order-status" aria-live="polite"></div>
+          </form>
+
+          <div class="mfa-box">
+            <h3>Seguridad de la cuenta</h3>
+            <p class="security-note">Puedes activar autenticación multifactor (TOTP) con Google Authenticator, Authy, 1Password o una app compatible.</p>
+            <div id="mfaInactive">
+              <button id="enableMfa" class="button outline" type="button">Activar MFA</button>
+            </div>
+            <div id="mfaSetup" class="hidden stack">
+              <img id="mfaQr" class="mfa-qr" alt="Código QR para activar MFA">
+              <p>Clave manual: <code id="mfaSecret"></code></p>
+              <label>Código de 6 dígitos<input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8"></label>
+              <button id="verifyMfa" class="button outline" type="button">Confirmar MFA</button>
+            </div>
+            <div id="mfaStatus" class="order-status" aria-live="polite"></div>
+          </div>
+
+          <div style="border-top:1px solid var(--line);margin-top:20px;padding-top:20px">
+            <button id="placeOrder" class="button gold" type="button">Pedir / Ordenar carrito</button>
+            <div id="orderStatus" class="order-status" style="margin-top:12px" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <section class="checkout-card" style="margin-top:22px">
+      <p class="eyebrow">SEGUIMIENTO</p>
+      <h2>Mis pedidos</h2>
+      <div id="myOrders" class="order-list"><p class="muted">Inicia sesión para ver tus pedidos.</p></div>
+    </section>
+  </main>
+
+  <script src="/supabase-config.js"></script>
+  <script src="/customer.js"></script>
+</body>
+</html>
