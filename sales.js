@@ -6,7 +6,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   // Cuentan como venta los pedidos que la tienda ya confirmó; "nuevo" queda por confirmar y "cancelado" no suma.
   const SOLD = ['confirmado', 'preparando', 'enviado', 'entregado'];
-  const norm = value => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const norm = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
   const statusOf = order => norm(order.status) || 'nuevo';
 
   // El total del pedido es un texto ("RD$7,500"): se toma el primer monto escrito.
