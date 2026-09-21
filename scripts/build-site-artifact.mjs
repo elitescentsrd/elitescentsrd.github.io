@@ -3,6 +3,8 @@
 // documentación, etc.) fuera del sitio publicado, aunque sigan versionadas en Git.
 import { cp, mkdir, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
+import { renderProductPage, productPath } from './lib/seo.mjs';
 
 const OUT = '_site';
 
@@ -65,6 +67,21 @@ async function listAll(base, prefix = '') {
   return out;
 }
 
+// Una página indexable por perfume (título, descripción, foto, precio y datos estructurados propios).
+// Se generan desde el catálogo ya construido en index.html; no se versionan porque cambian con cada build.
+{
+  const indexHtml = await readFile('index.html', 'utf8');
+  const data = indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1];
+  if (!data) throw new Error('index.html no trae el catálogo precargado; ejecuta npm run build antes de npm run site.');
+  const products = JSON.parse(data);
+  await mkdir(OUT + '/perfumes', { recursive: true });
+  for (const p of products) {
+    const related = p.brand ? products.filter(x => x.brand === p.brand && x.id !== p.id).slice(0, 6) : [];
+    await writeFile(OUT + productPath(p), renderProductPage(p, related));
+  }
+  console.log('Páginas de perfume generadas: ' + products.length);
+}
+
 const shipped = await listAll(OUT);
 const leaked = shipped.filter(path => FORBIDDEN_SUBSTRINGS.some(bad => path.includes(bad)));
 if (leaked.length) {
@@ -72,7 +89,6 @@ if (leaked.length) {
 }
 
 // Búsqueda global: ningún archivo público puede referir a las láminas antiguas.
-const { readFile } = await import('node:fs/promises');
 const TEXT = /\.(html|js|css|xml|txt|json)$/;
 const offenders = [];
 for (const path of shipped.filter(p => TEXT.test(p))) {

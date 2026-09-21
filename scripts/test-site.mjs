@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { Script } from 'node:vm';
 import { imageSize, imageProblems } from './check-product-images.mjs';
+import { renderProductPage, productPath, productUrl, slugify, SITE_URL } from './lib/seo.mjs';
 
 const [html, template, css, js, enrichmentText, pricingText, positionsText] = await Promise.all([
   readFile('index.html', 'utf8'),
@@ -218,6 +219,50 @@ assert(checkout.includes('id="mfaLoginForm"')&&checkout.includes('id="disableMfa
 assert(products.every(p=>String(p.description||'').length>=120&&p.description.includes(p.name)),'Cada producto debe tener una descripción propia con su nombre');
 assert(new Set(products.map(p=>p.description)).size>=415,'Las descripciones no deben repetirse (salvo productos idénticos)');
 assert(productSchemas.every(s=>String(s.description||'').length>=120),'El JSON-LD debe usar la descripción propia');
+// --- SEO: marca, páginas por perfume y sitemap ---
+{
+  const brandBlock=[...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m=>JSON.parse(m[1])).find(x=>x['@graph']);
+  assert(brandBlock,'La portada debe declarar la marca (WebSite + Store) en JSON-LD');
+  const org=brandBlock['@graph'].find(x=>x['@type']==='Store'), site=brandBlock['@graph'].find(x=>x['@type']==='WebSite');
+  assert(org.name==='Elite Scents RD'&&site.name==='Elite Scents RD','El nombre de la marca debe ser Elite Scents RD');
+  assert(org.alternateName.includes('EliteScentsRD')&&org.sameAs.some(u=>u.includes('instagram.com/elite.scentsrd')),'Debe incluir variantes del nombre y la red social');
+  assert(/logo-oficial/.test(org.logo.url)&&org.telephone==='+18094333348'&&org.areaServed.name==='República Dominicana','Debe incluir logotipo, teléfono y zona de servicio');
+  assert(/<html lang="es-DO">/.test(html),'La portada debe declarar es-DO');
+  assert(/<title>Elite Scents RD \|/.test(html)&&/<h1><span class="h1-brand">Elite Scents RD/.test(html),'El título y el h1 deben llevar la marca');
+  const metaDescription=html.match(/<meta name="description" content="([^"]+)"/)[1];
+  assert(metaDescription.startsWith('Elite Scents RD')&&metaDescription.length>=100&&metaDescription.length<=200,'La descripción debe empezar con la marca y tener una longitud útil');
+  assert(html.includes('property="og:site_name" content="Elite Scents RD"'),'Debe declarar og:site_name');
+  const sitemap=await readFile('sitemap.xml','utf8');
+  const paths=new Set(), titles=new Set();
+  for(const p of products){
+    const path=productPath(p); assert(!paths.has(path),'Ruta de perfume repetida: '+path); paths.add(path);
+    assert(html.includes('<a href="'+path+'">'),'La tarjeta de '+p.name+' debe enlazar a su página');
+    assert(sitemap.includes('<loc>'+productUrl(p)+'</loc>'),'El sitemap debe incluir '+path);
+    const related=p.brand?products.filter(x=>x.brand===p.brand&&x.id!==p.id).slice(0,6):[];
+    const page=renderProductPage(p,related);
+    assert(page.includes('<link rel="canonical" href="'+productUrl(p)+'">'),'Canonical de '+path);
+    assert(page.includes('<title>')&&page.includes('| Elite Scents RD</title>'),'Título con marca en '+path);
+    assert(!page.includes('/pages/page-'),'Sin láminas en '+path);
+    const lds=[...page.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m=>JSON.parse(m[1]));
+    const prod=lds.find(x=>x['@type']==='Product'), crumbs=lds.find(x=>x['@type']==='BreadcrumbList');
+    assert(prod&&prod.name===p.name&&prod.offers.priceCurrency==='DOP'&&prod.offers.url===productUrl(p)&&prod.image&&prod.description.length>=120,'Product JSON-LD completo en '+path);
+    assert(crumbs&&crumbs.itemListElement.length===3,'Migas de pan en '+path);
+    assert(page.includes('<h1 class="detail-title">'+p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')+'</h1>'),'h1 con el nombre en '+path);
+    const title=page.match(/<title>([^<]*)<\/title>/)[1]; titles.add(title);
+  }
+  assert.equal(paths.size,420,'Debe haber 420 páginas de perfume distintas');
+  assert(titles.size>=415,'Los títulos de las páginas de perfume no deben repetirse');
+  assert.equal((sitemap.match(/<image:image>/g)||[]).length,420,'El sitemap debe incluir la foto de cada perfume');
+  for(const u of [SITE_URL+'/',SITE_URL+'/pedidos-envios.html',SITE_URL+'/privacidad.html']) assert(sitemap.includes('<loc>'+u+'</loc>'),'El sitemap debe incluir '+u);
+  assert(!sitemap.includes('catalogo.html')&&!sitemap.includes('admin.html')&&!sitemap.includes('checkout.html'),'El sitemap no debe listar páginas retiradas ni privadas');
+  // El slug de tienda.js (enlaces de las tarjetas dibujadas por JavaScript) debe ser idéntico al del build.
+  const start=js.indexOf('function slugify(s)'),end=js.indexOf('\n',start);
+  const clientSlug=new Function(js.slice(start,end)+'; return slugify;')();
+  for(const p of products) assert.equal(clientSlug(p.name),slugify(p.name),'slugify de tienda.js debe coincidir para '+p.name);
+  assert(js.includes('function productPath(p)')&&js.includes('function openFromHash()')&&js.includes("titleLink.href=productPath(p)"),'tienda.js debe enlazar a la página del perfume y abrir la ficha desde #producto-ID');
+  const robots=await readFile('robots.txt','utf8'); assert(robots.includes('Sitemap: '+SITE_URL+'/sitemap.xml'),'robots.txt debe apuntar al sitemap');
+  const artifactSource=await readFile('scripts/build-site-artifact.mjs','utf8'); assert(artifactSource.includes('renderProductPage')&&artifactSource.includes("'/perfumes'"),'El artefacto debe generar las páginas de perfume');
+}
 // --- Cookies en todas las páginas públicas ---
 {
   const cookies=await readFile('cookies.js','utf8');

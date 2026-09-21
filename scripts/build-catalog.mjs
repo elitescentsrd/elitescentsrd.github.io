@@ -1,7 +1,7 @@
 import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
-const SITE_URL = 'https://elitescentsrd.github.io';
+import { SITE_URL, productPath, productUrl, absoluteUrl, brandSchemaScript } from './lib/seo.mjs';
 const USD_RATE_DOP = 63;
 // Se pide select=* (funciona aunque una migración de columnas aún no se haya aplicado) y se publican solo estos campos.
 const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at'];
@@ -37,7 +37,6 @@ const nums = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Num
 const gender = { hombre: 'Hombre', mujer: 'Mujer', unisex: 'Unisex' };
 const status = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'Solo por encargo' };
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
-const productUrl = p => SITE_URL + '/#producto-' + p.id;
 // Solo devuelve una URL de imagen individual real. A propósito NO cae a la
 // lámina completa de /pages/: esa lámina muestra hasta 12 productos distintos
 // y jamás debe declararse como la foto de un producto en datos estructurados
@@ -101,7 +100,7 @@ function card(p, index) {
   return '<article class="perfume" id="producto-' + esc(p.id) + '" data-product-id="' + esc(p.id) + '">' +
     visual(p, index) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' + (p.original_price ? '<span class="offer-badge">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
-    '<h3>' + esc(p.name) + '</h3><div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
+    '<h3><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a></h3><div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
     '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><a href="' + esc(whatsapp(p)) + '" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a></div></article>';
 }
 function schema(p) {
@@ -126,7 +125,8 @@ const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="gr
 const schemas = '<!-- PRODUCT_JSON_LD_START -->\n' + products.map(schema).join('\n') + '\n<!-- PRODUCT_JSON_LD_END -->';
 const output = template
   .replace(/<!-- PRODUCT_CATALOG_START -->[\s\S]*?<!-- PRODUCT_CATALOG_END -->/, catalog)
-  .replace(/<!-- PRODUCT_JSON_LD_START -->[\s\S]*?<!-- PRODUCT_JSON_LD_END -->/, schemas);
+  .replace(/<!-- PRODUCT_JSON_LD_START -->[\s\S]*?<!-- PRODUCT_JSON_LD_END -->/, schemas)
+  .replace('<!-- BRAND_JSON_LD -->', brandSchemaScript());
 await writeFile('index.html', output);
 
 // Regenera sitemap.xml en cada build: la portada cambia con el catálogo, así
@@ -140,9 +140,13 @@ const STATIC_PAGES = [
 ];
 const sitemapUrl = (loc, lastmod, changefreq, priority) =>
   '  <url><loc>' + SITE_URL + loc + '</loc><lastmod>' + lastmod + '</lastmod><changefreq>' + changefreq + '</changefreq><priority>' + priority + '</priority></url>';
-const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+// Una entrada por perfume (con su foto para Google Imágenes).
+const productEntries = products.map(p => '  <url><loc>' + esc(productUrl(p)) + '</loc><lastmod>' + today + '</lastmod><changefreq>weekly</changefreq><priority>0.7</priority>' +
+  (p.image_url ? '<image:image><image:loc>' + esc(absoluteUrl(p.image_url)) + '</image:loc><image:title>' + esc(p.name) + '</image:title></image:image>' : '') + '</url>');
+const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' +
   sitemapUrl('/', today, 'weekly', '1.0') + '\n' +
   STATIC_PAGES.map(p => sitemapUrl('/' + p.path, p.lastmod, p.changefreq, p.priority)).join('\n') + '\n' +
+  productEntries.join('\n') + '\n' +
   '</urlset>\n';
 await writeFile('sitemap.xml', sitemap);
 

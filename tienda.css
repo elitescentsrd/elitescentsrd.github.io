@@ -58,3 +58,14 @@
 
 /* Tarjetas fuera de la primera pantalla: la foto no se descarga hasta que tienda.js dibuja la tarjeta */
 .photo.custom{background-size:contain;background-position:center;background-repeat:no-repeat}.photo[data-bg]{background-color:var(--surface-soft)}
+
+/* SEO: h1 con la marca y páginas de producto */
+.hero h1 .h1-brand{display:block;color:var(--gold);font:700 11px/1.6 Arial,Helvetica,sans-serif;letter-spacing:.23em;text-transform:uppercase;margin:0 0 18px}
+.perfume h3 a{color:inherit}.perfume h3 a:hover{color:var(--gold)}
+.product-page{max-width:1100px;margin:0 auto}.breadcrumb{font-size:12px;color:var(--muted);margin-bottom:22px}.breadcrumb a{text-decoration:underline}
+.product-detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:start}
+.product-detail-photo img,.product-detail-photo .photo{width:100%;height:auto;aspect-ratio:1/1;background:#fff;border:1px solid var(--line,#ded8cc)}
+.detail-title{font:400 clamp(30px,4vw,48px)/1.15 Georgia,'Times New Roman',serif;letter-spacing:-.02em;margin:8px 0 12px}
+.detail-price{font-size:22px;margin:10px 0 18px;display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}.detail-offer{margin:0 0 6px}
+.related{margin-top:56px}.related-list{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 24px}.related-list a{text-decoration:underline}.related-list span{color:var(--muted);font-size:12px}
+@media(max-width:820px){.product-detail{grid-template-columns:1fr;gap:22px}}
