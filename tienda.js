@@ -75,6 +75,40 @@ function openProduct(p){const dialog=$('#productDialog'),main=$('#dialogMainImag
 function resetFilters(){q.value='';gender='todos';onlyFavorites=false;priceFilter.value=brandFilter.value=noteFilter.value=availabilityFilter.value='all';document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter==='todos'));visible=24;closeSuggestions();render()}
 function unavailable(){products=[];render();grid.setAttribute('aria-busy','false');empty.hidden=false;empty.textContent='El catálogo no está disponible ahora. Escríbenos por WhatsApp para consultar un perfume.';count.textContent='Catálogo no disponible'}
 function catalogMessage(message){const el=$('#catalogStatus');if(el)el.textContent=message}
+// Asistente "Encuentra tu perfume": 4 preguntas cortas y una recomendación según las notas de cada perfume (la lógica está en aroma.js).
+const finderDialog=$('#finderDialog'),Aroma=window.EliteAroma;
+let finderStep=0,finderAnswers={};
+function finderReset(){finderStep=0;finderAnswers={who:'',occasion:'',families:[],budget:''}}
+function finderOpen(){finderReset();renderFinder();if(!finderDialog.open)finderDialog.showModal()}
+function markFinderSelection(step){const chosen=step.multi?finderAnswers[step.id]:[finderAnswers[step.id]];$('#finderOptions').querySelectorAll('.finder-option').forEach(b=>{const on=chosen.includes(b.dataset.value);b.classList.toggle('selected',on);b.setAttribute('aria-pressed',String(on))});if(step.multi)$('#finderNext').disabled=!finderAnswers[step.id].length}
+function chooseFinderOption(step,option){
+ if(step.multi){let list=finderAnswers[step.id];if(option.exclusive)list=list.includes(option.value)?[]:[option.value];else{list=list.filter(v=>v!=='ninguno');list=list.includes(option.value)?list.filter(v=>v!==option.value):[...list,option.value].slice(-step.max)}finderAnswers[step.id]=list;markFinderSelection(step);return}
+ finderAnswers[step.id]=option.value;finderStep++;renderFinder();
+}
+function renderFinder(){
+ const steps=Aroma.STEPS;if(finderStep>=steps.length){renderFinderResults();return}
+ const step=steps[finderStep];$('#finderQuestion').hidden=false;$('#finderResults').hidden=true;
+ $('#finderStep').textContent='PASO '+(finderStep+1)+' DE '+steps.length;$('#finderTitle').textContent=step.title;$('#finderHelp').textContent=step.help||'';
+ const box=$('#finderOptions');box.replaceChildren();
+ step.options.forEach(option=>{const b=document.createElement('button');b.type='button';b.className='finder-option';b.dataset.value=option.value;const label=document.createElement('strong');label.textContent=option.label;b.append(label);if(option.hint){const hint=document.createElement('small');hint.textContent=option.hint;b.append(hint)}b.addEventListener('click',()=>chooseFinderOption(step,option));box.append(b)});
+ markFinderSelection(step);$('#finderBack').hidden=finderStep===0;$('#finderNext').hidden=!step.multi;box.querySelector('button')?.focus();
+}
+function renderFinderResults(){
+ $('#finderQuestion').hidden=true;$('#finderResults').hidden=false;$('#finderStep').textContent='TUS RECOMENDACIONES';$('#finderTitle').textContent='Estas opciones son para ti';
+ const {items,total}=Aroma.recommend(products,finderAnswers,6),summary=Aroma.describeAnswers(finderAnswers);
+ $('#finderSummary').textContent=items.length?(summary?'Buscaste un perfume '+summary+'. ':'')+'Mostramos '+items.length+' de '+total+' que coinciden, ordenados por afinidad con las notas de cada uno.':'No encontramos perfumes con esas condiciones.';
+ $('#finderGrid').replaceChildren(...items.map(({product,reasons})=>{const article=card(product);if(reasons.length){const why=document.createElement('p');why.className='finder-reason';why.textContent='Coincide: '+reasons.slice(0,2).map(r=>r.label.toLowerCase()+' ('+r.notes.join(', ')+')').join(' · ');article.append(why)}return article}));
+ const few=$('#finderFew');few.hidden=total>=3;few.textContent=total>=3?'':'Hay pocas coincidencias exactas. Prueba con otros gustos o un presupuesto mayor, o pídenos una recomendación por WhatsApp.';
+ $('#finderWhatsapp').href='https://wa.me/18094333348?text='+encodeURIComponent('Hola Elite Scents RD, quiero una recomendación de perfume'+(summary?' '+summary:'')+'. ¿Me ayudas?');
+ finderDialog.scrollTop=0;
+}
+if(finderDialog&&Aroma){
+ document.addEventListener('click',e=>{if(e.target.closest('[data-open-finder]')&&products.length){e.preventDefault();finderOpen()}});
+ $('#finderClose').addEventListener('click',()=>finderDialog.close());finderDialog.addEventListener('click',e=>{if(e.target===finderDialog)finderDialog.close()});
+ $('#finderBack').addEventListener('click',()=>{if(finderStep>0){finderStep--;renderFinder()}});$('#finderNext').addEventListener('click',()=>{finderStep++;renderFinder()});
+ $('#finderRestart').addEventListener('click',()=>{finderReset();renderFinder()});
+ $('#finderCatalog').addEventListener('click',()=>{finderDialog.close();resetFilters();if(finderAnswers.who==='hombre'||finderAnswers.who==='mujer'){gender=finderAnswers.who;document.querySelectorAll('[data-filter]').forEach(b=>b.classList.toggle('active',b.dataset.filter===gender));render()}$('#coleccion').scrollIntoView()});
+}
 async function load(){if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(String(cfg.url||'').replace(/\/$/,''))||!key){unavailable();return}const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);try{const fields='id,name,price,size,gender,image_url,sort_order,availability,brand,notes_top,notes_heart,notes_base,gallery_urls,description';const response=await fetch(API+'?select=*'+'&active=eq.true&order=sort_order.asc,id.asc&limit=1000',{headers:{apikey:key},signal:controller.signal});if(!response.ok)throw new Error('HTTP '+response.status);const fresh=await response.json();if(!Array.isArray(fresh)||!fresh.length)throw new Error('Catálogo vacío');products=fresh.map(product=>{const saved=preRenderedById.get(Number(product.id));return saved?{...product,description:product.description||saved.description,image_url:validImage(product.image_url)?product.image_url:saved.image_url||null,notes_top:product.notes_top?.length?product.notes_top:saved.notes_top,notes_heart:product.notes_heart?.length?product.notes_heart:saved.notes_heart,notes_base:product.notes_base?.length?product.notes_base:saved.notes_base}:product});prepareFilters();render();updateFavoriteSummary();grid.setAttribute('aria-busy','false');catalogMessage('')}catch{if(products.length){render();grid.setAttribute('aria-busy','false');catalogMessage('Mostrando la última versión guardada del catálogo. Puedes consultar disponibilidad por WhatsApp.')}else unavailable()}finally{clearTimeout(timer)}}
 q.addEventListener('input',()=>{visible=24;showSuggestions();render()});q.addEventListener('keydown',e=>{if(e.key==='ArrowDown'){e.preventDefault();moveSuggestion(1)}else if(e.key==='ArrowUp'){e.preventDefault();moveSuggestion(-1)}else if(e.key==='Enter'&&suggestionIndex>=0){e.preventDefault();chooseSuggestion(suggestions.children[suggestionIndex].textContent.split(' · ')[0])}else if(e.key==='Escape')closeSuggestions()});q.addEventListener('blur',()=>setTimeout(closeSuggestions,120));
 [priceFilter,brandFilter,noteFilter,availabilityFilter].forEach(el=>el.addEventListener('change',()=>{visible=24;render()}));

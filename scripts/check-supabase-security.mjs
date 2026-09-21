@@ -54,6 +54,23 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
   else if (r.json?.code === 'P0001') record('AVISO', 'place_customer_order sigue ejecutable por anon (solo la rechaza la validación interna)', 'aplicar supabase/migrations/20260920120000_lock_down_place_customer_order.sql');
   else record('FALLO', 'Respuesta inesperada de place_customer_order sin sesión', 'HTTP ' + r.status + ' ' + r.text.slice(0, 100));
 }
+// 4b. Cupones (migración 20260921130000_cupones.sql): un visitante no puede usar las funciones ni leer las tablas.
+//     Si la migración todavía no se aplicó, es un AVISO (no un fallo): las funciones simplemente no existen.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  for (const [name, body] of [['preview_coupon', { p_code: 'X', p_product_ids: [], p_subtotal: 0 }], ['place_customer_order_con_cupon', { p_items: [], p_coupon: 'X' }]]) {
+    const r = await call('POST', '/rest/v1/rpc/' + name, body);
+    if (denied(r)) record('OK', name + ': EXECUTE revocado para anon', 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', name + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260921130000_cupones.sql');
+    else record('FALLO', 'Respuesta inesperada de ' + name + ' sin sesión', 'HTTP ' + r.status + ' ' + r.text.slice(0, 100));
+  }
+  for (const table of ['coupons', 'coupon_redemptions', 'coupon_attempts']) {
+    const r = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260921130000_cupones.sql');
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
+  }
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

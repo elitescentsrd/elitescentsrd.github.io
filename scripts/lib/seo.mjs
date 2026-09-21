@@ -65,6 +65,7 @@ export function renderProductPage(p, related = []) {
     '<title>' + esc(title) + '</title><meta name="description" content="' + esc(metaDescription) + '"><meta name="robots" content="index,follow,max-image-preview:large"><link rel="canonical" href="' + esc(url) + '">' +
     '<meta property="og:type" content="product"><meta property="og:site_name" content="' + BRAND + '"><meta property="og:locale" content="es_DO"><meta property="og:title" content="' + esc(title) + '"><meta property="og:description" content="' + esc(metaDescription) + '"><meta property="og:url" content="' + esc(url) + '">' +
     '<meta property="og:image" content="' + esc(image || SITE_URL + '/social-card.png') + '"><meta name="twitter:card" content="summary_large_image">' +
+    '<meta name="theme-color" content="#14130f"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">' +
     '<link rel="stylesheet" href="/tienda.css"><link rel="icon" href="/logo-oficial.webp" type="image/webp">' + jsonLd(productSchema(p)) + jsonLd(breadcrumb) + '</head><body>' +
     '<header class="header"><a class="brand" href="/"><img src="/logo-oficial.webp" width="48" height="48" alt="Logotipo de Elite Scents RD"><span>ELITE <em>SCENTS</em><small>REPÚBLICA DOMINICANA</small></span></a><a href="/#coleccion">← Ver todos los perfumes</a></header>' +
     '<main class="collection product-page"><nav class="breadcrumb" aria-label="Ruta"><a href="/">Inicio</a> › <a href="/#coleccion">Perfumes</a> › <span>' + esc(p.name) + '</span></nav>' +
@@ -76,7 +77,7 @@ export function renderProductPage(p, related = []) {
     '<p class="dialog-description">' + esc(p.description || '') + '</p>' +
     '<div class="dialog-order-actions"><a class="button gold" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer">Pedir por WhatsApp ↗</a><a class="button outline" href="/#producto-' + esc(p.id) + '">Ver en la tienda y agregar al carrito</a></div>' +
     '</div></article>' + relatedHtml + '</main>' +
-    '<footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/privacidad.html">Privacidad</a></div><p class="copyright">© Elite Scents RD</p></footer><script src="/cookies.js"></script></body></html>';
+    '<footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/privacidad.html">Privacidad</a></div><p class="copyright">© Elite Scents RD</p></footer><script src="/cookies.js"></script><script defer src="/pwa.js"></script></body></html>';
 }
 
 // Datos de la marca para el buscador: nombre, variantes de escritura, logotipo, redes y contacto.

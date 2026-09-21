@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-catalog.mjs",
-    "test": "node scripts/test-site.mjs && node scripts/test-photos-render.mjs",
+    "test": "node scripts/test-site.mjs && node scripts/test-features.mjs && node scripts/test-photos-render.mjs",
     "test:images": "node scripts/check-product-images.mjs",
+    "test:sql": "node scripts/test-coupons-sql.mjs",
     "test:security": "node scripts/check-supabase-security.mjs",
     "check:batch": "node scripts/check-photo-batch.mjs",
     "verify": "npm run build && npm test && npm run test:images && npm run test:security",

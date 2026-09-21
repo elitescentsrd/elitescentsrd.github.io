@@ -46,6 +46,17 @@
     </section>
 
     <div id="admin-content" class="hidden">
+      <section class="admin-card" id="sales-card">
+        <div class="admin-head"><div><p class="eyebrow">Resumen</p><h2>Resumen de ventas</h2><p class="muted">Se calcula con los pedidos del panel. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados; los nuevos quedan "por confirmar" y los cancelados no suman.</p></div><label class="sales-period-label">Período<select id="sales-period"><option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="all">Todo el historial</option></select></label></div>
+        <div class="sales-kpis" id="sales-kpis"></div>
+        <div class="admin-actions sales-chart-head"><strong id="sales-chart-title">Pedidos por día</strong><button type="button" class="btn btn-secondary active" data-sales-metric="orders">Pedidos</button><button type="button" class="btn btn-secondary" data-sales-metric="sales">Ventas (RD$)</button></div>
+        <div id="sales-chart" class="sales-chart" role="img" aria-label="Gráfico de pedidos por día"></div>
+        <div class="sales-columns">
+          <div><h3>Perfumes más pedidos</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Unidades</th><th>Pedidos</th></tr></thead><tbody id="sales-top"></tbody></table></div><p class="muted">Se lee del texto de cada pedido; los cancelados no cuentan.</p></div>
+          <div><h3>De dónde llegan tus clientes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Origen</th><th>Cuentas</th><th>Compraron</th><th>Pedidos</th></tr></thead><tbody id="sales-origins"></tbody></table></div><p class="muted">Según cómo llegó cada persona al crear su cuenta (todas las cuentas, sin importar el período).</p></div>
+        </div>
+      </section>
+
       <section class="admin-card">
         <div class="admin-head"><div><p class="eyebrow">Producto</p><h2 id="form-title">Agregar perfume</h2></div><button id="cancel-edit" class="btn btn-secondary hidden" type="button">Cancelar edición</button></div>
         <form id="product-form" class="admin-form">
@@ -117,6 +128,27 @@
         </form>
       </section>
 
+      <section class="admin-card" id="coupons-card">
+        <div class="admin-head"><div><p class="eyebrow">Cupones</p><h2>Cupones de descuento</h2><p class="muted">Crea códigos para eventos o primeras compras. El cliente lo escribe en su carrito y la base de datos calcula el descuento sobre el total real, así nadie puede falsificarlo. Por defecto un cupón no se combina con perfumes que ya están en oferta.</p></div><button id="coupons-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <p id="coupons-notice" class="muted hidden">Para usar cupones falta aplicar la migración "cupones" en Supabase (SQL Editor).</p>
+        <form id="coupon-form" class="admin-form">
+          <label>Código<input name="code" maxlength="24" required autocomplete="off" autocapitalize="characters" placeholder="MADRES10"></label>
+          <label>Tipo<select name="kind"><option value="percent">Porcentaje (%)</option><option value="amount">Monto fijo (RD$)</option></select></label>
+          <label>Valor<input name="value" type="number" min="1" step="1" required placeholder="10"></label>
+          <label>Descuento máximo (RD$, opcional)<input name="max_discount" type="number" min="1" step="1"></label>
+          <label class="span-2">Evento o nota (opcional)<input name="description" maxlength="120" placeholder="Día de las Madres"></label>
+          <label>Compra mínima (RD$)<input name="min_subtotal" type="number" min="0" step="1" value="0"></label>
+          <label>Usos máximos (vacío = sin límite)<input name="max_uses" type="number" min="1" step="1"></label>
+          <label>Empieza (opcional)<input name="starts_at" type="datetime-local"></label>
+          <label>Termina (opcional)<input name="ends_at" type="datetime-local"></label>
+          <label class="check-line"><input name="one_per_customer" type="checkbox" checked> Un uso por cliente</label>
+          <label class="check-line"><input name="first_order_only" type="checkbox"> Solo primera compra</label>
+          <label class="check-line"><input name="allow_with_offers" type="checkbox"> Permitir con perfumes en oferta</label>
+          <div class="span-4 admin-actions"><button class="btn" type="submit">Crear cupón</button><span id="coupon-status" aria-live="polite"></span></div>
+        </form>
+        <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Código</th><th>Descuento</th><th>Reglas</th><th>Vigencia</th><th>Usos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="coupons-body"></tbody></table></div>
+      </section>
+
       <section class="admin-card" id="customers-card">
         <div class="admin-head"><div><p class="eyebrow">Cuentas Clientes</p><h2>Cuentas de clientes</h2><p class="muted">Clientes que crearon una cuenta en la tienda y desde dónde llegaron. Las contraseñas están cifradas por Supabase y nadie puede verlas ni recuperarlas; solo se pueden restablecer.</p></div><button id="customers-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
         <p id="customers-notice" class="muted hidden">Para ver las cuentas falta aplicar la migración "cuentas_clientes" en Supabase (SQL Editor).</p>
@@ -144,6 +176,7 @@
     </div>
   </main>
   <script src="/supabase-config.js"></script>
+  <script src="/sales.js"></script>
   <script src="/admin.js"></script>
 </body>
 </html>

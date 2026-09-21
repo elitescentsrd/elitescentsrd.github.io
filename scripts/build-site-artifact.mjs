@@ -5,6 +5,7 @@ import { cp, mkdir, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { renderProductPage, productPath } from './lib/seo.mjs';
+import { merchantFeed } from './lib/feeds.mjs';
 
 const OUT = '_site';
 
@@ -21,6 +22,12 @@ const FILES = [
   'tienda.css',
   'tienda.js',
   'cookies.js',
+  'aroma.js',
+  'sales.js',
+  'pwa.js',
+  'sw.js',
+  'offline.html',
+  'manifest.webmanifest',
   'checkout.css',
   'admin.css',
   'supabase-config.js',
@@ -56,6 +63,18 @@ for (const dir of DIRS) {
   await cp(dir, OUT + '/' + dir, { recursive: true });
 }
 
+// El service worker guarda copias con un nombre que incluye la versión: cada publicación (commit) trae una nueva
+// y así las copias antiguas se borran solas en los celulares de los clientes.
+{
+  const buildId = (process.env.GITHUB_SHA || '').slice(0, 8) || 'local';
+  const swPath = OUT + '/sw.js';
+  const sw = await readFile(swPath, 'utf8');
+  if (!sw.includes('__BUILD_ID__')) throw new Error('sw.js perdió el marcador __BUILD_ID__.');
+  const stamped = sw.replaceAll('__BUILD_ID__', buildId);
+  if (stamped.includes('__BUILD_ID__') || !stamped.includes("'elite-v" + buildId + "'")) throw new Error('No se pudo versionar sw.js.');
+  await writeFile(swPath, stamped);
+}
+
 async function listAll(base, prefix = '') {
   const entries = await readdir(base, { withFileTypes: true });
   let out = [];
@@ -80,6 +99,11 @@ async function listAll(base, prefix = '') {
     await writeFile(OUT + productPath(p), renderProductPage(p, related));
   }
   console.log('Páginas de perfume generadas: ' + products.length);
+  // Archivo de productos para Google Merchant Center e Instagram/Facebook: /feeds/productos.xml
+  const feed = merchantFeed(products);
+  await mkdir(OUT + '/feeds', { recursive: true });
+  await writeFile(OUT + '/feeds/productos.xml', feed.xml);
+  console.log('Archivo de productos para Google/Instagram: ' + feed.included + ' perfumes (omitidos: ' + feed.skipped.length + ').');
 }
 
 const shipped = await listAll(OUT);

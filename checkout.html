@@ -27,6 +27,8 @@
         <div id="cartItems"></div>
         <p id="cartEmpty" class="empty" hidden>Tu carrito está vacío. <a href="/#coleccion">Explorar perfumes</a></p>
         <div class="cart-total"><span>Total estimado</span><span id="cartTotal">RD$0</span></div>
+        <div class="cart-total hidden" id="couponRow"><span id="couponRowLabel">Cupón</span><span id="couponRowValue"></span></div>
+        <div class="cart-total hidden" id="finalRow"><strong>Total con cupón</strong><strong id="finalTotal"></strong></div>
         <div class="admin-actions mt-md">
           <a id="cartWhatsapp" class="button gold" target="_blank" rel="noopener noreferrer">Enviar carrito por WhatsApp ↗</a>
           <button id="clearCart" class="button outline" type="button">Vaciar carrito</button>
@@ -108,6 +110,12 @@
               <button id="verifyMfa" class="button outline" type="button">Confirmar MFA</button>
             </div>
             <div id="mfaStatus" class="order-status" aria-live="polite"></div>
+          </div>
+
+          <div id="couponBox" class="coupon-box hidden">
+            <label>Código de descuento (opcional)<input id="couponCode" maxlength="24" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Ej. MADRES10"></label>
+            <div class="admin-actions"><button id="applyCoupon" class="button outline" type="button">Aplicar cupón</button><button id="removeCoupon" class="button outline hidden" type="button">Quitar cupón</button></div>
+            <div id="couponStatus" class="order-status" aria-live="polite"></div>
           </div>
 
           <div class="divider-top">

@@ -35,6 +35,36 @@ function renderCart(){
  $('#cartWhatsapp').href='https://wa.me/'+WA+'?text='+encodeURIComponent(msg);
  $('#cartWhatsapp').classList.toggle('hidden',!items.length);
  $('#clearCart').disabled=!items.length;
+ if(coupon)recheckCoupon();
+}
+// --- Cupones de descuento: la base de datos valida el código y calcula el descuento (funciones preview_coupon y place_customer_order_con_cupon) ---
+let coupon=null;
+function cartProductIds(){return [...new Set(readCart().map(i=>Number(i.product_id)).filter(Number.isFinite))]}
+function setCouponStatus(text,kind){const el=$('#couponStatus');el.textContent=text;el.classList.toggle('error',kind==='error')}
+function renderCouponTotals(){
+ const on=Boolean(coupon);$('#couponRow').classList.toggle('hidden',!on);$('#finalRow').classList.toggle('hidden',!on);$('#removeCoupon').classList.toggle('hidden',!on);
+ if(on){$('#couponRowLabel').textContent='Cupón '+coupon.code;$('#couponRowValue').textContent='−'+money(coupon.discount);$('#finalTotal').textContent=money(coupon.total)}
+}
+async function checkCoupon(code,silent){
+ const subtotal=cartTotal();
+ if(!subtotal){coupon=null;renderCouponTotals();if(!silent)setCouponStatus('Tu carrito está vacío.','error');return false}
+ const r=await authFetch('/rest/v1/rpc/preview_coupon',{method:'POST',body:JSON.stringify({p_code:code,p_product_ids:cartProductIds(),p_subtotal:subtotal})});
+ if(!r||r.ok!==true){coupon=null;renderCouponTotals();setCouponStatus(r?.message||'No se pudo comprobar el cupón.','error');return false}
+ coupon={code:r.code,discount:Number(r.discount)||0,total:Number(r.total)||0,description:r.description||''};renderCouponTotals();
+ setCouponStatus('Cupón '+coupon.code+' aplicado'+(coupon.description?' ('+coupon.description+')':'')+': descuento de '+money(coupon.discount)+'. El total final se confirma al hacer el pedido.');
+ return true;
+}
+async function applyCoupon(){
+ const code=$('#couponCode').value.trim().toUpperCase();if(!code){setCouponStatus('Escribe tu código de descuento.','error');return}
+ setCouponStatus('Comprobando…');
+ try{await checkCoupon(code,false)}catch(err){coupon=null;renderCouponTotals();setCouponStatus(/preview_coupon|schema cache|could not find/i.test(err.message)?'Los cupones todavía no están disponibles.':friendly(err.message),'error')}
+}
+function removeCoupon(){coupon=null;$('#couponCode').value='';renderCouponTotals();setCouponStatus('')}
+// Si el carrito cambia con un cupón aplicado, se vuelve a comprobar solo.
+async function recheckCoupon(){if(!coupon)return;try{await checkCoupon(coupon.code,true)}catch{coupon=null;renderCouponTotals();setCouponStatus('El carrito cambió. Vuelve a aplicar tu cupón.','error')}}
+// La caja del cupón solo aparece si la función existe en Supabase (mientras no se aplique la migración, no se muestra).
+async function initCoupons(){
+ try{const r=await authFetch('/rest/v1/rpc/preview_coupon',{method:'POST',body:JSON.stringify({p_code:'',p_product_ids:[],p_subtotal:0})});$('#couponBox').classList.toggle('hidden',!(r&&r.ok===false))}catch{$('#couponBox').classList.add('hidden')}
 }
 function setMode(next,keepStatus){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';if(!keepStatus)$('#authStatus').textContent='';$('#forgotLink').classList.toggle('hidden',mode!=='login');$('#passwordHint').classList.toggle('hidden',mode!=='signup');pass.minLength=mode==='signup'?10:8}
 // Verificación en dos pasos al entrar: si la cuenta tiene un factor TOTP verificado, tras la contraseña se pide el código.
@@ -182,7 +212,7 @@ async function handleAuthRedirect(){
 }
 async function afterLogin(){
  $('#authArea').classList.add('hidden');$('#customerArea').classList.remove('hidden');
- try{const user=await authFetch('/auth/v1/user',{method:'GET'});session.user=user;saveSession(session);await loadProfile();renderMfaState(user);await loadOrders()}catch(err){$('#profileStatus').textContent=err.message}
+ try{const user=await authFetch('/auth/v1/user',{method:'GET'});session.user=user;saveSession(session);await loadProfile();renderMfaState(user);await loadOrders();initCoupons()}catch(err){$('#profileStatus').textContent=err.message}
 }
 async function loadProfile(){
  const uid=session?.user?.id;if(!uid)return;
@@ -238,16 +268,21 @@ async function placeOrder(){
  const items=readCart();if(!items.length)throw new Error('Tu carrito está vacío.');
  $('#orderStatus').textContent='Registrando pedido…';
  const payload=items.map(i=>({product_id:Number(i.product_id),qty:Number(i.qty)||1,unit_price:selectedPrice(i),size:i.size||''}));
- const data=await authFetch('/rest/v1/rpc/place_customer_order',{method:'POST',body:JSON.stringify({p_items:payload})});
+ // Sin cupón se usa la función de siempre; con cupón, place_customer_order_con_cupon (que aplica el descuento en la base de datos).
+ const code=coupon?.code||'';let data;
+ try{
+  data=code?await authFetch('/rest/v1/rpc/place_customer_order_con_cupon',{method:'POST',body:JSON.stringify({p_items:payload,p_coupon:code})}):await authFetch('/rest/v1/rpc/place_customer_order',{method:'POST',body:JSON.stringify({p_items:payload})});
+  if(data&&data.ok===false)throw new Error(data.message||'No se pudo aplicar el cupón.');
+ }catch(err){if(code){coupon=null;renderCouponTotals();setCouponStatus(friendly(err.message),'error')}throw err}
  const status=$('#orderStatus');
- status.textContent='Pedido #'+data.order_id+' recibido. Te contactaremos por WhatsApp para confirmar disponibilidad y el tiempo estimado de entrega. Para avisarnos de inmediato, envíanos tu pedido por WhatsApp:';
+ status.textContent='Pedido #'+data.order_id+' recibido'+(data.cupon?' con el cupón '+data.cupon+' (descuento de '+money(data.descuento)+'; total '+money(data.total)+')':'')+'. Te contactaremos por WhatsApp para confirmar disponibilidad y el tiempo estimado de entrega. Para avisarnos de inmediato, envíanos tu pedido por WhatsApp:';
  // Aviso inmediato a la tienda: el cliente abre WhatsApp con el pedido ya escrito y solo pulsa enviar.
  const lines=items.map(i=>(Number(i.qty)||1)+'× '+i.name+(i.size?' · '+i.size:'')+' · '+money(selectedPrice(i)));
  const total=items.reduce((sum,i)=>sum+selectedPrice(i)*(Number(i.qty)||1),0);
  const link=document.createElement('a');link.className='button gold';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Enviar mi pedido #'+data.order_id+' por WhatsApp ↗';
- link.href='https://wa.me/'+WA+'?text='+encodeURIComponent('Hola Elite Scents RD, acabo de hacer el pedido #'+data.order_id+' en la web:\n\n'+lines.join('\n')+'\n\nTotal estimado: '+money(total)+'\nQuedo atento(a) a la confirmación.');
+ link.href='https://wa.me/'+WA+'?text='+encodeURIComponent('Hola Elite Scents RD, acabo de hacer el pedido #'+data.order_id+' en la web:\n\n'+lines.join('\n')+'\n\nTotal estimado: '+money(total)+(data.cupon?'\nCupón '+data.cupon+': −'+money(data.descuento)+'\nTotal con cupón: '+money(data.total):'')+'\nQuedo atento(a) a la confirmación.');
  status.append(document.createElement('br'),link);
- saveCart([]);await loadOrders();
+ removeCoupon();saveCart([]);await loadOrders();
 }
 async function loadOrders(){
  if(!session?.user?.id)return;
@@ -284,7 +319,9 @@ $('#placeOrder').addEventListener('click',async()=>{
  if(!profile.reportValidity())return;
  try{await saveProfile(new FormData(profile));await placeOrder()}catch(err){$('#orderStatus').textContent=err.message}
 });
-$('#clearCart').addEventListener('click',()=>{if(confirm('¿Vaciar el carrito?'))saveCart([])});
+$('#clearCart').addEventListener('click',()=>{if(confirm('¿Vaciar el carrito?')){removeCoupon();saveCart([])}});
+$('#applyCoupon').addEventListener('click',applyCoupon);$('#removeCoupon').addEventListener('click',removeCoupon);
+$('#couponCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applyCoupon()}});
 renderCart();setMode('login');
 handleAuthRedirect().then(handled=>{if(!handled&&session?.access_token)afterLogin()}).catch(err=>{$('#authStatus').textContent=friendly(err.message)});
 })();
