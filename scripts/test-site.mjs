@@ -84,7 +84,8 @@ for(const p of products){
   const raw=page[Number(position.slot)];
   assert(raw!==undefined,'Falta costo para '+p.name);
   const costs=Array.isArray(raw)?raw:[raw];
-  const sells=numericPrices(p.price);
+  // Durante una oferta, price es el precio de oferta y original_price el normal: la política de márgenes aplica al normal.
+  const sells=numericPrices(p.original_price||p.price);
   assert.equal(sells.length,costs.length,'Presentaciones no coinciden para '+p.name);
   costs.forEach((cost,i)=>assert.equal(sells[i],cost+expectedMarkup(cost),'Precio fuera de política para '+p.name));
 }
@@ -108,6 +109,9 @@ for(const legacy of ['catalogo.html','catalogo-app.js','catalogo-viewer.js','sit
   assert(!existsSync(legacy),'El archivo legado debe estar archivado, no en la raíz pública: '+legacy);
 assert(existsSync('archive/catalogo-legacy/catalogo.html'),'La copia archivada del catálogo antiguo debe conservarse');
 
+// Rendimiento: al abrir la portada solo se descargan las fotos de las primeras 24 tarjetas (no las 420, ~20 MB).
+assert((html.match(/background-image:url\(&quot;\/img\/productos\//g)||[]).length<=24,'El HTML solo puede pedir 24 fotos al abrir la portada');
+assert(html.includes('data-bg="/img/productos/'),'Las tarjetas restantes deben guardar la foto en data-bg');
 // --- 420 fotos individuales guardadas en el sitio (img/productos/): una por producto, válidas y sin láminas ---
 {
   const { readdir } = await import('node:fs/promises');
@@ -202,6 +206,57 @@ assert(adminJs.includes("digits.length===10)digits='1'+digits"),'WhatsApp del pa
 assert(customer.includes("f.status!=='verified')await authFetch('/auth/v1/factors/'"),'Debe eliminar factores sin verificar antes de activar de nuevo');
 assert(customer.includes('async function finishMfaLogin(code)')&&customer.includes("/challenge'")&&customer.includes("/verify'"),'Al entrar con MFA activo debe pedirse el código');
 assert(checkout.includes('id="mfaLoginForm"')&&checkout.includes('id="disableMfa"')&&checkout.includes('id="mfaLink"'),'checkout.html debe incluir el código al entrar, desactivar y abrir en la app');
+// --- Cookies en todas las páginas públicas ---
+{
+  const cookies=await readFile('cookies.js','utf8');
+  for(const page of ['checkout.html','privacidad.html','pedidos-envios.html','404.html']) assert((await readFile(page,'utf8')).includes('<script src="/cookies.js"></script>'),'cookies.js debe cargarse en '+page);
+  assert(template.includes('src="/cookies.js"'),'La portada debe cargar cookies.js');
+  assert(cookies.includes('elite-cookie-consent-v1')&&cookies.includes('Solo necesarias')&&cookies.includes('Aceptar todas')&&cookies.includes('data-cookie-settings'),'El aviso debe ofrecer aceptar, solo necesarias y cambiar la elección');
+  assert(css.includes('.cookie-banner')&&css.includes('.cookie-prefs'),'El CSS debe estilar el aviso de cookies');
+  assert(privacy.includes('id="cookies"')&&privacy.includes('Preferencias de cookies'),'La política debe explicar las cookies');
+  const artifact=await readFile('scripts/build-site-artifact.mjs','utf8'); assert(artifact.includes("'cookies.js'"),'cookies.js debe publicarse');
+}
+// --- Cuentas de clientes, recuperación y contraseñas ---
+assert(customer.includes('function passwordProblems(')&&customer.includes('function collectOrigin()')&&customer.includes('data:{origen:collectOrigin()}'),'El registro debe validar la contraseña y enviar el origen');
+assert(customer.includes('/auth/v1/recover?redirect_to=')&&customer.includes('verify_recovery_identity')&&customer.includes("scope=global"),'La recuperación debe usar enlace, verificación de identidad y cerrar sesiones');
+assert(customer.includes('Si existe una cuenta con ese correo'),'La recuperación no debe revelar qué correos existen');
+assert(checkout.includes('id="forgotLink"')&&checkout.includes('id="recoverForm"')&&checkout.includes('id="resetForm"')&&checkout.includes('id="resetMfaLabel"')&&checkout.includes('id="resetIdLabel"'),'checkout.html debe incluir la recuperación de contraseña');
+{
+  const start=customer.indexOf('const COMMON_PASSWORDS'),end=customer.indexOf('// Datos técnicos del registro');
+  const passwordProblems=new Function(customer.slice(start,end)+'; return passwordProblems;')();
+  assert.deepEqual(passwordProblems('Clave-Larga-2026','ana@example.com'),[],'Una contraseña fuerte debe aceptarse');
+  assert(passwordProblems('corta1A','x@y.z').length>0,'Una contraseña corta debe rechazarse');
+  assert(passwordProblems('todominuscula123','x@y.z').some(p=>/mayúscula/.test(p)),'Debe exigir mayúscula');
+  assert(passwordProblems('TODOMAYUSCULA123','x@y.z').some(p=>/minúscula/.test(p)),'Debe exigir minúscula');
+  assert(passwordProblems('SinNumerosAquiXY','x@y.z').some(p=>/número/.test(p)),'Debe exigir número');
+  assert(passwordProblems('Gabriel2026Clave','gabriel@example.com').some(p=>/correo/.test(p)),'No debe contener la parte local del correo');
+  assert(passwordProblems('Xpassword123Y','x@y.z').some(p=>/común/.test(p)),'Debe rechazar contraseñas comunes');
+}
+// --- Panel: MFA obligatorio, Cuentas Clientes y ofertas ---
+assert(adminJs.includes('async function gate()')&&adminJs.includes("jwtAal(session.access_token) === 'aal2'")&&adminJs.includes('async function startMfaSetup()'),'El panel debe exigir MFA (código o activación)');
+assert(adminHtml.includes('id="mfa-card"')&&adminHtml.includes('id="mfa-setup-card"')&&adminHtml.includes('id="mfa-qr"'),'admin.html debe incluir las pantallas de MFA');
+assert(adminHtml.includes('Cuentas Clientes')&&adminHtml.includes('id="customers-body"')&&adminJs.includes('admin_list_customers'),'El panel debe listar las cuentas de clientes');
+assert(adminHtml.includes('id="offer-form"')&&adminHtml.includes('name="offer_price"')&&adminHtml.includes('id="offer-remove-all"')&&adminJs.includes('function discountedAmounts('),'El panel debe permitir ofertas');
+{
+  const money=adminJs.slice(adminJs.indexOf('function money('),adminJs.indexOf('\n',adminJs.indexOf('function money(')));
+  const block=adminJs.slice(adminJs.indexOf('const amountsOf'),adminJs.indexOf('const discountedText'));
+  const {discountedAmounts}=new Function(money+'\n'+block+'; return {discountedAmounts};')();
+  assert.deepEqual(discountedAmounts('RD$4,500',10),[4050],'10 % de 4,500');
+  assert.deepEqual(discountedAmounts('RD$4,900',20),[3900],'20 % de 4,900 redondeado a 50');
+  assert.deepEqual(discountedAmounts('RD$3,550 / RD$4,150',10),[3200,3750],'Cada presentación se descuenta por separado');
+  assert.equal(discountedAmounts('RD$50',10),null,'Un precio demasiado bajo no admite oferta');
+  assert.equal(discountedAmounts('Precio a confirmar',10),null,'Sin precio no hay oferta');
+  for(const n of [100,850,2650,3150,10050]) for(const pct of [1,5,10,25,70]){const r=discountedAmounts('RD$'+n.toLocaleString('en-US'),pct); if(r) assert(r[0]<n&&r[0]>=50&&r[0]%50===0,'La oferta debe ser menor, múltiplo de 50 y >= 50: '+n+' '+pct)}
+}
+for(const f of ['20260921120000_cuentas_clientes.sql','20260921121000_ofertas.sql','20260921122000_recuperacion_identidad.sql']) assert(existsSync('supabase/migrations/'+f),'Falta la migración '+f);
+{
+  const [cuentas,ofertas,recuperacion,enforce]=await Promise.all(['supabase/migrations/20260921120000_cuentas_clientes.sql','supabase/migrations/20260921121000_ofertas.sql','supabase/migrations/20260921122000_recuperacion_identidad.sql','supabase/proposed/09_enforce_admin_mfa.sql'].map(f=>readFile(f,'utf8')));
+  assert(cuentas.includes('create or replace function public.admin_list_customers()')&&cuentas.includes('private.is_store_admin()')&&/revoke all on function public\.admin_list_customers\(\) from public, anon/i.test(cuentas),'admin_list_customers debe ser solo para administradores');
+  assert(!/encrypted_password|raw_app_meta_data/i.test(cuentas),'La vista de cuentas nunca debe exponer contraseñas');
+  assert(ofertas.includes('original_price')&&ofertas.includes('products_offer_guard')&&ofertas.includes('expire_offers')&&ofertas.includes('cron.schedule'),'Las ofertas deben validarse y terminar solas');
+  assert(recuperacion.includes("'locked'")&&recuperacion.includes("interval '30 minutes'")&&/grant execute on function public\.verify_recovery_identity\(text\) to authenticated/i.test(recuperacion)&&/revoke all on function public\.verify_recovery_identity\(text\) from public, anon/i.test(recuperacion),'La verificación de identidad debe limitar intentos y no ser pública');
+  assert(enforce.includes("'aal2'")&&enforce.includes('private.is_store_admin()'),'La propuesta debe exigir AAL2 a administradores');
+}
 const lockMigration=await readFile('supabase/migrations/20260920120000_lock_down_place_customer_order.sql','utf8');
 assert(/revoke execute on function public\.place_customer_order\(jsonb\) from public, anon/i.test(lockMigration)&&/grant\s+execute on function public\.place_customer_order\(jsonb\) to authenticated/i.test(lockMigration),'La migración versionada debe revocar anon y conceder authenticated');
 assert(lockMigration.includes('to_regprocedure'),'La migración debe ser idempotente y no fallar si la función no existe');
