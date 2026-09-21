@@ -62,6 +62,12 @@ for (const dir of DIRS) {
   if (!existsSync(dir)) throw new Error('Falta una carpeta pública esperada: ' + dir);
   await cp(dir, OUT + '/' + dir, { recursive: true });
 }
+// Verificación de Google Search Console: Google entrega un archivo googleXXXXXXXXXXXXXXXX.html que debe quedar en la raíz, sin cambios.
+for (const name of await readdir('.')) {
+  if (!/^google[0-9a-f]{16}\.html$/.test(name)) continue;
+  if (!(await readFile(name, 'utf8')).includes('google-site-verification: ' + name)) console.warn('Aviso: ' + name + ' no trae el texto que pide Google; la verificación fallará.');
+  await cp(name, OUT + '/' + name);
+}
 
 // El service worker guarda copias con un nombre que incluye la versión: cada publicación (commit) trae una nueva
 // y así las copias antiguas se borran solas en los celulares de los clientes.
