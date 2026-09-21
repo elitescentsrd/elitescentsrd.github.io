@@ -45,9 +45,28 @@
           <form id="authForm" class="stack">
             <label>Correo electrónico<input name="email" type="email" autocomplete="email" required></label>
             <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="current-password" required></label>
+            <p id="passwordHint" class="security-note hidden">Mínimo 10 caracteres, con mayúscula, minúscula y número. No uses tu correo ni una contraseña común.</p>
             <button class="button gold" type="submit" id="authSubmit">Entrar</button>
+            <button id="forgotLink" class="link-button" type="button">¿Olvidaste tu contraseña?</button>
             <div id="authStatus" class="order-status" aria-live="polite"></div>
             <button id="resendConfirm" class="button outline hidden" type="button">Reenviar correo de confirmación</button>
+          </form>
+          <form id="recoverForm" class="stack hidden">
+            <p class="security-note">Escribe el correo de tu cuenta. Te enviaremos un enlace de un solo uso para crear una nueva contraseña; solo llega a ese correo.</p>
+            <label>Correo electrónico<input name="email" type="email" autocomplete="email" required></label>
+            <button class="button gold" type="submit">Enviar enlace</button>
+            <button id="recoverCancel" class="button outline" type="button">Volver</button>
+            <div id="recoverStatus" class="order-status" aria-live="polite"></div>
+          </form>
+          <form id="resetForm" class="stack hidden">
+            <p class="security-note">Vas a cambiar la contraseña de <strong id="resetEmail"></strong>. Por tu seguridad te pedimos comprobar tu identidad.</p>
+            <label id="resetMfaLabel" class="hidden">Código de tu app de autenticación (6 dígitos)<input name="mfa" inputmode="numeric" autocomplete="one-time-code" maxlength="8"></label>
+            <label id="resetIdLabel" class="hidden">Últimos 4 dígitos de la cédula que registraste<input name="last4" inputmode="numeric" autocomplete="off" maxlength="4"></label>
+            <label>Nueva contraseña<input name="password" type="password" minlength="10" autocomplete="new-password" required></label>
+            <label>Repite la nueva contraseña<input name="password2" type="password" minlength="10" autocomplete="new-password" required></label>
+            <p class="security-note">Mínimo 10 caracteres, con mayúscula, minúscula y número. Al guardar se cierran todas las sesiones abiertas de la cuenta.</p>
+            <button class="button gold" type="submit">Guardar nueva contraseña</button>
+            <div id="resetStatus" class="order-status" aria-live="polite"></div>
           </form>
           <form id="mfaLoginForm" class="stack hidden">
             <p class="security-note">Tu cuenta tiene la verificación en dos pasos activada. Abre tu app de autenticación y escribe el código de 6 dígitos de <strong>Elite Scents</strong>.</p>
@@ -106,6 +125,7 @@
     </section>
   </main>
 
+  <script src="/cookies.js"></script>
   <script src="/supabase-config.js"></script>
   <script src="/customer.js"></script>
 </body>
