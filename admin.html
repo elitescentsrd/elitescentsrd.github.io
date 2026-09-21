@@ -20,6 +20,28 @@
         <label class="span-2">Correo<input name="email" type="email" autocomplete="username" required></label>
         <label class="span-2">Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
         <div class="span-4 admin-actions"><button class="btn" type="submit">Entrar</button><span id="login-status" aria-live="polite"></span></div>
+        <p class="span-4 muted">El acceso pide después un código de verificación en dos pasos. Si olvidaste tu contraseña, usa "¿Olvidaste tu contraseña?" en <a href="/checkout.html">la página de cuenta</a>.</p>
+      </form>
+    </section>
+
+    <section id="mfa-card" class="admin-card hidden">
+      <h2>Verificación en dos pasos</h2>
+      <p class="muted">Escribe el código de 6 dígitos que muestra tu app de autenticación para entrar al panel.</p>
+      <form id="mfa-form" class="admin-form">
+        <label class="span-2">Código<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
+        <div class="span-4 admin-actions"><button class="btn" type="submit">Verificar</button><button id="mfa-cancel" class="btn btn-secondary" type="button">Cancelar</button><span id="mfa-status" aria-live="polite"></span></div>
+      </form>
+    </section>
+
+    <section id="mfa-setup-card" class="admin-card hidden">
+      <h2>Activa la verificación en dos pasos (obligatoria para administrar)</h2>
+      <p class="muted">1) En Google Authenticator, Authy o 1Password elige "Añadir cuenta" y escanea este código con la cámara (desde otro dispositivo si estás en el mismo celular, o usa la clave manual).</p>
+      <img id="mfa-qr" class="mfa-qr" alt="Código QR para activar la verificación en dos pasos">
+      <p>Clave manual: <code id="mfa-secret"></code> <a id="mfa-link" class="hidden" href="#">Abrir en mi app</a></p>
+      <p class="muted">2) Escribe el código de 6 dígitos que muestra la app y pulsa Activar.</p>
+      <form id="mfa-setup-form" class="admin-form">
+        <label class="span-2">Código<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
+        <div class="span-4 admin-actions"><button class="btn" type="submit">Activar y entrar</button><button id="mfa-setup-cancel" class="btn btn-secondary" type="button">Cancelar</button><span id="mfa-setup-status" aria-live="polite"></span></div>
       </form>
     </section>
 
@@ -43,6 +65,9 @@
           <label class="span-2">Galería por URL (una por línea, máximo 3)<textarea name="gallery_urls" placeholder="https://..."></textarea></label>
           <label class="span-2">Subir galería (máximo 3)<input name="gallery_files" type="file" multiple accept="image/jpeg,image/png,image/webp"></label>
           <label class="span-4">Descripción<textarea name="description" maxlength="1200" placeholder="Descripción breve del aroma y la ocasión recomendada"></textarea></label>
+          <label id="offer-price-label">Precio de oferta (RD$, opcional)<input name="offer_price" inputmode="decimal" placeholder="4,000"></label>
+          <label id="offer-event-label">Evento de la oferta<input name="offer_label" maxlength="60" placeholder="Día de las Madres"></label>
+          <label id="offer-end-label">La oferta termina<input name="offer_ends" type="datetime-local"></label>
           <label><input name="active" type="checkbox" checked> Producto visible</label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar producto</button><span id="product-status" aria-live="polite"></span></div>
           <p class="span-4 muted">Los perfumes con precio de RD$7,000 o más se guardan automáticamente como “Solo por encargo”.</p>
@@ -62,6 +87,28 @@
       <section class="admin-card">
         <div class="admin-head"><div><p class="eyebrow">Inventario</p><h2>Edición de perfumes</h2><p class="muted">Busca el perfume que quieres editar. Se muestran máximo 6 resultados.</p></div></div><input id="admin-search" type="search" placeholder="Buscar perfume o marca" autocomplete="off" class="admin-search-input">
         <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Imagen</th><th>Producto</th><th>Marca</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="products-body"></tbody></table></div>
+      </section>
+
+      <section class="admin-card" id="offers-card">
+        <div class="admin-head"><div><p class="eyebrow">Ofertas</p><h2>Ofertas por evento</h2><p class="muted">Elige perfumes y un descuento. En la tienda se verá el precio anterior tachado ("Antes") y el precio de oferta ("Ahora"). Los pedidos se registran al precio de oferta y, si pones fecha de fin, la oferta termina sola.</p></div></div>
+        <p id="offers-notice" class="muted hidden">Para usar ofertas falta aplicar la migración "ofertas" en Supabase (SQL Editor).</p>
+        <form id="offer-form" class="admin-form">
+          <label class="span-2">Nombre del evento<input name="label" maxlength="60" placeholder="Día de las Madres"></label>
+          <label>Descuento (%)<input name="percent" type="number" min="1" max="70" step="1" value="10" required></label>
+          <label>Termina (opcional)<input name="ends" type="datetime-local"></label>
+          <label class="span-2">Buscar perfumes<input id="offer-search" name="q" type="search" placeholder="Nombre o marca" autocomplete="off"></label>
+          <label class="span-2 check-line"><input id="offer-select-all" type="checkbox"> Seleccionar todos los resultados</label>
+          <div class="span-4 admin-table-wrap"><table class="admin-table"><thead><tr><th></th><th>Perfume</th><th>Precio normal</th><th>Con oferta</th><th>Estado</th></tr></thead><tbody id="offers-body"></tbody></table></div>
+          <div class="span-4 admin-actions"><button class="btn" type="submit" id="offer-apply">Aplicar oferta a los seleccionados</button><button class="btn btn-secondary" type="button" id="offer-remove">Quitar oferta a los seleccionados</button><button class="btn btn-secondary" type="button" id="offer-remove-all">Terminar todas las ofertas</button><span id="offer-status" aria-live="polite"></span></div>
+        </form>
+      </section>
+
+      <section class="admin-card" id="customers-card">
+        <div class="admin-head"><div><p class="eyebrow">Cuentas Clientes</p><h2>Cuentas de clientes</h2><p class="muted">Clientes que crearon una cuenta en la tienda y desde dónde llegaron. Las contraseñas están cifradas por Supabase y nadie puede verlas ni recuperarlas; solo se pueden restablecer.</p></div><button id="customers-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <p id="customers-notice" class="muted hidden">Para ver las cuentas falta aplicar la migración "cuentas_clientes" en Supabase (SQL Editor).</p>
+        <input id="customers-search" type="search" placeholder="Buscar por correo, nombre o teléfono" autocomplete="off" class="admin-search-input">
+        <p id="customers-summary" class="muted"></p>
+        <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Correo</th><th>Nombre</th><th>Teléfono</th><th>Creada</th><th>Último acceso</th><th>Correo confirmado</th><th>MFA</th><th>Pedidos</th><th>Origen del registro</th></tr></thead><tbody id="customers-body"></tbody></table></div>
       </section>
 
       <section class="admin-card">
