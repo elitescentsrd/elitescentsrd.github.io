@@ -1,7 +1,7 @@
 // Pruebas de las funciones nuevas: app instalable (PWA), "Encuentra tu perfume", archivo de productos para Google/Instagram,
 // resumen de ventas del panel y cupones de descuento. Se ejecutan con `npm test`.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { Script } from 'node:vm';
@@ -233,5 +233,14 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const security = await read('scripts/check-supabase-security.mjs');
   assert(security.includes('preview_coupon'), 'La revisión de seguridad también prueba las funciones de cupones');
   console.log('Cupones: migración segura (RLS, permisos, función original intacta) y pantallas conectadas.');
+}
+
+// ---------------------------------------------------------------- Google Search Console
+{
+  const files = (await readdir('.')).filter(name => /^google[0-9a-f]{16}\.html$/.test(name));
+  assert(files.length >= 1, 'Debe existir el archivo de verificación de Search Console en la raíz');
+  for (const name of files) assert.equal(await read(name), 'google-site-verification: ' + name, name + ' debe tener exactamente el texto que pide Google (sin saltos de línea ni cambios)');
+  assert(buildSite.includes('google[0-9a-f]{16}') && buildSite.includes('OUT + \'/\' + name'), 'El build publica el archivo de verificación en _site');
+  console.log('Search Console: archivo de verificación ' + files.join(', ') + ' intacto y publicado por el build.');
 }
 console.log('Pruebas de funciones nuevas superadas.');
