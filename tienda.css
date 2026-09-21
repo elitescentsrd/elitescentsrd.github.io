@@ -45,3 +45,17 @@
 @media(max-width:560px){.header{flex-wrap:wrap;row-gap:8px;padding:10px 4vw;gap:8px}.header-actions{width:100%;justify-content:space-between}.header-actions>*{flex:0 0 auto}.brand small{display:none}}
 /* Listas dentro de páginas de texto (privacidad). */
 .collection-doc ul{padding-left:22px;margin:10px 0 16px}.collection-doc li{margin:6px 0}
+/* Aviso de cookies y almacenamiento local */
+.cookie-banner{position:fixed;left:16px;right:16px;bottom:16px;z-index:2000;max-width:760px;margin:0 auto;background:var(--surface,#fff);color:var(--ink,#171714);border:1px solid var(--line,#ded8cc);border-radius:16px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:18px 20px;display:grid;gap:10px}
+.cookie-banner strong{font-size:1rem}.cookie-banner p{margin:0;font-size:.9rem;line-height:1.5;color:var(--muted,#68675f)}.cookie-banner a{text-decoration:underline}
+.cookie-actions{display:flex;flex-wrap:wrap;gap:10px}.cookie-actions .button{flex:1;min-width:150px}
+.cookie-prefs{grid-column:1/-1;justify-self:start;background:none;border:0;color:#c8c4b9;font:inherit;font-size:12px;text-decoration:underline;padding:0;cursor:pointer}
+@media(max-width:560px){.cookie-banner{left:8px;right:8px;bottom:8px;padding:14px}}
+
+/* Ofertas: precio anterior tachado y precio de oferta */
+.price-was{color:var(--muted);font-weight:500;font-size:12px}.price-was s{text-decoration:line-through}.price-offer strong{color:#a13025}
+.offer-badge{display:inline-flex;align-self:flex-start;margin:8px 16px 0;padding:3px 9px;background:#a13025;color:#fff;font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
+.product-facts .price-was{display:block}
+
+/* Tarjetas fuera de la primera pantalla: la foto no se descarga hasta que tienda.js dibuja la tarjeta */
+.photo.custom{background-size:contain;background-position:center;background-repeat:no-repeat}.photo[data-bg]{background-color:var(--surface-soft)}

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Reconstruye la web cada 6 horas para que precios, ofertas y datos estructurados del HTML sigan al día con Supabase.
+    - cron: '23 */6 * * *'
 
 permissions:
   contents: read
