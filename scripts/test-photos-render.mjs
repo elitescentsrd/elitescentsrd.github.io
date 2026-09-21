@@ -33,7 +33,7 @@ assert.equal(conFoto.length, 14);
 for (const [id, file] of [[20, '0020-foto-local-a.jpg'], [21, '0021-foto-local-b.jpg']]) {
   const p = withPhoto.find(x => Number(x.id) === id);
   assert(schemas.find(s => s.name === p.name).image.includes('https://elitescentsrd.github.io/img/productos/' + file), 'JSON-LD debe usar la URL absoluta de la foto local de ' + p.name);
-  assert(html.includes('url(&quot;/img/productos/' + file + '&quot;)'), 'La tarjeta debe usar la ruta del sitio de ' + p.name);
+  assert(html.includes('url(&quot;/img/productos/thumbs/' + file.replace('.jpg', '.webp') + '&quot;)'), 'La tarjeta debe usar la miniatura del sitio de ' + p.name);
 }
 for (const p of withPhoto.slice(0, 12)) assert(schemas.find(s => s.name === p.name).image.includes(p.image_url), 'JSON-LD debe usar la foto individual de ' + p.name);
 assert(!html.includes('/pages/page-'), 'no debe haber láminas en el HTML');

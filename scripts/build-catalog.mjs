@@ -83,12 +83,14 @@ const whatsapp = p => 'https://wa.me/18094333348?text=' + encodeURIComponent('Ho
 // Las demás guardan la ruta en data-bg: así el navegador no descarga las 420 fotos (~20 MB) antes de que el JavaScript
 // deje solo 24 tarjetas en pantalla; el JSON-LD y el JSON precargado conservan todas las fotos para buscadores.
 const EAGER_CARDS = 24;
+// Las tarjetas usan una miniatura WebP (img/productos/thumbs/, ~8 KB); la ficha y el JSON-LD usan la foto completa.
+const thumbOf = url => /^\/img\/productos\/[^/]+\.(jpe?g|png)$/i.test(url) ? url.replace('/img/productos/', '/img/productos/thumbs/').replace(/\.(jpe?g|png)$/i, '.webp') : url;
 function visual(p, index = 0) {
   if (imageUrl(p)) {
     const label = esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : ''));
     return index < EAGER_CARDS
-      ? '<div class="photo custom" role="img" aria-label="' + label + '" style="background-image:url(&quot;' + esc(p.image_url) + '&quot;);background-size:contain;background-position:center"></div>'
-      : '<div class="photo custom" role="img" aria-label="' + label + '" data-bg="' + esc(p.image_url) + '"></div>';
+      ? '<div class="photo custom" role="img" aria-label="' + label + '" style="background-image:url(&quot;' + esc(thumbOf(p.image_url)) + '&quot;);background-size:contain;background-position:center"></div>'
+      : '<div class="photo custom" role="img" aria-label="' + label + '" data-bg="' + esc(thumbOf(p.image_url)) + '"></div>';
   }
   // Sin foto propia: placeholder neutro. Nunca se recorta una lámina del catálogo original.
   return '<div class="photo placeholder" role="img" aria-label="' + esc('Foto próximamente de ' + p.name) + '"></div>';

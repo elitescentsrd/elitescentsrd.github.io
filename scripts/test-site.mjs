@@ -111,7 +111,15 @@ assert(existsSync('archive/catalogo-legacy/catalogo.html'),'La copia archivada d
 
 // Rendimiento: al abrir la portada solo se descargan las fotos de las primeras 24 tarjetas (no las 420, ~20 MB).
 assert((html.match(/background-image:url\(&quot;\/img\/productos\//g)||[]).length<=24,'El HTML solo puede pedir 24 fotos al abrir la portada');
-assert(html.includes('data-bg="/img/productos/'),'Las tarjetas restantes deben guardar la foto en data-bg');
+assert(html.includes('data-bg="/img/productos/thumbs/'),'Las tarjetas restantes deben guardar la miniatura en data-bg');
+{
+  const { readdir, stat } = await import('node:fs/promises');
+  const thumbs=(await readdir('img/productos/thumbs')).filter(f=>f.endsWith('.webp')), fulls=(await readdir('img/productos')).filter(f=>/\.jpg$/i.test(f));
+  assert.equal(thumbs.length,420,'Debe haber 420 miniaturas WebP para las tarjetas');
+  for(const f of fulls) assert(thumbs.includes(f.replace(/\.jpg$/i,'.webp')),'Falta la miniatura de '+f);
+  for(const f of thumbs){const s=(await stat('img/productos/thumbs/'+f)).size; assert(s>500&&s<40*1024,'La miniatura debe pesar menos de 40 KB: '+f+' '+s);}
+  assert(!/(background-image:url\(&quot;|data-bg=")\/img\/productos\/[0-9]/.test(html),'Las tarjetas no deben usar la foto grande, solo la miniatura');
+}
 // --- 420 fotos individuales guardadas en el sitio (img/productos/): una por producto, válidas y sin láminas ---
 {
   const { readdir } = await import('node:fs/promises');
