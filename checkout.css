@@ -34,3 +34,5 @@
 .mt-md{margin-top:16px}
 .mt-lg{margin-top:22px}
 .divider-top{border-top:1px solid var(--line);margin-top:20px;padding-top:20px}
+
+.link-button{background:none;border:0;padding:0;color:var(--gold);text-decoration:underline;cursor:pointer;font-size:.86rem;justify-self:start}

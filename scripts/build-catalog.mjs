@@ -3,7 +3,8 @@ import { existsSync } from 'node:fs';
 
 const SITE_URL = 'https://elitescentsrd.github.io';
 const USD_RATE_DOP = 63;
-const FIELDS = 'id,name,price,size,gender,page,slot,image_url,sort_order,availability,brand,notes_top,notes_heart,notes_base,gallery_urls,description';
+// Se pide select=* (funciona aunque una migración de columnas aún no se haya aplicado) y se publican solo estos campos.
+const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at'];
 const template = await readFile('src/index.template.html', 'utf8');
 const enrichment = JSON.parse(await readFile('data/product-enrichment.json', 'utf8'));
 const config = await readFile('supabase-config.js', 'utf8');
@@ -13,7 +14,7 @@ if (!url || !key) throw new Error('No se encontró la configuración pública de
 
 const controller = new AbortController();
 const timer = setTimeout(() => controller.abort(), 15000);
-const endpoint = url.replace(/\/$/, '') + '/rest/v1/products?select=' + encodeURIComponent(FIELDS) + '&active=eq.true&order=sort_order.asc,id.asc&limit=1000';
+const endpoint = url.replace(/\/$/, '') + '/rest/v1/products?select=*&active=eq.true&order=sort_order.asc,id.asc&limit=1000';
 const response = await fetch(endpoint, { headers: { apikey: key }, signal: controller.signal });
 clearTimeout(timer);
 if (!response.ok) throw new Error('Supabase respondió HTTP ' + response.status);
@@ -23,7 +24,8 @@ if (!Array.isArray(databaseProducts) || databaseProducts.length === 0) throw new
 // en data/product-positions.json (que nunca se publica) y no llegan al HTML
 // ni al JSON público del catálogo.
 const positions = {};
-const products = databaseProducts.map(({ page, slot, ...product }) => {
+const products = databaseProducts.map(({ page, slot, ...rest }) => {
+  const product = Object.fromEntries(PUBLIC_FIELDS.filter(k => rest[k] !== undefined).map(k => [k, rest[k]]));
   positions[product.id] = { page, slot };
   const extra = enrichment[String(product.id)];
   return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
@@ -53,30 +55,53 @@ if (existsSync('img/productos')) {
     if (match) localPhotos.set(Number(match[1]), '/img/productos/' + file);
   }
 }
+// Descripción propia de cada perfume, armada solo con datos verificados (marca, género, tamaño y notas olfativas).
+// Una descripción escrita a mano en el panel (columna description) tiene prioridad.
+const listText = items => items.slice(0, 3).map(item => String(item).toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' y $1');
+function describe(p) {
+  const who = { hombre: 'para hombre', mujer: 'para mujer', unisex: 'unisex' }[p.gender] || '';
+  const top = p.notes_top || [], heart = p.notes_heart || [], base = p.notes_base || [];
+  const parts = [p.name + ' es una fragancia' + (who ? ' ' + who : '') + (p.brand ? ' de ' + p.brand : '') + (p.size ? ', en presentación de ' + p.size : '') + '.'];
+  if (top.length) parts.push('Abre con notas de ' + listText(top) + (heart.length ? ', se desarrolla con ' + listText(heart) : '') + (base.length ? ' y se asienta en un fondo de ' + listText(base) : '') + '.');
+  parts.push('Consulta disponibilidad y tiempo de entrega por WhatsApp antes de ordenar.');
+  return parts.join(' ');
+}
 // Defensa en profundidad: una URL de lámina (o no válida) en la base nunca llega al HTML público.
 for (const p of products) {
+  p.description = p.description || describe(p);
   p.image_url = imageUrl(p) || localPhotos.get(Number(p.id)) || null;
   p.gallery_urls = (p.gallery_urls || []).filter(validImage);
 }
-const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
+const description = p => p.description || describe(p);
 const usdPrice = p => {
   const value = nums(p.price)[0];
   return value ? 'US$' + Math.round(value / USD_RATE_DOP) + ' aprox.' : '';
 };
 const whatsapp = p => 'https://wa.me/18094333348?text=' + encodeURIComponent('Hola Elite Scents RD, me interesa: ' + p.name + ' (' + (p.size || 'tamaño por confirmar') + ', ' + (p.price || 'precio por confirmar') + '). ¿Puedes ayudarme?');
 
-function visual(p) {
-  if (imageUrl(p)) return '<div class="photo custom" role="img" aria-label="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" style="background-image:url(&quot;' + esc(p.image_url) + '&quot;);background-size:contain;background-position:center"></div>';
+// Solo las primeras EAGER_CARDS tarjetas cargan su foto al abrir la página (las mismas que muestra tienda.js al inicio).
+// Las demás guardan la ruta en data-bg: así el navegador no descarga las 420 fotos (~20 MB) antes de que el JavaScript
+// deje solo 24 tarjetas en pantalla; el JSON-LD y el JSON precargado conservan todas las fotos para buscadores.
+const EAGER_CARDS = 24;
+// Las tarjetas usan una miniatura WebP (img/productos/thumbs/, ~8 KB); la ficha y el JSON-LD usan la foto completa.
+const thumbOf = url => /^\/img\/productos\/[^/]+\.(jpe?g|png)$/i.test(url) ? url.replace('/img/productos/', '/img/productos/thumbs/').replace(/\.(jpe?g|png)$/i, '.webp') : url;
+function visual(p, index = 0) {
+  if (imageUrl(p)) {
+    const label = esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : ''));
+    return index < EAGER_CARDS
+      ? '<div class="photo custom" role="img" aria-label="' + label + '" style="background-image:url(&quot;' + esc(thumbOf(p.image_url)) + '&quot;);background-size:contain;background-position:center"></div>'
+      : '<div class="photo custom" role="img" aria-label="' + label + '" data-bg="' + esc(thumbOf(p.image_url)) + '"></div>';
+  }
   // Sin foto propia: placeholder neutro. Nunca se recorta una lámina del catálogo original.
   return '<div class="photo placeholder" role="img" aria-label="' + esc('Foto próximamente de ' + p.name) + '"></div>';
 }
-function card(p) {
+function card(p, index) {
   const availability = status[p.availability] ? p.availability : 'disponible';
   const notes = [...(p.notes_top || []), ...(p.notes_heart || []), ...(p.notes_base || [])].slice(0,3).join(' · ') || (gender[p.gender] || 'Unisex');
   return '<article class="perfume" id="producto-' + esc(p.id) + '" data-product-id="' + esc(p.id) + '">' +
-    visual(p) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' +
+    visual(p, index) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' + (p.original_price ? '<span class="offer-badge">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
-    '<h3>' + esc(p.name) + '</h3><div class="size">' + esc(notes) + '</div><div class="price"><strong>' + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
+    '<h3>' + esc(p.name) + '</h3><div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
     '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><a href="' + esc(whatsapp(p)) + '" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a></div></article>';
 }
 function schema(p) {
@@ -90,7 +115,7 @@ function schema(p) {
     name:p.name,
     description:description(p),
     brand:{'@type':'Brand',name:p.brand || 'Elite Scents RD'},
-    offers:{'@type':'Offer',price:value ? String(value) : undefined,priceCurrency:'DOP',availability:schemaAvailability[p.availability] || schemaAvailability.disponible,url:productUrl(p)}
+    offers:{'@type':'Offer',price:value ? String(value) : undefined,priceCurrency:'DOP',priceValidUntil:p.original_price && p.offer_ends_at ? String(p.offer_ends_at).slice(0, 10) : undefined,availability:schemaAvailability[p.availability] || schemaAvailability.disponible,url:productUrl(p)}
   };
   if (images.length) data.image = images;
   return '<script type="application/ld+json">' + JSON.stringify(data).replace(/</g, '\\u003c') + '<\/script>';
@@ -111,7 +136,7 @@ await writeFile('index.html', output);
 const today = new Date().toISOString().slice(0, 10);
 const STATIC_PAGES = [
   { path: 'pedidos-envios.html', lastmod: '2026-09-20', changefreq: 'monthly', priority: '0.6' },
-  { path: 'privacidad.html', lastmod: '2026-09-20', changefreq: 'yearly', priority: '0.3' },
+  { path: 'privacidad.html', lastmod: '2026-09-21', changefreq: 'yearly', priority: '0.3' },
 ];
 const sitemapUrl = (loc, lastmod, changefreq, priority) =>
   '  <url><loc>' + SITE_URL + loc + '</loc><lastmod>' + lastmod + '</lastmod><changefreq>' + changefreq + '</changefreq><priority>' + priority + '</priority></url>';

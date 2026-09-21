@@ -33,3 +33,7 @@ body.admin-light input[type="file"]{color:#171714!important}
 .admin-search-input{width:100%;max-width:560px;padding:12px;margin-bottom:14px}
 
 .pending-count{font-weight:700;margin:6px 0 0}.pending-count.has-pending{color:#9f2929;background:#fff0ed;border:1px solid #e8c3be;padding:8px 12px;display:inline-block}
+
+.mfa-qr{max-width:220px;background:#fff;padding:10px;border:1px solid #d2ccc0}
+
+.check-line{display:flex;align-items:center;gap:8px;text-transform:none!important;letter-spacing:0!important}.admin-table-wide{min-width:1100px}

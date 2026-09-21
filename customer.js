@@ -36,7 +36,7 @@ function renderCart(){
  $('#cartWhatsapp').classList.toggle('hidden',!items.length);
  $('#clearCart').disabled=!items.length;
 }
-function setMode(next,keepStatus){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';if(!keepStatus)$('#authStatus').textContent=''}
+function setMode(next,keepStatus){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';if(!keepStatus)$('#authStatus').textContent='';$('#forgotLink').classList.toggle('hidden',mode!=='login');$('#passwordHint').classList.toggle('hidden',mode!=='signup');pass.minLength=mode==='signup'?10:8}
 // Verificación en dos pasos al entrar: si la cuenta tiene un factor TOTP verificado, tras la contraseña se pide el código.
 let mfaPending=null;
 async function verifiedTotp(data){
@@ -73,6 +73,8 @@ function friendly(message){
  if(/invalid totp|mfa verification|verification failed/i.test(m))return 'Código incorrecto o vencido. Escribe el código actual que muestra tu app (cambia cada 30 segundos).';
  if(/aal2/i.test(m))return 'Para este cambio inicia sesión de nuevo con tu código de verificación y vuelve a intentarlo.';
  if(/friendly name|already exists/i.test(m))return 'Ya había una configuración a medias. Pulsa "Activar MFA" otra vez.';
+ if(/different from the old/i.test(m))return 'La nueva contraseña debe ser distinta de la anterior.';
+ if(/expired|invalid.*(token|jwt)|jwt/i.test(m))return 'El enlace venció o ya se usó. Pide uno nuevo con "¿Olvidaste tu contraseña?".';
  if(/password should be at least|weak/i.test(m))return 'La contraseña es demasiado débil: usa al menos 8 caracteres.';
  return m;
 }
@@ -83,7 +85,78 @@ async function resendConfirmation(){
  const res=await fetch(base+'/auth/v1/resend?redirect_to='+encodeURIComponent(redirectUrl()),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({type:'signup',email:pendingEmail})});
  await json(res);$('#authStatus').textContent='Te enviamos otro correo a '+pendingEmail+'. Abre el enlace más reciente.';
 }
-async function signup(email,password){const res=await fetch(base+'/auth/v1/signup?redirect_to='+encodeURIComponent(redirectUrl()),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password})});const data=await json(res);if(data.access_token){saveSession(data);await afterLogin()}else{$('#authStatus').textContent='Cuenta creada. Te enviamos un correo a '+email+': abre el enlace para confirmarla y volverás a esta página para completar tu pedido.';offerResend(email);setMode('login',true)}}
+async function signup(email,password){const problems=passwordProblems(password,email);if(problems.length)throw new Error('La contraseña necesita: '+problems.join(', ')+'.');const res=await fetch(base+'/auth/v1/signup?redirect_to='+encodeURIComponent(redirectUrl()),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password,data:{origen:collectOrigin()}})});const data=await json(res);if(data.access_token){saveSession(data);await afterLogin()}else{$('#authStatus').textContent='Cuenta creada. Te enviamos un correo a '+email+': abre el enlace para confirmarla y volverás a esta página para completar tu pedido.';offerResend(email);setMode('login',true)}}
+// --- Contraseñas: reglas mínimas (además de las de Supabase Auth) ---
+const COMMON_PASSWORDS=['1234567890','12345678910','password123','contrasena123','contraseña123','qwertyuiop','elitescents123','perfumes123'];
+function passwordProblems(password,email){
+ const p=String(password||''),out=[];
+ if(p.length<10)out.push('al menos 10 caracteres');
+ if(!/[a-z]/.test(p))out.push('una minúscula');
+ if(!/[A-Z]/.test(p))out.push('una mayúscula');
+ if(!/\d/.test(p))out.push('un número');
+ const local=String(email||'').split('@')[0].toLowerCase();
+ if(local.length>=4&&p.toLowerCase().includes(local))out.push('no incluir tu correo');
+ if(COMMON_PASSWORDS.some(c=>p.toLowerCase().includes(c)))out.push('no ser una contraseña común');
+ return out;
+}
+// Datos técnicos del registro para "Cuentas Clientes" del panel (dispositivo, navegador, idioma, zona horaria y, con consentimiento, el sitio de origen).
+function collectOrigin(){
+ const ua=navigator.userAgent||'';
+ const dispositivo=/iPad|Tablet/i.test(ua)?'tablet':/Mobi|Android|iPhone|iPod/i.test(ua)?'móvil':'computador';
+ const navegador=/Edg\//.test(ua)?'Edge':/OPR\/|Opera/.test(ua)?'Opera':/Chrome\//.test(ua)?'Chrome':/Firefox\//.test(ua)?'Firefox':/Safari\//.test(ua)?'Safari':'otro';
+ let zona='';try{zona=Intl.DateTimeFormat().resolvedOptions().timeZone||''}catch{}
+ const first=window.EliteConsent?.firstTouch?.()||null;
+ return {fuente:first?first.fuente:'sin consentimiento',utm:first?first.utm:undefined,pagina:first?first.pagina:undefined,registrado_desde:location.pathname.slice(0,80),dispositivo,navegador,idioma:String(navigator.language||'').slice(0,10),zona:zona.slice(0,40)};
+}
+// --- Recuperación de contraseña: enlace de un solo uso al correo + código MFA (si existe) + últimos 4 dígitos de la cédula ---
+let recovery=null,recoverCooldown=null;
+async function sendRecovery(email){
+ const res=await fetch(base+'/auth/v1/recover?redirect_to='+encodeURIComponent(redirectUrl()),{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email})});
+ await json(res);
+}
+function startRecoveryCooldown(seconds){
+ const button=$('#recoverForm button[type=submit]');let left=seconds;button.disabled=true;
+ clearInterval(recoverCooldown);recoverCooldown=setInterval(()=>{left--;if(left<=0){clearInterval(recoverCooldown);button.disabled=false;button.textContent='Enviar enlace'}else button.textContent='Reenviar en '+left+' s'},1000);
+}
+function recoveryHeaders(token){return {apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'}}
+async function startRecovery(tokens){
+ recovery={token:tokens.access_token,email:'',factor:null,needId:false};
+ $('#authArea').classList.remove('hidden');$('#customerArea').classList.add('hidden');
+ ['#authForm','#recoverForm','#mfaLoginForm'].forEach(s=>$(s).classList.add('hidden'));document.querySelector('.auth-tabs').classList.add('hidden');
+ $('#authTitle').textContent='Crear nueva contraseña';$('#resetForm').classList.remove('hidden');$('#resetStatus').textContent='Verificando el enlace…';
+ const user=await json(await fetch(base+'/auth/v1/user',{headers:recoveryHeaders(recovery.token)}));
+ recovery.email=user.email||'';recovery.factor=(user.factors||[]).find(f=>f.factor_type==='totp'&&f.status==='verified')||null;
+ $('#resetEmail').textContent=recovery.email;$('#resetMfaLabel').classList.toggle('hidden',!recovery.factor);
+ try{const r=await json(await fetch(base+'/rest/v1/rpc/verify_recovery_identity',{method:'POST',headers:recoveryHeaders(recovery.token),body:JSON.stringify({p_last4:''})}));recovery.needId=r==='need';if(r==='locked'){$('#resetStatus').textContent='Demasiados intentos fallidos. Espera 30 minutos o escríbenos por WhatsApp.';return}}catch{recovery.needId=false}
+ $('#resetIdLabel').classList.toggle('hidden',!recovery.needId);$('#resetStatus').textContent='';
+}
+async function finishRecovery(fd){
+ if(!recovery)throw new Error('El enlace venció. Pide uno nuevo.');
+ const password=String(fd.get('password')||''),password2=String(fd.get('password2')||'');
+ const problems=passwordProblems(password,recovery.email);if(problems.length)throw new Error('La contraseña necesita: '+problems.join(', ')+'.');
+ if(password!==password2)throw new Error('Las contraseñas no coinciden.');
+ let token=recovery.token;
+ if(recovery.factor){
+  const code=String(fd.get('mfa')||'').trim();if(!/^\d{6,8}$/.test(code))throw new Error('Escribe el código de 6 dígitos de tu app de autenticación.');
+  const id=encodeURIComponent(recovery.factor.id);
+  const challenge=await json(await fetch(base+'/auth/v1/factors/'+id+'/challenge',{method:'POST',headers:recoveryHeaders(token),body:'{}'}));
+  const verified=await json(await fetch(base+'/auth/v1/factors/'+id+'/verify',{method:'POST',headers:recoveryHeaders(token),body:JSON.stringify({challenge_id:challenge.id,code})}));
+  token=verified.access_token||token;
+ }
+ if(recovery.needId){
+  const last4=String(fd.get('last4')||'').replace(/\D/g,'');if(last4.length!==4)throw new Error('Escribe los últimos 4 dígitos de tu cédula.');
+  const r=await json(await fetch(base+'/rest/v1/rpc/verify_recovery_identity',{method:'POST',headers:recoveryHeaders(token),body:JSON.stringify({p_last4:last4})}));
+  if(r==='bad')throw new Error('Los últimos 4 dígitos no coinciden con los de tu cuenta.');
+  if(r==='locked')throw new Error('Demasiados intentos fallidos. Espera 30 minutos o escríbenos por WhatsApp.');
+  if(r!=='ok')throw new Error('No se pudo verificar tu identidad.');
+ }
+ await json(await fetch(base+'/auth/v1/user',{method:'PUT',headers:recoveryHeaders(token),body:JSON.stringify({password})}));
+ // Cierra TODAS las sesiones de la cuenta (también en otros dispositivos) y obliga a entrar con la contraseña nueva.
+ await fetch(base+'/auth/v1/logout?scope=global',{method:'POST',headers:recoveryHeaders(token)}).catch(()=>{});
+ recovery=null;saveSession(null);
+ $('#resetForm').reset();$('#resetForm').classList.add('hidden');document.querySelector('.auth-tabs').classList.remove('hidden');$('#authForm').classList.remove('hidden');
+ setMode('login');$('#authStatus').textContent='Contraseña actualizada. Cerramos las demás sesiones de tu cuenta: inicia sesión con tu nueva contraseña.';
+}
 // Al volver del enlace del correo, Supabase añade la sesión (o un error) en el fragmento # de la URL.
 async function handleAuthRedirect(){
  const hash=location.hash.replace(/^#/,'');if(!hash)return false;
@@ -91,6 +164,11 @@ async function handleAuthRedirect(){
  if(q.get('error')||q.get('error_code')){
   history.replaceState(null,'',location.pathname+location.search);
   $('#authStatus').textContent=q.get('error_code')==='otp_expired'?'El enlace ya se usó o expiró. Inicia sesión con tu correo y contraseña; si aún no puedes, pide otro correo de confirmación.':friendly(q.get('error_description')||'No se pudo confirmar el correo.');
+  return true;
+ }
+ if(q.get('access_token')&&q.get('type')==='recovery'){
+  history.replaceState(null,'',location.pathname+location.search);
+  await startRecovery({access_token:q.get('access_token')});
   return true;
  }
  if(q.get('access_token')){
@@ -189,6 +267,17 @@ $('#enableMfa').addEventListener('click',()=>enableMfa().catch(err=>{$('#mfaStat
 $('#verifyMfa').addEventListener('click',()=>verifyMfa().catch(err=>$('#mfaStatus').textContent=friendly(err.message)));
 $('#disableMfa').addEventListener('click',()=>disableMfa().catch(err=>$('#mfaStatus').textContent=friendly(err.message)));
 $('#mfaLoginForm').addEventListener('submit',async e=>{e.preventDefault();$('#mfaLoginStatus').textContent='Verificando…';try{await finishMfaLogin(String(new FormData(e.currentTarget).get('code')).trim())}catch(err){$('#mfaLoginStatus').textContent=friendly(err.message)}});
+$('#forgotLink').addEventListener('click',()=>{$('#authForm').classList.add('hidden');$('#recoverForm').classList.remove('hidden');$('#recoverStatus').textContent='';const typed=$('#authForm').elements.email.value.trim();if(typed)$('#recoverForm').elements.email.value=typed});
+$('#recoverCancel').addEventListener('click',()=>{$('#recoverForm').classList.add('hidden');$('#authForm').classList.remove('hidden')});
+$('#recoverForm').addEventListener('submit',async e=>{
+ e.preventDefault();const email=String(new FormData(e.currentTarget).get('email')||'').trim();if(!email)return;
+ $('#recoverStatus').textContent='Enviando…';
+ try{await sendRecovery(email)}catch(err){if(/rate limit|too many/i.test(err.message)){$('#recoverStatus').textContent=friendly(err.message);return}}
+ // Mismo mensaje exista o no la cuenta: no revelamos qué correos están registrados.
+ $('#recoverStatus').textContent='Si existe una cuenta con ese correo, te enviamos un enlace para crear una nueva contraseña. Vence en poco tiempo y solo funciona una vez. Revisa también spam.';
+ startRecoveryCooldown(60);
+});
+$('#resetForm').addEventListener('submit',async e=>{e.preventDefault();$('#resetStatus').textContent='Guardando…';try{await finishRecovery(new FormData(e.currentTarget))}catch(err){$('#resetStatus').textContent=friendly(err.message)}});
 $('#mfaLoginCancel').addEventListener('click',()=>{mfaPending=null;$('#mfaLoginForm').classList.add('hidden');$('#authForm').classList.remove('hidden');$('#authStatus').textContent='';$('#authForm').elements.password.value=''});
 $('#placeOrder').addEventListener('click',async()=>{
  const profile=$('#profileForm');
