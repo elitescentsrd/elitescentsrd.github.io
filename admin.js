@@ -377,20 +377,52 @@
   const offerSelected = new Set();
   function applyOfferUi() {
     const on = offersEnabled();
+    if (on) fillOfferBrands();
     ['#offer-price-label', '#offer-event-label', '#offer-end-label'].forEach(sel => $(sel).classList.toggle('hidden', !on));
     $('#offers-notice').classList.toggle('hidden', on); offerForm.classList.toggle('hidden', !on);
   }
+  // Filtros iguales a los del catálogo: búsqueda, precio, marca, género y estado; se recorren los 420 perfumes.
+  const offerFilter = { q: '', price: 'all', brand: 'all', gender: 'todos', state: 'all' };
+  const OFFER_PAGE = 50; let offerVisible = OFFER_PAGE;
+  function offerPriceMatches(p, value) {
+    const values = amountsOf(p.original_price || p.price), n = values.length ? Math.max(...values) : 0;
+    if (value === 'under3000') return n < 3000;
+    if (value === '3000-4999') return n >= 3000 && n < 5000;
+    if (value === '5000-6999') return n >= 5000 && n < 7000;
+    if (value === '7000plus') return n >= 7000;
+    return true;
+  }
   function offerCandidates() {
-    const q = $('#offer-search').value.trim().toLocaleLowerCase('es');
-    return products.filter(p => p.active !== false && (!q || (p.name + ' ' + (p.brand || '')).toLocaleLowerCase('es').includes(q))).slice(0, 80);
+    const q = offerFilter.q.toLocaleLowerCase('es');
+    return products.filter(p => p.active !== false
+      && (!q || (p.name + ' ' + (p.brand || '') + ' ' + (p.size || '')).toLocaleLowerCase('es').includes(q))
+      && offerPriceMatches(p, offerFilter.price)
+      && (offerFilter.brand === 'all' || p.brand === offerFilter.brand)
+      && (offerFilter.gender === 'todos' || p.gender === offerFilter.gender)
+      && (offerFilter.state === 'all' || (offerFilter.state === 'offer' ? Boolean(p.original_price) : !p.original_price)));
+  }
+  function fillOfferBrands() {
+    const select = $('#offer-brand'), current = offerFilter.brand;
+    const brands = [...new Set(products.map(p => p.brand).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    select.replaceChildren(new Option('Todas las marcas', 'all'), ...brands.map(b => new Option(b, b)));
+    select.value = brands.includes(current) ? current : 'all'; offerFilter.brand = select.value;
+  }
+  function updateOfferCounters(list = offerCandidates()) {
+    $('#offer-select-all').checked = list.length > 0 && list.every(p => offerSelected.has(p.id));
+    $('#offer-select-label').textContent = 'Seleccionar los ' + list.length + ' perfumes de esta búsqueda';
+    $('#offer-selected-count').textContent = offerSelected.size ? offerSelected.size + ' seleccionado(s) en total' : 'Ninguno seleccionado';
   }
   function renderOffers() {
     if (!offersEnabled()) return;
-    const percent = Number(offerForm.elements.percent.value) || 0;
-    offersBody.replaceChildren(...offerCandidates().map(p => {
+    const percent = Number(offerForm.elements.percent.value) || 0, list = offerCandidates(), shown = list.slice(0, offerVisible);
+    const total = products.filter(p => p.active !== false).length;
+    $('#offer-count').textContent = list.length ? 'Mostrando ' + shown.length + ' de ' + list.length + ' perfumes' + (list.length < total ? ' (de ' + total + ' en total)' : '') : 'No hay perfumes con esos filtros.';
+    const more = $('#offer-more'); more.classList.toggle('hidden', list.length <= shown.length); more.textContent = 'Mostrar ' + Math.min(OFFER_PAGE, list.length - shown.length) + ' más (faltan ' + (list.length - shown.length) + ')';
+    updateOfferCounters(list);
+    offersBody.replaceChildren(...shown.map(p => {
       const tr = document.createElement('tr'), cells = [0, 1, 2, 3, 4].map(() => document.createElement('td'));
       const check = document.createElement('input'); check.type = 'checkbox'; check.checked = offerSelected.has(p.id); check.setAttribute('aria-label', 'Seleccionar ' + p.name);
-      check.addEventListener('change', () => { check.checked ? offerSelected.add(p.id) : offerSelected.delete(p.id); });
+      check.addEventListener('change', () => { check.checked ? offerSelected.add(p.id) : offerSelected.delete(p.id); updateOfferCounters(); });
       cells[0].append(check); cells[1].textContent = p.name + (p.size ? ' · ' + p.size : '');
       const normal = p.original_price || p.price; cells[2].textContent = normal;
       cells[3].textContent = discountedText(normal, percent) || 'No aplica';
@@ -398,7 +430,22 @@
       tr.append(...cells); return tr;
     }));
   }
-  $('#offer-search').addEventListener('input', renderOffers);
+  const refreshOffers = () => { offerVisible = OFFER_PAGE; renderOffers(); };
+  $('#offer-search').addEventListener('input', e => { offerFilter.q = e.target.value.trim(); refreshOffers(); });
+  $('#offer-price').addEventListener('change', e => { offerFilter.price = e.target.value; refreshOffers(); });
+  $('#offer-brand').addEventListener('change', e => { offerFilter.brand = e.target.value; refreshOffers(); });
+  $('#offer-state').addEventListener('change', e => { offerFilter.state = e.target.value; refreshOffers(); });
+  document.querySelectorAll('[data-offer-gender]').forEach(button => button.addEventListener('click', () => {
+    offerFilter.gender = button.dataset.offerGender;
+    document.querySelectorAll('[data-offer-gender]').forEach(other => other.classList.toggle('active', other === button)); refreshOffers();
+  }));
+  $('#offer-clear').addEventListener('click', () => {
+    Object.assign(offerFilter, { q: '', price: 'all', brand: 'all', gender: 'todos', state: 'all' });
+    $('#offer-search').value = ''; $('#offer-price').value = 'all'; $('#offer-brand').value = 'all'; $('#offer-state').value = 'all';
+    document.querySelectorAll('[data-offer-gender]').forEach(other => other.classList.toggle('active', other.dataset.offerGender === 'todos')); refreshOffers();
+  });
+  $('#offer-more').addEventListener('click', () => { offerVisible += OFFER_PAGE; renderOffers(); });
+  $('#offer-deselect').addEventListener('click', () => { offerSelected.clear(); renderOffers(); });
   offerForm.elements.percent.addEventListener('input', renderOffers);
   $('#offer-select-all').addEventListener('change', e => { offerCandidates().forEach(p => e.target.checked ? offerSelected.add(p.id) : offerSelected.delete(p.id)); renderOffers(); });
   async function patchProducts(items, bodyFor, verb) {

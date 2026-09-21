@@ -305,6 +305,19 @@ assert(adminHtml.includes('id="offer-form"')&&adminHtml.includes('name="offer_pr
   assert.equal(discountedAmounts('Precio a confirmar',10),null,'Sin precio no hay oferta');
   for(const n of [100,850,2650,3150,10050]) for(const pct of [1,5,10,25,70]){const r=discountedAmounts('RD$'+n.toLocaleString('en-US'),pct); if(r) assert(r[0]<n&&r[0]>=50&&r[0]%50===0,'La oferta debe ser menor, múltiplo de 50 y >= 50: '+n+' '+pct)}
 }
+// Ofertas: mismos filtros que el catálogo (búsqueda, precio, marca, género, estado), Limpiar y paginación para los 420.
+for(const id of ['offer-search','offer-price','offer-brand','offer-state','offer-clear','offer-more','offer-select-all','offer-deselect','offer-count']) assert(adminHtml.includes('id="'+id+'"'),'Las ofertas deben incluir '+id);
+assert(['todos','hombre','mujer','unisex'].every(g=>adminHtml.includes('data-offer-gender="'+g+'"')),'Las ofertas deben filtrar por Todos/Hombre/Mujer/Unisex');
+assert(!adminJs.includes('.slice(0, 80)'),'Las ofertas ya no deben limitarse a 80 perfumes');
+{
+  const money=adminJs.slice(adminJs.indexOf('function money('),adminJs.indexOf('\n',adminJs.indexOf('function money(')));
+  const amounts=adminJs.slice(adminJs.indexOf('const amountsOf'),adminJs.indexOf('\n',adminJs.indexOf('const amountsOf')));
+  const fn=adminJs.slice(adminJs.indexOf('function offerPriceMatches'),adminJs.indexOf('function offerCandidates'));
+  const offerPriceMatches=new Function(money+'\n'+amounts+'\n'+fn+'; return offerPriceMatches;')();
+  const cases=[['RD$2,850','under3000',true],['RD$3,000','under3000',false],['RD$3,000','3000-4999',true],['RD$4,900','3000-4999',true],['RD$5,000','3000-4999',false],['RD$5,000','5000-6999',true],['RD$7,000','5000-6999',false],['RD$7,000','7000plus',true],['RD$3,550 / RD$7,150','7000plus',true],['RD$3,550 / RD$4,150','under3000',false],['RD$4,000','all',true]];
+  for(const [price,filter,expected] of cases) assert.equal(offerPriceMatches({price},filter),expected,'Filtro de precio '+filter+' con '+price);
+  assert.equal(offerPriceMatches({price:'RD$2,000',original_price:'RD$3,500'},'under3000'),false,'El filtro de precio usa el precio normal, no el de oferta');
+}
 for(const f of ['20260921120000_cuentas_clientes.sql','20260921121000_ofertas.sql','20260921122000_recuperacion_identidad.sql']) assert(existsSync('supabase/migrations/'+f),'Falta la migración '+f);
 {
   const [cuentas,ofertas,recuperacion,enforce]=await Promise.all(['supabase/migrations/20260921120000_cuentas_clientes.sql','supabase/migrations/20260921121000_ofertas.sql','supabase/migrations/20260921122000_recuperacion_identidad.sql','supabase/proposed/09_enforce_admin_mfa.sql'].map(f=>readFile(f,'utf8')));

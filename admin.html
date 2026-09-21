@@ -96,9 +96,23 @@
           <label class="span-2">Nombre del evento<input name="label" maxlength="60" placeholder="Día de las Madres"></label>
           <label>Descuento (%)<input name="percent" type="number" min="1" max="70" step="1" value="10" required></label>
           <label>Termina (opcional)<input name="ends" type="datetime-local"></label>
-          <label class="span-2">Buscar perfumes<input id="offer-search" name="q" type="search" placeholder="Nombre o marca" autocomplete="off"></label>
-          <label class="span-2 check-line"><input id="offer-select-all" type="checkbox"> Seleccionar todos los resultados</label>
+          <div class="span-4 offer-filters">
+            <label class="offer-filter-search">Buscar<input id="offer-search" type="search" placeholder="Nombre, marca o tamaño" autocomplete="off"></label>
+            <label>Precio<select id="offer-price"><option value="all">Todos los precios</option><option value="under3000">Menos de RD$3,000</option><option value="3000-4999">RD$3,000–4,999</option><option value="5000-6999">RD$5,000–6,999</option><option value="7000plus">RD$7,000 o más</option></select></label>
+            <label>Marca<select id="offer-brand"><option value="all">Todas las marcas</option></select></label>
+            <label>Estado<select id="offer-state"><option value="all">Todos</option><option value="offer">En oferta</option><option value="none">Sin oferta</option></select></label>
+          </div>
+          <div class="span-4 admin-actions offer-gender" role="group" aria-label="Filtrar por género">
+            <button type="button" class="btn btn-secondary active" data-offer-gender="todos">Todos</button>
+            <button type="button" class="btn btn-secondary" data-offer-gender="hombre">Hombre</button>
+            <button type="button" class="btn btn-secondary" data-offer-gender="mujer">Mujer</button>
+            <button type="button" class="btn btn-secondary" data-offer-gender="unisex">Unisex</button>
+            <button type="button" class="btn btn-secondary" id="offer-clear">Limpiar</button>
+          </div>
+          <p class="span-4 muted" id="offer-count" aria-live="polite"></p>
+          <div class="span-4 admin-actions"><label class="check-line"><input id="offer-select-all" type="checkbox"> <span id="offer-select-label">Seleccionar los perfumes de esta búsqueda</span></label><span class="muted" id="offer-selected-count"></span><button type="button" class="btn btn-secondary" id="offer-deselect">Deseleccionar todo</button></div>
           <div class="span-4 admin-table-wrap"><table class="admin-table"><thead><tr><th></th><th>Perfume</th><th>Precio normal</th><th>Con oferta</th><th>Estado</th></tr></thead><tbody id="offers-body"></tbody></table></div>
+          <div class="span-4 admin-actions"><button type="button" class="btn btn-secondary hidden" id="offer-more">Mostrar más</button></div>
           <div class="span-4 admin-actions"><button class="btn" type="submit" id="offer-apply">Aplicar oferta a los seleccionados</button><button class="btn btn-secondary" type="button" id="offer-remove">Quitar oferta a los seleccionados</button><button class="btn btn-secondary" type="button" id="offer-remove-all">Terminar todas las ofertas</button><span id="offer-status" aria-live="polite"></span></div>
         </form>
       </section>

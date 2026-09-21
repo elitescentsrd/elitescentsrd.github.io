@@ -37,3 +37,6 @@ body.admin-light input[type="file"]{color:#171714!important}
 .mfa-qr{max-width:220px;background:#fff;padding:10px;border:1px solid #d2ccc0}
 
 .check-line{display:flex;align-items:center;gap:8px;text-transform:none!important;letter-spacing:0!important}.admin-table-wide{min-width:1100px}
+
+.offer-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end}.offer-filter-search{grid-column:span 2}.offer-gender .btn.active{background:#171714;color:#fff}@media(max-width:560px){.offer-filter-search{grid-column:span 1}}
+.admin-form label.check-line{display:flex;flex-direction:row;align-items:center;gap:8px}.admin-form label.check-line input{width:auto}
