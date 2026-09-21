@@ -121,7 +121,7 @@
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
     loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
-    loadCustomers();
+    loadCustomers(); loadCoupons();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
   // Pedidos sin atender (estado "nuevo"): contador visible y en el título de la pestaña.
@@ -213,13 +213,13 @@
   }
   function orderWhatsapp(o) {
     const eta=o.estimated_delivery?(' Entrega estimada: '+o.estimated_delivery+'.'):'';
-    const text='Hola '+(o.customer_name||'')+', recibimos tu pedido #'+o.id+' en Elite Scents RD.'+eta+'\n\n'+(o.items||'')+'\n\nTotal: '+(o.amount||'Por confirmar');
+    const text='Hola '+(o.customer_name||'')+', recibimos tu pedido #'+o.id+' en Elite Scents RD.'+eta+'\n\n'+(o.items||'')+'\n\nTotal: '+(o.amount||'Por confirmar')+(o.coupon_code?' (con el cupón '+o.coupon_code+')':'');
     // wa.me exige el código de país: un número dominicano de 10 dígitos (809/829/849) lleva 1 delante.
     let digits=String(o.phone||'').replace(/\D/g,'');if(digits.length===10)digits='1'+digits;
     return 'https://wa.me/'+digits+'?text='+encodeURIComponent(text);
   }
   function renderOrders() {
-    updatePending();
+    updatePending(); renderSales();
     ordersBody.replaceChildren(...orders.map(o => {
       const tr=document.createElement('tr');
       const date=document.createElement('td');date.textContent=new Date(o.created_at).toLocaleString('es-DO');
@@ -228,6 +228,7 @@
       const phone=document.createElement('td');phone.textContent=o.phone||'—';
       const items=document.createElement('td');items.textContent=o.items||'—';
       const total=document.createElement('td');total.textContent=o.amount||'—';
+      if(o.coupon_code){const note=document.createElement('small');note.textContent='Cupón '+o.coupon_code+' (−'+money(o.discount_amount)+')';total.append(document.createElement('br'),note)}
       const manage=document.createElement('td');manage.className='admin-actions';
       const statusSelect=document.createElement('select');
       ['nuevo','confirmado','preparando','enviado','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
@@ -237,7 +238,7 @@
         save.disabled=true;
         try{
           await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({status:statusSelect.value,estimated_delivery:eta.value.trim()||null,updated_at:new Date().toISOString()})});
-          o.status=statusSelect.value;o.estimated_delivery=eta.value.trim()||null;save.textContent='Guardado ✓';setTimeout(()=>save.textContent='Guardar',1400);
+          o.status=statusSelect.value;o.estimated_delivery=eta.value.trim()||null;renderSales();save.textContent='Guardado ✓';setTimeout(()=>save.textContent='Guardar',1400);
         }catch(err){alert(err.message)}finally{save.disabled=false}
       });
       manage.append(statusSelect,eta,save);
@@ -346,12 +347,12 @@
     await loadAll();
   });
   $('#order-form').addEventListener('submit', async e => {
-    e.preventDefault(); const el=$('#order-status'); status(el,'Guardando…');
+    e.preventDefault(); const el=$('#order-status'), orderForm=e.currentTarget; status(el,'Guardando…');
     try {
-      const fd=new FormData(e.currentTarget);
+      const fd=new FormData(orderForm);
       const payload={customer_name:String(fd.get('customer_name')).trim(),phone:String(fd.get('phone')).trim(),amount:String(fd.get('amount')||'').trim(),status:String(fd.get('status')),items:String(fd.get('items')).trim(),notes:String(fd.get('notes')||'').trim()};
       await api('/rest/v1/orders',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
-      e.currentTarget.reset(); status(el,'Pedido guardado.','success'); await loadAll();
+      orderForm.reset(); status(el,'Pedido guardado.','success'); await loadAll();
     } catch(err){status(el,err.message,'error')}
   });
   async function deleteProduct(p) {
@@ -510,10 +511,133 @@
       customers = []; notice.classList.remove('hidden');
       notice.textContent = /admin_list_customers|schema cache|could not find/i.test(err.message) ? 'Para ver las cuentas falta aplicar la migración "cuentas_clientes" en Supabase (SQL Editor).' : 'No se pudieron cargar las cuentas: ' + err.message;
     }
-    renderCustomers();
+    renderCustomers(); renderSales();
   }
   $('#customers-search').addEventListener('input', renderCustomers);
   $('#customers-refresh').addEventListener('click', loadCustomers);
+
+  // --- Resumen de ventas (los cálculos viven en sales.js) ---
+  let salesMetric = 'orders';
+  const rd = n => 'RD$' + new Intl.NumberFormat('es-DO').format(Math.round(n));
+  function kpi(label, value, note, tone) {
+    const box = document.createElement('div'); box.className = 'kpi' + (tone ? ' ' + tone : '');
+    const small = document.createElement('small'); small.textContent = label;
+    const strong = document.createElement('strong'); strong.textContent = value;
+    box.append(small, strong);
+    if (note) { const em = document.createElement('em'); em.textContent = note; box.append(em); }
+    return box;
+  }
+  function versus(now, before) { const c = window.EliteSales.change(now, before); return c === null ? '' : (c > 0 ? '+' : '') + c + '% frente al período anterior'; }
+  function emptyRow(cols, text) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = cols; td.className = 'muted'; td.textContent = text; tr.append(td); return tr; }
+  function salesChart(days) {
+    const NS = 'http://www.w3.org/2000/svg', W = 720, H = 150, svg = document.createElementNS(NS, 'svg');
+    const values = days.map(d => d[salesMetric]), max = Math.max(1, ...values), bw = W / Math.max(days.length, 1);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (H + 22)); svg.setAttribute('class', 'sales-svg'); svg.setAttribute('aria-hidden', 'true');
+    const base = document.createElementNS(NS, 'line'); [['x1', 0], ['x2', W], ['y1', H], ['y2', H], ['stroke', '#d9d4c9']].forEach(([k, v]) => base.setAttribute(k, v)); svg.append(base);
+    days.forEach((d, i) => {
+      const value = values[i], h = value ? Math.max(3, (value / max) * H) : 0, bar = document.createElementNS(NS, 'rect');
+      [['x', i * bw + 1], ['y', H - h], ['width', Math.max(bw - 2, 1)], ['height', h], ['fill', '#bd9b5d']].forEach(([k, v]) => bar.setAttribute(k, v));
+      const tip = document.createElementNS(NS, 'title'); tip.textContent = d.label + ': ' + d.orders + ' pedido(s) · ' + rd(d.sales) + ' en ventas confirmadas'; bar.append(tip); svg.append(bar);
+    });
+    const step = Math.max(1, Math.ceil(days.length / 7));
+    days.forEach((d, i) => { if (i % step) return; const t = document.createElementNS(NS, 'text'); [['x', i * bw], ['y', H + 16], ['font-size', 11], ['fill', '#6f6a5f']].forEach(([k, v]) => t.setAttribute(k, v)); t.textContent = d.label; svg.append(t); });
+    return svg;
+  }
+  function renderSales() {
+    const Sales = window.EliteSales; if (!Sales || !$('#sales-kpis')) return;
+    try {
+      const s = Sales.summarize(orders, customers, { period: $('#sales-period').value }), t = s.totals, p = s.previous;
+      $('#sales-kpis').replaceChildren(
+        kpi('Pedidos recibidos', String(t.received), p ? versus(t.received, p.received) : ''),
+        kpi('Ventas confirmadas', rd(t.sales), (p ? versus(t.sales, p.sales) : '') || t.soldCount + ' pedido(s) confirmado(s)'),
+        kpi('Ticket promedio', t.soldCount ? rd(t.average) : '—', 'por pedido confirmado'),
+        kpi('Por confirmar', rd(t.pendingAmount), t.pendingCount + ' pedido(s) nuevo(s)', t.pendingCount ? 'warn' : ''),
+        kpi('Cancelados', String(t.cancelled), ''));
+      const title = salesMetric === 'orders' ? 'Pedidos por día' : 'Ventas confirmadas por día (RD$)';
+      $('#sales-chart-title').textContent = title; $('#sales-chart').setAttribute('aria-label', 'Gráfico: ' + title.toLowerCase());
+      $('#sales-chart').replaceChildren(salesChart(s.days));
+      document.querySelectorAll('[data-sales-metric]').forEach(b => b.classList.toggle('active', b.dataset.salesMetric === salesMetric));
+      $('#sales-top').replaceChildren(...(s.top.length ? s.top.map(x => { const tr = document.createElement('tr'); [x.name, x.units, x.orders].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); }); return tr; }) : [emptyRow(3, 'Todavía no hay pedidos en este período.')]));
+      $('#sales-origins').replaceChildren(...(s.origins.length ? s.origins.map(x => { const tr = document.createElement('tr'); [x.name, x.accounts, x.buyers, x.orders].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); }); return tr; }) : [emptyRow(4, 'Todavía no hay cuentas de clientes.')]));
+    } catch (err) { $('#sales-kpis').textContent = 'No se pudo calcular el resumen: ' + err.message; }
+  }
+  // --- Cupones de descuento (tablas coupons y coupon_redemptions; solo administradores con verificación en dos pasos) ---
+  let coupons = [], couponUse = new Map();
+  function couponState(c) {
+    const now = Date.now();
+    if (!c.active) return 'Inactivo';
+    if (c.ends_at && now >= Date.parse(c.ends_at)) return 'Vencido';
+    if (c.starts_at && now < Date.parse(c.starts_at)) return 'Programado';
+    if (c.max_uses && c.used_count >= c.max_uses) return 'Agotado';
+    return 'Activo';
+  }
+  const couponDiscountText = c => (c.kind === 'percent' ? Number(c.value) + '%' : money(c.value)) + (c.max_discount ? ' (tope ' + money(c.max_discount) + ')' : '');
+  function couponRules(c) {
+    const rules = [];
+    if (Number(c.min_subtotal) > 0) rules.push('compra mínima ' + money(c.min_subtotal));
+    rules.push(c.one_per_customer ? '1 uso por cliente' : 'varios usos por cliente');
+    if (c.first_order_only) rules.push('solo primera compra');
+    rules.push(c.allow_with_offers ? 'con perfumes en oferta' : 'sin perfumes en oferta');
+    return rules.join(' · ');
+  }
+  function couponMessage(c) {
+    const what = c.kind === 'percent' ? Number(c.value) + '% de descuento' : money(c.value) + ' de descuento';
+    return 'Usa el código ' + c.code + ' en tu carrito y obtén ' + what + (c.description ? ' (' + c.description + ')' : '') + ' en Elite Scents RD: https://elitescentsrd.github.io' + (c.ends_at ? '. Válido hasta el ' + dateText(c.ends_at) : '') + '.';
+  }
+  function renderCoupons() {
+    $('#coupons-body').replaceChildren(...(coupons.length ? coupons.map(c => {
+      const tr = document.createElement('tr'), state = couponState(c), use = couponUse.get(c.code) || { count: 0, total: 0 };
+      const name = document.createElement('td'), strong = document.createElement('strong'); strong.textContent = c.code; name.append(strong);
+      if (c.description) { const small = document.createElement('small'); small.textContent = c.description; name.append(document.createElement('br'), small); }
+      const cells = [couponDiscountText(c), couponRules(c), (c.starts_at ? 'desde ' + dateText(c.starts_at) : 'ya vigente') + (c.ends_at ? ' hasta ' + dateText(c.ends_at) : ', sin fecha de fin'),
+        c.used_count + (c.max_uses ? ' de ' + c.max_uses : '') + ' (' + money(use.total) + ' descontados)', state].map(text => { const td = document.createElement('td'); td.textContent = text; return td; });
+      const actions = document.createElement('td'); actions.className = 'admin-actions';
+      const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'btn btn-secondary'; toggle.textContent = c.active ? 'Desactivar' : 'Activar';
+      toggle.addEventListener('click', async () => { try { await api('/rest/v1/coupons?code=eq.' + encodeURIComponent(c.code), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ active: !c.active }) }); await loadCoupons(); } catch (err) { alert(err.message); } });
+      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'btn btn-secondary'; copy.textContent = 'Copiar mensaje';
+      copy.addEventListener('click', async () => { const text = couponMessage(c); try { await navigator.clipboard.writeText(text); copy.textContent = 'Copiado ✓'; setTimeout(() => { copy.textContent = 'Copiar mensaje'; }, 1500); } catch { prompt('Copia este mensaje:', text); } });
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'btn btn-secondary'; del.textContent = 'Eliminar';
+      del.addEventListener('click', async () => {
+        if (!confirm('¿Eliminar el cupón ' + c.code + '?')) return;
+        try { await api('/rest/v1/coupons?code=eq.' + encodeURIComponent(c.code), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await loadCoupons(); }
+        catch (err) { alert(/foreign key|violates|23503/i.test(err.message) ? 'Este cupón ya se usó en pedidos: no se puede eliminar. Desactívalo para que nadie más lo use.' : err.message); }
+      });
+      actions.append(toggle, copy, del); tr.append(name, ...cells, actions); return tr;
+    }) : [emptyRow(7, 'Todavía no hay cupones.')]));
+  }
+  async function loadCoupons() {
+    const notice = $('#coupons-notice'), form = $('#coupon-form');
+    try {
+      coupons = await api('/rest/v1/coupons?select=*&order=created_at.desc');
+      const uses = await api('/rest/v1/coupon_redemptions?select=coupon_code,discount&limit=5000').catch(() => []);
+      couponUse = new Map(); for (const u of uses) { const e = couponUse.get(u.coupon_code) || { count: 0, total: 0 }; e.count += 1; e.total += Number(u.discount) || 0; couponUse.set(u.coupon_code, e); }
+      notice.classList.add('hidden'); form.classList.remove('hidden');
+    } catch (err) {
+      coupons = []; notice.classList.remove('hidden'); form.classList.add('hidden');
+      notice.textContent = /coupons|schema cache|could not find|relation/i.test(err.message) ? 'Para usar cupones falta aplicar la migración "cupones" en Supabase (SQL Editor).' : 'No se pudieron cargar los cupones: ' + err.message;
+    }
+    renderCoupons();
+  }
+  $('#coupon-form').addEventListener('submit', async e => {
+    e.preventDefault(); const couponForm = e.currentTarget, f = couponForm.elements, st = $('#coupon-status');
+    const code = f.code.value.trim().toUpperCase().replace(/\s+/g, ''), kind = f.kind.value, value = Number(f.value.value);
+    if (!/^[A-Z0-9_-]{3,24}$/.test(code)) { status(st, 'El código debe tener de 3 a 24 letras, números, guion o guion bajo, sin espacios.', 'error'); return; }
+    if (!(value > 0)) { status(st, 'Escribe el valor del descuento.', 'error'); return; }
+    if (kind === 'percent' && value > 90) { status(st, 'El porcentaje máximo permitido es 90%.', 'error'); return; }
+    const starts = f.starts_at.value ? new Date(f.starts_at.value) : null, ends = f.ends_at.value ? new Date(f.ends_at.value) : null;
+    if (starts && ends && ends <= starts) { status(st, 'La fecha de fin debe ser posterior a la de inicio.', 'error'); return; }
+    const body = { code, kind, value, description: f.description.value.trim(), min_subtotal: Number(f.min_subtotal.value) || 0,
+      max_discount: f.max_discount.value ? Number(f.max_discount.value) : null, max_uses: f.max_uses.value ? Number(f.max_uses.value) : null,
+      starts_at: starts ? starts.toISOString() : null, ends_at: ends ? ends.toISOString() : null,
+      one_per_customer: f.one_per_customer.checked, first_order_only: f.first_order_only.checked, allow_with_offers: f.allow_with_offers.checked, active: true };
+    status(st, 'Creando…');
+    try { await api('/rest/v1/coupons', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); couponForm.reset(); status(st, 'Cupón ' + code + ' creado.', 'ok'); await loadCoupons(); }
+    catch (err) { status(st, /duplicate|already exists|23505/i.test(err.message) ? 'Ya existe un cupón con ese código.' : err.message, 'error'); }
+  });
+  $('#coupons-refresh').addEventListener('click', loadCoupons);
+
+  $('#sales-period').addEventListener('change', renderSales);
+  document.querySelectorAll('[data-sales-metric]').forEach(b => b.addEventListener('click', () => { salesMetric = b.dataset.salesMetric; renderSales(); }));
 
   if(!base||!key){status(loginStatus,'Falta la configuración de Supabase.','error')}else restore();
 })();

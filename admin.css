@@ -40,3 +40,7 @@ body.admin-light input[type="file"]{color:#171714!important}
 
 .offer-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end}.offer-filter-search{grid-column:span 2}.offer-gender .btn.active{background:#171714;color:#fff}@media(max-width:560px){.offer-filter-search{grid-column:span 1}}
 .admin-form label.check-line{display:flex;flex-direction:row;align-items:center;gap:8px}.admin-form label.check-line input{width:auto}
+.sales-period-label{display:grid;gap:4px;font-size:12px;min-width:170px}.sales-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:8px 0 18px}
+.kpi{border:1px solid #ded8cc;background:#faf9f6;padding:14px 16px;display:grid;gap:4px}.kpi small{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#6f6a5f}.kpi strong{font-size:24px;line-height:1.1}.kpi em{font-style:normal;font-size:12px;color:#6f6a5f}.kpi.warn{border-color:#bd9b5d;background:#fbf5e7}
+.sales-chart-head{align-items:center;margin:6px 0}.sales-chart-head .btn.active{background:#171714;color:#fff}.sales-chart{border:1px solid #ded8cc;background:#fff;padding:12px 12px 4px;margin-bottom:18px}.sales-svg{display:block;width:100%;height:auto}
+.sales-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}.sales-columns h3{margin:0 0 8px;font-size:16px}
