@@ -5,7 +5,7 @@
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api; else root.EliteAroma = api;
 })(typeof self !== 'undefined' ? self : this, function () {
-  const norm = value => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const norm = value => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
   const numbers = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Number(v.replace(/[,.]/g, ''))).filter(Number.isFinite);
 
   const FAMILIES = {
