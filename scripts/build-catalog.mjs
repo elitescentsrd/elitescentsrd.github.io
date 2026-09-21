@@ -55,12 +55,24 @@ if (existsSync('img/productos')) {
     if (match) localPhotos.set(Number(match[1]), '/img/productos/' + file);
   }
 }
+// Descripción propia de cada perfume, armada solo con datos verificados (marca, género, tamaño y notas olfativas).
+// Una descripción escrita a mano en el panel (columna description) tiene prioridad.
+const listText = items => items.slice(0, 3).map(item => String(item).toLowerCase()).join(', ').replace(/, ([^,]*)$/, ' y $1');
+function describe(p) {
+  const who = { hombre: 'para hombre', mujer: 'para mujer', unisex: 'unisex' }[p.gender] || '';
+  const top = p.notes_top || [], heart = p.notes_heart || [], base = p.notes_base || [];
+  const parts = [p.name + ' es una fragancia' + (who ? ' ' + who : '') + (p.brand ? ' de ' + p.brand : '') + (p.size ? ', en presentación de ' + p.size : '') + '.'];
+  if (top.length) parts.push('Abre con notas de ' + listText(top) + (heart.length ? ', se desarrolla con ' + listText(heart) : '') + (base.length ? ' y se asienta en un fondo de ' + listText(base) : '') + '.');
+  parts.push('Consulta disponibilidad y tiempo de entrega por WhatsApp antes de ordenar.');
+  return parts.join(' ');
+}
 // Defensa en profundidad: una URL de lámina (o no válida) en la base nunca llega al HTML público.
 for (const p of products) {
+  p.description = p.description || describe(p);
   p.image_url = imageUrl(p) || localPhotos.get(Number(p.id)) || null;
   p.gallery_urls = (p.gallery_urls || []).filter(validImage);
 }
-const description = p => p.description || (p.name + ', perfume de ' + (p.brand || 'marca seleccionada') + ' en presentación ' + (p.size || 'por confirmar') + '. Consulta disponibilidad en Elite Scents RD.');
+const description = p => p.description || describe(p);
 const usdPrice = p => {
   const value = nums(p.price)[0];
   return value ? 'US$' + Math.round(value / USD_RATE_DOP) + ' aprox.' : '';

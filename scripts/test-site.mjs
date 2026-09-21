@@ -206,6 +206,10 @@ assert(adminJs.includes("digits.length===10)digits='1'+digits"),'WhatsApp del pa
 assert(customer.includes("f.status!=='verified')await authFetch('/auth/v1/factors/'"),'Debe eliminar factores sin verificar antes de activar de nuevo');
 assert(customer.includes('async function finishMfaLogin(code)')&&customer.includes("/challenge'")&&customer.includes("/verify'"),'Al entrar con MFA activo debe pedirse el código');
 assert(checkout.includes('id="mfaLoginForm"')&&checkout.includes('id="disableMfa"')&&checkout.includes('id="mfaLink"'),'checkout.html debe incluir el código al entrar, desactivar y abrir en la app');
+// --- Descripciones propias: una por producto, con datos reales (nombre, notas), sin texto repetido ---
+assert(products.every(p=>String(p.description||'').length>=120&&p.description.includes(p.name)),'Cada producto debe tener una descripción propia con su nombre');
+assert(new Set(products.map(p=>p.description)).size>=415,'Las descripciones no deben repetirse (salvo productos idénticos)');
+assert(productSchemas.every(s=>String(s.description||'').length>=120),'El JSON-LD debe usar la descripción propia');
 // --- Cookies en todas las páginas públicas ---
 {
   const cookies=await readFile('cookies.js','utf8');
