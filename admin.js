@@ -584,6 +584,18 @@
     const what = c.kind === 'percent' ? Number(c.value) + '% de descuento' : money(c.value) + ' de descuento';
     return 'Usa el código ' + c.code + ' en tu carrito y obtén ' + what + (c.description ? ' (' + c.description + ')' : '') + ' en Elite Scents RD: https://elitescentsrd.github.io' + (c.ends_at ? '. Válido hasta el ' + dateText(c.ends_at) : '') + '.';
   }
+  // Elimina uno o varios cupones. Si el cupón ya se usó y falta aplicar la actualización "cupones_eliminar", la base lo rechaza.
+  async function deleteCoupons(codes) {
+    try { await api('/rest/v1/coupons?code=in.(' + codes.map(encodeURIComponent).join(',') + ')', { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await loadCoupons(); }
+    catch (err) { alert(/foreign key|violates|23503/i.test(err.message) ? 'Para eliminar cupones que ya se usaron falta aplicar la actualización "cupones_eliminar" en Supabase (SQL Editor).' : err.message); }
+  }
+  $('#coupons-clean').addEventListener('click', async () => {
+    const old = coupons.filter(c => ['Vencido', 'Agotado', 'Inactivo'].includes(couponState(c)));
+    if (!old.length) { alert('No hay cupones vencidos, agotados ni desactivados para limpiar.'); return; }
+    const used = old.filter(c => Number(c.used_count) > 0).length, names = old.slice(0, 8).map(c => c.code).join(', ') + (old.length > 8 ? '…' : '');
+    if (!confirm('Se eliminarán ' + old.length + ' cupón(es) vencidos, agotados o desactivados: ' + names + '.' + (used ? '\n\n' + used + ' ya se usaron: también se borra su historial de usos (los pedidos conservan el cupón y el descuento).' : '') + '\n\n¿Continuar?')) return;
+    await deleteCoupons(old.map(c => c.code));
+  });
   function renderCoupons() {
     $('#coupons-body').replaceChildren(...(coupons.length ? coupons.map(c => {
       const tr = document.createElement('tr'), state = couponState(c), use = couponUse.get(c.code) || { count: 0, total: 0 };
@@ -598,9 +610,9 @@
       copy.addEventListener('click', async () => { const text = couponMessage(c); try { await navigator.clipboard.writeText(text); copy.textContent = 'Copiado ✓'; setTimeout(() => { copy.textContent = 'Copiar mensaje'; }, 1500); } catch { prompt('Copia este mensaje:', text); } });
       const del = document.createElement('button'); del.type = 'button'; del.className = 'btn btn-secondary'; del.textContent = 'Eliminar';
       del.addEventListener('click', async () => {
-        if (!confirm('¿Eliminar el cupón ' + c.code + '?')) return;
-        try { await api('/rest/v1/coupons?code=eq.' + encodeURIComponent(c.code), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); await loadCoupons(); }
-        catch (err) { alert(/foreign key|violates|23503/i.test(err.message) ? 'Este cupón ya se usó en pedidos: no se puede eliminar. Desactívalo para que nadie más lo use.' : err.message); }
+        const uses = Math.max(use.count, Number(c.used_count) || 0);
+        if (!confirm(uses ? 'El cupón ' + c.code + ' se usó ' + uses + (uses === 1 ? ' vez' : ' veces') + '. Al eliminarlo también se borra su historial de usos; los pedidos conservan el cupón y el descuento que se aplicó.\n\n¿Eliminarlo de todos modos?' : '¿Eliminar el cupón ' + c.code + '?')) return;
+        await deleteCoupons([c.code]);
       });
       actions.append(toggle, copy, del); tr.append(name, ...cells, actions); return tr;
     }) : [emptyRow(7, 'Todavía no hay cupones.')]));

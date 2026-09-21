@@ -129,7 +129,7 @@
       </section>
 
       <section class="admin-card" id="coupons-card">
-        <div class="admin-head"><div><p class="eyebrow">Cupones</p><h2>Cupones de descuento</h2><p class="muted">Crea códigos para eventos o primeras compras. El cliente lo escribe en su carrito y la base de datos calcula el descuento sobre el total real, así nadie puede falsificarlo. Por defecto un cupón no se combina con perfumes que ya están en oferta.</p></div><button id="coupons-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <div class="admin-head"><div><p class="eyebrow">Cupones</p><h2>Cupones de descuento</h2><p class="muted">Crea códigos para eventos o primeras compras. El cliente lo escribe en su carrito y la base de datos calcula el descuento sobre el total real, así nadie puede falsificarlo. Por defecto un cupón no se combina con perfumes que ya están en oferta.</p></div><div class="admin-actions"><button id="coupons-clean" class="btn btn-secondary" type="button">Limpiar vencidos y desactivados</button><button id="coupons-refresh" class="btn btn-secondary" type="button">Actualizar</button></div></div>
         <p id="coupons-notice" class="muted hidden">Para usar cupones falta aplicar la migración "cupones" en Supabase (SQL Editor).</p>
         <form id="coupon-form" class="admin-form">
           <label>Código<input name="code" maxlength="24" required autocomplete="off" autocapitalize="characters" placeholder="MADRES10"></label>

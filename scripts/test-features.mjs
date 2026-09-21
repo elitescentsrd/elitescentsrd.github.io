@@ -139,7 +139,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert.equal(included + skipped.length, 420); assert(included >= 410, 'Casi todos los perfumes deben estar en el archivo (' + included + ')');
   assert.equal((xml.match(/<item>/g) || []).length, included); assert.equal((xml.match(/<\/item>/g) || []).length, included);
   assert(!/&(?!amp;|lt;|gt;|quot;|#39;)/.test(xml), 'El XML no puede tener & sin escapar');
-  assert(!/[ --]/.test(xml), 'Sin caracteres de control');
+  assert(!Array.from(xml).some(ch => { const c = ch.codePointAt(0); return c < 9 || c === 11 || c === 12 || (c > 13 && c < 32); }), 'Sin caracteres de control');
   const items = xml.split('<item>').slice(1);
   for (const item of items) {
     for (const tag of ['g:id', 'title', 'description', 'link', 'g:image_link', 'g:availability', 'g:price', 'g:brand', 'g:condition']) assert(item.includes('<' + tag + '>'), 'Falta ' + tag);
@@ -218,7 +218,16 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(customerJs.includes("rpc/preview_coupon") && customerJs.includes('p_coupon:code'));
   for (const id of idsUsed(customerJs, /\$\('#((?:coupon|applyCoupon|removeCoupon|finalRow|finalTotal)[A-Za-z]*)'\)/g)) assert(checkoutHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en checkout.html');
   assert(checkoutHtml.includes('id="couponBox" class="coupon-box hidden"'), 'La caja del cupón empieza oculta hasta comprobar que existe en Supabase');
-  for (const id of ['coupon-form', 'coupons-body', 'coupons-notice']) assert(adminHtml.includes('id="' + id + '"'));
+  for (const id of ['coupon-form', 'coupons-body', 'coupons-notice', 'coupons-clean', 'coupons-refresh']) assert(adminHtml.includes('id="' + id + '"'));
+  // Eliminar cupones ya usados: segunda migración (el historial de usos se borra con el cupón; los pedidos no se tocan).
+  const removeSql = (await read('supabase/migrations/20260921140000_cupones_eliminar.sql')).replace(/^--.*$/gm, '');
+  assert(/on delete cascade/i.test(removeSql) && /foreign key \(coupon_code\) references public\.coupons \(code\)/i.test(removeSql), 'El historial de usos se borra junto con el cupón');
+  assert(/raise exception[\s\S]*20260921130000_cupones\.sql/i.test(removeSql), 'Comprueba que la migración de cupones ya esté aplicada');
+  assert(!/\b(drop table|truncate|delete from|update public\.orders|alter table public\.orders)\b/i.test(removeSql), 'No toca pedidos ni borra datos');
+  assert(adminJs.includes('async function deleteCoupons(') && adminJs.includes('cupones_eliminar') && adminJs.includes("code=in.("), 'El panel elimina uno o varios cupones');
+  assert(adminJs.includes('también se borra su historial de usos') && adminJs.includes('los pedidos conservan el cupón'), 'El panel avisa qué se borra antes de eliminar un cupón usado');
+  assert(!adminJs.includes('no se puede eliminar. Desactívalo'), 'Ya no se rechaza eliminar un cupón usado');
+  assert(adminJs.includes("['Vencido', 'Agotado', 'Inactivo'].includes(couponState(c))"), 'Limpiar solo quita cupones vencidos, agotados o desactivados (nunca activos ni programados)');
   assert(/Prefer:\s*'return=minimal'/.test(adminJs.slice(adminJs.indexOf('// --- Cupones de descuento'))));
   assert(!/e\.currentTarget\.reset\(\)/.test(adminJs), 'currentTarget es null después de un await: el formulario se guarda antes');
   const security = await read('scripts/check-supabase-security.mjs');
