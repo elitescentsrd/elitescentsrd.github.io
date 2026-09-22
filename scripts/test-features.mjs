@@ -5,7 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import vm from 'node:vm';
 import { Script } from 'node:vm';
-import { renderProductPage } from './lib/seo.mjs';
+import { renderProductPage, SITE_URL, WHATSAPP, INSTAGRAM } from './lib/seo.mjs';
 import { merchantFeed, feedTitle } from './lib/feeds.mjs';
 
 const read = path => readFile(path, 'utf8');
@@ -242,5 +242,29 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   for (const name of files) assert.equal(await read(name), 'google-site-verification: ' + name, name + ' debe tener exactamente el texto que pide Google (sin saltos de línea ni cambios)');
   assert(buildSite.includes('google[0-9a-f]{16}') && buildSite.includes('OUT + \'/\' + name'), 'El build publica el archivo de verificación en _site');
   console.log('Search Console: archivo de verificación ' + files.join(', ') + ' intacto y publicado por el build.');
+}
+
+// ---------------------------------------------------------------- Canales oficiales
+{
+  const page = await read('canales-oficiales.html');
+  const handle = INSTAGRAM.replace('https://www.instagram.com/', '').replace(/\/$/, '');
+  const phone = WHATSAPP.replace(/^1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
+  assert.equal(handle, 'elite.scentsrd', 'El usuario oficial de Instagram');
+  for (const text of [INSTAGRAM, '@' + handle, 'https://wa.me/' + WHATSAPP, phone, SITE_URL + '/', 'elitescentsrd.github.io']) assert(page.includes(text), 'La página de canales oficiales debe incluir ' + text);
+  // Los datos de contacto de la página son los mismos que usa el resto del sitio (evita errores de tipeo).
+  assert(template.includes(INSTAGRAM) && template.includes('https://wa.me/' + WHATSAPP) && template.includes('tel:+' + WHATSAPP));
+  const links = [...page.matchAll(/<a [^>]*href="(https?:\/\/[^"]+)"[^>]*>/g)].map(m => m[0]);
+  for (const tag of links.filter(t => t.includes('target="_blank"'))) assert(tag.includes('rel="noopener noreferrer"'), 'Los enlaces externos usan rel="noopener noreferrer": ' + tag.slice(0, 60));
+  assert(page.includes('content="index,follow"') && page.includes('rel="canonical" href="' + SITE_URL + '/canales-oficiales.html"'), 'La página se puede indexar y tiene su canonical');
+  assert(/Content-Security-Policy/.test(page) && (page.match(/<script src=/g) || []).length === 1 && page.includes('<script src="/cookies.js">'), 'Solo carga cookies.js y tiene su política de seguridad');
+  const ld = JSON.parse(page.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(ld['@type'], 'WebPage'); assert.equal(ld.about['@id'], SITE_URL + '/#organization'); assert.equal(ld.isPartOf['@id'], SITE_URL + '/#website');
+  assert(!/elite\.scents\.rd/i.test(page), 'La página no nombra cuentas de terceros');
+  assert(!/(cuenta bancaria|número de cuenta|transferencia a)/i.test(page), 'La página no inventa datos de pago');
+  // Se enlaza desde todos los pies de página públicos y se publica.
+  for (const [name, html] of [['portada', template], ['página de perfume', renderProductPage(products[0], [])], ['pedidos y envíos', await read('pedidos-envios.html')], ['privacidad', await read('privacidad.html')]]) assert(html.includes('href="/canales-oficiales.html"'), 'El pie de página de ' + name + ' enlaza a los canales oficiales');
+  assert(buildSite.includes("'canales-oficiales.html'"), 'El build publica canales-oficiales.html');
+  assert((await read('scripts/build-catalog.mjs')).includes("path: 'canales-oficiales.html'") && (await read('sitemap.xml')).includes(SITE_URL + '/canales-oficiales.html'), 'Está en el sitemap');
+  console.log('Canales oficiales: página, enlaces y datos de contacto correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');
