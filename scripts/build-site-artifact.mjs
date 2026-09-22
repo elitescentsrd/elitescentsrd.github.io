@@ -18,6 +18,7 @@ const FILES = [
   'customer.js',
   'privacidad.html',
   'pedidos-envios.html',
+  'canales-oficiales.html',
   '404.html',
   'tienda.css',
   'tienda.js',
