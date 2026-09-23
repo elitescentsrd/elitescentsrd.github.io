@@ -292,3 +292,98 @@ await throws(() => db.query('select * from public.store_settings'), /permission 
 await db.exec('reset role');
 console.log('permisos del interruptor OK');
 console.log('TODAS LAS PRUEBAS DE PROTECCIÓN DE PEDIDOS PASARON');
+
+// ================= Encuesta con cupón personal =================
+const survey = await readFile('supabase/migrations/20260923120000_encuesta.sql', 'utf8');
+await db.exec('reset role'); await as('');
+await db.exec(survey);
+await db.exec(survey);
+console.log('migración de encuesta aplicada 2 veces sin errores');
+const [U6, U7, U8] = ['66666666-6666-6666-6666-666666666666', '77777777-7777-7777-7777-777777777777', '88888888-8888-8888-8888-888888888888'];
+await db.exec(`insert into auth.users (id, email) values ('${U6}','u6@x.com'),('${U7}','u7@x.com'),('${U8}','u8@x.com')`);
+const answers = { para_quien: 'Para mí', aromas: ['Dulces', 'Amaderados'], ocasion: 'Noche y salidas', presupuesto: 'RD$3,000–5,000', favorito: 'Lattafa Khamrah', como_nos_conociste: 'Instagram', mejorar: '' };
+const submit = async a => (await one('select public.submit_survey($1::jsonb) as r', [JSON.stringify(a)])).r;
+const mine = async () => (await one('select public.my_survey_coupon() as r')).r;
+const CODE = /^ES-[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/;
+
+// Información pública (la tienda la consulta sin sesión)
+await db.exec('set role anon');
+let info = (await one('select public.survey_info() as r')).r;
+assert.deepEqual([info.enabled, Number(info.amount), info.valid_days], [true, 300, 30], 'Encuesta activa con cupón de RD$300 por 30 días');
+await throws(() => db.query(`select public.submit_survey('{}'::jsonb)`), /permission denied/i, 'un visitante sin cuenta no puede enviar la encuesta');
+await throws(() => db.query('select public.my_survey_coupon()'), /permission denied/i, 'un visitante no pide cupones');
+await throws(() => db.query('select * from public.survey_responses'), /permission denied/i, 'un visitante no lee respuestas');
+await db.exec('reset role');
+
+// Validación de respuestas
+await as(U6);
+r = await submit({ para_quien: 'Para mí' });
+assert.equal(r.ok, false); assert.match(r.message, /Responde las preguntas/, 'con pocas respuestas no hay cupón');
+await throws(() => submit({ ...answers, mejorar: 'x'.repeat(301) }), /no son válidas/, 'texto demasiado largo');
+await throws(() => submit({ ...answers, aromas: [1, 2] }), /no son válidas/, 'lista con valores que no son texto');
+await throws(() => submit({ ...answers, 'Clave Rara': 'x' }), /no son válidas/, 'claves con formato inválido');
+await throws(() => submit(Object.fromEntries(Array.from({ length: 13 }, (_, i) => ['p' + 'abcdefghijklm'[i], 'x']))), /no son válidas/, 'demasiadas preguntas');
+assert.equal((await one('select count(*)::int as n from public.survey_responses')).n, 0, 'nada se guardó con respuestas inválidas');
+
+// Cupón personal, único e idempotente
+r = await submit(answers);
+assert.equal(r.ok, true); assert.equal(r.already, false); assert.match(r.code, CODE, 'código personal con formato ES-XXXXXX');
+const code6 = r.code;
+let row = await one('select * from public.coupons where code = $1', [code6]);
+assert.equal(row.user_id, U6); assert.equal(row.source, 'encuesta'); assert.equal(Number(row.value), 300); assert.equal(row.kind, 'amount'); assert.equal(row.max_uses, 1); assert.equal(row.one_per_customer, true);
+const days = (new Date(row.ends_at) - Date.now()) / 864e5; assert(days > 29.9 && days <= 30.01, 'vence en 30 días');
+r = await submit({ ...answers, favorito: 'otro' });
+assert.equal(r.already, true); assert.equal(r.code, code6, 'enviar de nuevo devuelve el mismo cupón (no crea otro)');
+assert.equal((await one(`select count(*)::int as n from public.coupons where user_id = $1`, [U6])).n, 1, 'un solo cupón por cuenta');
+assert.equal((await one(`select answers->>'favorito' as f from public.survey_responses where user_id = $1`, [U6])).f, 'Lattafa Khamrah', 'se conservan las primeras respuestas');
+let m = await mine(); assert.equal(m.code, code6); assert.equal(m.used, false); assert.equal(m.expired, false);
+
+// Otra cuenta no puede usarlo; la dueña sí, una sola vez
+await as(U7);
+r = await preview(code6, [1], 3000); assert.equal(r.ok, false); assert.match(r.message, /personal/, 'otra cuenta no puede usar el cupón personal');
+r = await place(cart(1), code6); assert.equal(r.ok, false); assert.match(r.message, /personal/);
+assert.equal(await mine(), null, 'quien no llenó la encuesta no tiene cupón');
+await as(U6);
+r = await preview(code6, [1], 3000); assert.equal(r.ok, true); assert.equal(r.discount, 300); assert.equal(r.total, 2700);
+r = await place(cart(1), code6); assert.equal(r.descuento, 300); assert.equal(r.total, 2700);
+m = await mine(); assert.equal(m.used, true, 'después de usarlo aparece como usado');
+r = await place(cart(1), code6); assert.equal(r.ok, false, 'no se puede usar dos veces');
+console.log('cupón personal: único, idempotente, solo para su dueño y de un uso OK');
+
+// Los cupones normales siguen igual
+await as(''); await addCoupon({ code: 'NORMAL50', kind: 'amount', value: 50, one_per_customer: false });
+await as(U8); r = await preview('NORMAL50', [1], 3000); assert.equal(r.ok, true); assert.equal(r.discount, 50, 'un cupón normal lo puede usar cualquier cuenta');
+
+// El administrador apaga la encuesta o cambia el monto
+await db.exec('reset role'); await as(ADMIN); await db.exec('set role authenticated');
+assert.equal((await db.query('update public.store_settings set survey_enabled = false')).affectedRows, 1, 'el administrador apaga la encuesta');
+await db.exec('reset role');
+await as(U7); r = await submit(answers); assert.equal(r.ok, false); assert.match(r.message, /no está disponible/, 'con la encuesta apagada no se crean cupones');
+await db.exec('set role anon'); info = (await one('select public.survey_info() as r')).r; assert.equal(info.enabled, false); await db.exec('reset role');
+await as(ADMIN); await db.exec('set role authenticated');
+await db.query('update public.store_settings set survey_enabled = true, survey_amount = 500, survey_valid_days = 7, survey_min_subtotal = 2000');
+await db.exec('reset role');
+await as(U7); r = await submit(answers);
+assert.equal(r.ok, true); assert.equal(Number(r.amount), 500); assert.equal(Number(r.min_subtotal), 2000);
+row = await one('select * from public.coupons where code = $1', [r.code]);
+assert.equal(Number(row.value), 500); assert.equal(Number(row.min_subtotal), 2000); assert(((new Date(row.ends_at) - Date.now()) / 864e5) < 7.01, 'vence en 7 días');
+assert.notEqual(r.code, code6, 'cada persona recibe un código distinto');
+r = await preview(r.code, [1], 1500); assert.equal(r.ok, false); assert.match(r.message, /al menos RD\$2,000/, 'respeta la compra mínima');
+console.log('ajustes de la encuesta (apagar, monto, días, compra mínima) OK');
+
+// Permisos: un cliente no ve respuestas ajenas ni cambia los ajustes; el administrador ve todo
+await as(U6); await db.exec('set role authenticated');
+assert.equal((await db.query('select * from public.survey_responses')).rows.length, 0, 'un cliente no lee respuestas');
+assert.equal((await db.query('update public.store_settings set survey_amount = 5000')).affectedRows, 0, 'un cliente no cambia el monto');
+await throws(() => db.query(`insert into public.survey_responses (user_id, answers) values ('${U6}', '{}')`), /permission denied/i, 'nadie guarda respuestas saltándose la función');
+await db.exec('reset role');
+await as(ADMIN); await db.exec('set role authenticated');
+assert.equal((await db.query('select * from public.survey_responses')).rows.length, 2, 'el administrador ve las respuestas');
+await db.exec('reset role');
+// Si el administrador borra un cupón de encuesta, la respuesta queda y el cliente no recibe otro
+await as(''); await db.query('delete from public.coupons where code = $1', [code6]);
+assert.equal((await one('select coupon_code from public.survey_responses where user_id = $1', [U6])).coupon_code, null);
+await as(U6); r = await submit(answers); assert.equal(r.ok, true); assert.equal(r.already, true); assert.equal(r.code, null, 'no se regala otro cupón');
+m = await mine(); assert.equal(m.responded, true); assert.equal(m.code, null);
+console.log('permisos y borrado de cupones de encuesta OK');
+console.log('TODAS LAS PRUEBAS DE LA ENCUESTA PASARON');
