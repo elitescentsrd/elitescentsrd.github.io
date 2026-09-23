@@ -136,7 +136,7 @@ await writeFile('index.html', output);
 const today = new Date().toISOString().slice(0, 10);
 const STATIC_PAGES = [
   { path: 'pedidos-envios.html', lastmod: '2026-09-20', changefreq: 'monthly', priority: '0.6' },
-  { path: 'privacidad.html', lastmod: '2026-09-21', changefreq: 'yearly', priority: '0.3' },
+  { path: 'privacidad.html', lastmod: '2026-09-22', changefreq: 'yearly', priority: '0.3' },
   { path: 'canales-oficiales.html', lastmod: '2026-09-21', changefreq: 'yearly', priority: '0.4' },
 ];
 const sitemapUrl = (loc, lastmod, changefreq, priority) =>

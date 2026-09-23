@@ -1,13 +1,15 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" class="guarded">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://ozowziumksrudrotulll.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <title>Panel | Elite Scents RD</title>
   <link rel="stylesheet" href="/tienda.css">
   <link rel="stylesheet" href="/admin.css">
+  <script src="/frame-guard.js"></script>
 </head>
 <body class="admin-light">
   <header class="topbar"><a href="/" class="brand"><img src="/logo-oficial.webp" alt="Logo de Elite Scents RD"><span>Elite Scents RD</span></a></header>
@@ -16,7 +18,7 @@
 
     <section id="login-card" class="admin-card">
       <h2>Iniciar sesión</h2>
-      <form id="login-form" class="admin-form">
+      <form method="post" id="login-form" class="admin-form">
         <label class="span-2">Correo<input name="email" type="email" autocomplete="username" required></label>
         <label class="span-2">Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
         <div class="span-4 admin-actions"><button class="btn" type="submit">Entrar</button><span id="login-status" aria-live="polite"></span></div>
@@ -27,7 +29,7 @@
     <section id="mfa-card" class="admin-card hidden">
       <h2>Verificación en dos pasos</h2>
       <p class="muted">Escribe el código de 6 dígitos que muestra tu app de autenticación para entrar al panel.</p>
-      <form id="mfa-form" class="admin-form">
+      <form method="post" id="mfa-form" class="admin-form">
         <label class="span-2">Código<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
         <div class="span-4 admin-actions"><button class="btn" type="submit">Verificar</button><button id="mfa-cancel" class="btn btn-secondary" type="button">Cancelar</button><span id="mfa-status" aria-live="polite"></span></div>
       </form>
@@ -39,7 +41,7 @@
       <img id="mfa-qr" class="mfa-qr" alt="Código QR para activar la verificación en dos pasos">
       <p>Clave manual: <code id="mfa-secret"></code> <a id="mfa-link" class="hidden" href="#">Abrir en mi app</a></p>
       <p class="muted">2) Escribe el código de 6 dígitos que muestra la app y pulsa Activar.</p>
-      <form id="mfa-setup-form" class="admin-form">
+      <form method="post" id="mfa-setup-form" class="admin-form">
         <label class="span-2">Código<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
         <div class="span-4 admin-actions"><button class="btn" type="submit">Activar y entrar</button><button id="mfa-setup-cancel" class="btn btn-secondary" type="button">Cancelar</button><span id="mfa-setup-status" aria-live="polite"></span></div>
       </form>
@@ -57,9 +59,20 @@
         </div>
       </section>
 
+      <section class="admin-card" id="security-card">
+        <div class="admin-head"><div><p class="eyebrow">Seguridad</p><h2>Seguridad y respaldo</h2><p class="muted">Si entran muchos pedidos falsos, pausa los pedidos por la web: nadie podrá pedir desde la tienda hasta que los reanudes (WhatsApp sigue funcionando). Siempre activo: cada cuenta de cliente puede hacer como máximo 3 pedidos cada 10 minutos y 10 por día; los pedidos que registras tú en el panel no tienen límite.</p></div></div>
+        <p id="security-notice" class="muted hidden">Para usar la pausa falta aplicar la migración "protección de pedidos" en Supabase (SQL Editor).</p>
+        <div class="admin-actions"><strong id="orders-state">Pedidos por la web: comprobando…</strong><button id="orders-pause" class="btn" type="button" disabled>Pausar pedidos por la web</button></div>
+        <div class="security-backup">
+          <h3>Respaldo</h3>
+          <p class="muted">Descarga una copia de tus productos, pedidos, clientes y cupones. Contiene datos personales de tus clientes: guárdala en un lugar privado (por ejemplo, una memoria USB) y no la compartas. Recomendado: una vez por semana.</p>
+          <div class="admin-actions"><button id="backup-download" class="btn btn-secondary" type="button">Descargar respaldo</button><span id="backup-status" aria-live="polite"></span></div>
+        </div>
+      </section>
+
       <section class="admin-card">
         <div class="admin-head"><div><p class="eyebrow">Producto</p><h2 id="form-title">Agregar perfume</h2></div><button id="cancel-edit" class="btn btn-secondary hidden" type="button">Cancelar edición</button></div>
-        <form id="product-form" class="admin-form">
+        <form method="post" id="product-form" class="admin-form">
           <input name="id" type="hidden">
           <label class="span-2">Nombre<input name="name" required maxlength="180"></label>
           <label>Marca<input name="brand" maxlength="120"></label>
@@ -87,7 +100,7 @@
 
       <section class="admin-card">
         <div class="admin-head"><div><p class="eyebrow">Fotos</p><h2>Carga de fotos por lote</h2><p class="muted">Hasta 36 imágenes por lote. El nombre de cada archivo debe empezar con el ID del producto seguido de un guion, por ejemplo <code>0012-dior-sauvage.jpg</code>. Solo se actualiza la foto principal; precios y disponibilidad no se tocan.</p></div></div>
-        <form id="batch-form" class="admin-form">
+        <form method="post" id="batch-form" class="admin-form">
           <label class="span-2">Fotos (JPG, PNG o WebP; máx. 3 MB; mín. 500×500)<input id="batch-files" name="batch_files" type="file" multiple accept="image/jpeg,image/png,image/webp" required></label>
           <label class="span-2"><span><input id="batch-replace" name="batch_replace" type="checkbox"> Reemplazar la foto si el producto ya tiene una</span></label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Subir lote</button><span id="batch-status" aria-live="polite"></span></div>
@@ -103,7 +116,7 @@
       <section class="admin-card" id="offers-card">
         <div class="admin-head"><div><p class="eyebrow">Ofertas</p><h2>Ofertas por evento</h2><p class="muted">Elige perfumes y un descuento. En la tienda se verá el precio anterior tachado ("Antes") y el precio de oferta ("Ahora"). Los pedidos se registran al precio de oferta y, si pones fecha de fin, la oferta termina sola.</p></div></div>
         <p id="offers-notice" class="muted hidden">Para usar ofertas falta aplicar la migración "ofertas" en Supabase (SQL Editor).</p>
-        <form id="offer-form" class="admin-form">
+        <form method="post" id="offer-form" class="admin-form">
           <label class="span-2">Nombre del evento<input name="label" maxlength="60" placeholder="Día de las Madres"></label>
           <label>Descuento (%)<input name="percent" type="number" min="1" max="70" step="1" value="10" required></label>
           <label>Termina (opcional)<input name="ends" type="datetime-local"></label>
@@ -131,7 +144,7 @@
       <section class="admin-card" id="coupons-card">
         <div class="admin-head"><div><p class="eyebrow">Cupones</p><h2>Cupones de descuento</h2><p class="muted">Crea códigos para eventos o primeras compras. El cliente lo escribe en su carrito y la base de datos calcula el descuento sobre el total real, así nadie puede falsificarlo. Por defecto un cupón no se combina con perfumes que ya están en oferta.</p></div><div class="admin-actions"><button id="coupons-clean" class="btn btn-secondary" type="button">Limpiar vencidos y desactivados</button><button id="coupons-refresh" class="btn btn-secondary" type="button">Actualizar</button></div></div>
         <p id="coupons-notice" class="muted hidden">Para usar cupones falta aplicar la migración "cupones" en Supabase (SQL Editor).</p>
-        <form id="coupon-form" class="admin-form">
+        <form method="post" id="coupon-form" class="admin-form">
           <label>Código<input name="code" maxlength="24" required autocomplete="off" autocapitalize="characters" placeholder="MADRES10"></label>
           <label>Tipo<select name="kind"><option value="percent">Porcentaje (%)</option><option value="amount">Monto fijo (RD$)</option></select></label>
           <label>Valor<input name="value" type="number" min="1" step="1" required placeholder="10"></label>
@@ -159,7 +172,7 @@
 
       <section class="admin-card">
         <p class="eyebrow">Nuevo pedido</p><h2>Registrar pedido confirmado</h2>
-        <form id="order-form" class="admin-form">
+        <form method="post" id="order-form" class="admin-form">
           <label>Cliente<input name="customer_name" maxlength="150" required></label>
           <label>Teléfono<input name="phone" type="tel" maxlength="40" required></label>
           <label>Importe acordado<input name="amount" maxlength="70"></label>
