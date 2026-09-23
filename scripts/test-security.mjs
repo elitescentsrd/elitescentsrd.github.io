@@ -127,7 +127,7 @@ for (const file of published.filter(f => f.endsWith('.js'))) {
 
 // ---------------------------------------------------------------- Proceso de publicación en GitHub (permisos mínimos)
 {
-  const wf = await read('.github/workflows/pages.yml');
+  const wf = (await read('.github/workflows/pages.yml')).replace(/\r\n/g, '\n'); // igual en Windows (CRLF) que en GitHub (LF)
   const top = wf.slice(wf.indexOf('\npermissions:'), wf.indexOf('\nconcurrency:'));
   assert(/contents: read/.test(top) && !/write/.test(top), 'Por defecto el proceso solo puede leer el código');
   const job = name => { const start = wf.indexOf('\n  ' + name + ':'); const next = wf.slice(start + 3).search(/\n  [a-z]+:\n/); return wf.slice(start, next < 0 ? undefined : start + 3 + next); };

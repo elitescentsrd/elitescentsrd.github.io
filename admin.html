@@ -7,6 +7,11 @@
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://ozowziumksrudrotulll.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <title>Panel | Elite Scents RD</title>
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-title" content="Panel Elite">
+  <link rel="manifest" href="/admin.webmanifest">
+  <link rel="icon" href="/img/app/panel-icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/img/app/panel-apple-touch-icon.png">
   <link rel="stylesheet" href="/tienda.css">
   <link rel="stylesheet" href="/admin.css">
   <script src="/frame-guard.js"></script>
@@ -14,7 +19,7 @@
 <body class="admin-light">
   <header class="topbar"><a href="/" class="brand"><img src="/logo-oficial.webp" alt="Logo de Elite Scents RD"><span>Elite Scents RD</span></a></header>
   <main class="admin-shell">
-    <div class="admin-head"><div><p class="eyebrow">Administración</p><h1>Catálogo y pedidos</h1></div><div class="admin-actions"><a class="btn btn-secondary" href="/">Ver tienda</a><button id="logout" class="btn hidden" type="button">Cerrar sesión</button></div></div>
+    <div class="admin-head"><div><p class="eyebrow">Administración</p><h1>Catálogo y pedidos</h1></div><div class="admin-actions"><button type="button" class="btn btn-secondary" data-install-app="el panel" hidden>Instalar como app</button><a class="btn btn-secondary" href="/">Ver tienda</a><button id="logout" class="btn hidden" type="button">Cerrar sesión</button></div></div>
 
     <section id="login-card" class="admin-card">
       <h2>Iniciar sesión</h2>
@@ -191,5 +196,6 @@
   <script src="/supabase-config.js"></script>
   <script src="/sales.js"></script>
   <script src="/admin.js"></script>
+  <script src="/pwa.js"></script>
 </body>
 </html>

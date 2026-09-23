@@ -38,6 +38,24 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
     assert(html.includes('src="/pwa.js"'), 'Cada página pública carga pwa.js');
   }
   assert(template.includes('data-install-app'), 'Debe existir el botón de instalar');
+  // App del panel: manifiesto propio (otro nombre, otro ícono y solo /admin.html), instalable por separado de la tienda.
+  const panel = JSON.parse(await read('admin.webmanifest'));
+  assert.equal(panel.id, '/admin.html'); assert.equal(panel.start_url, '/admin.html'); assert.equal(panel.scope, '/admin.html');
+  assert.equal(panel.display, 'standalone'); assert.notEqual(panel.name, manifest.name, 'El panel se llama distinto que la tienda');
+  assert(panel.short_name.length <= 12, 'El nombre corto cabe debajo del ícono');
+  assert.notEqual(panel.id, manifest.id || manifest.start_url, 'Panel y tienda son apps distintas (id diferente)');
+  assert(panel.icons.some(i => i.purpose === 'maskable') && panel.icons.some(i => i.sizes === '192x192') && panel.icons.some(i => i.sizes === '512x512'));
+  for (const icon of panel.icons) {
+    assert(icon.src.startsWith('/img/app/panel-'), 'El panel usa sus propios íconos: ' + icon.src);
+    const png = await readFile(icon.src.slice(1)), [mw, mh] = icon.sizes.split('x').map(Number);
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [mw, mh], 'Tamaño real de ' + icon.src);
+  }
+  assert.deepEqual([...(await readFile('img/app/panel-apple-touch-icon.png')).subarray(16, 24)], [0, 0, 0, 180, 0, 0, 0, 180], 'ícono de iPhone del panel de 180x180');
+  assert(adminHtml.includes('<link rel="manifest" href="/admin.webmanifest">') && adminHtml.includes('rel="apple-touch-icon" href="/img/app/panel-apple-touch-icon.png"'), 'admin.html enlaza el manifiesto y el ícono del panel');
+  assert(!adminHtml.includes('/manifest.webmanifest'), 'El panel no usa el manifiesto de la tienda');
+  assert(/<button [^>]*data-install-app="el panel"[^>]*hidden/.test(adminHtml) && adminHtml.includes('<script src="/pwa.js"></script>'), 'El panel tiene su botón de instalar y carga pwa.js');
+  assert((await read('admin.css')).includes('[data-install-app][hidden]{display:none!important}'), 'El botón de instalar del panel se oculta cuando no se puede instalar');
+  assert(buildSite.includes("'admin.webmanifest'"), 'admin.webmanifest se publica');
   for (const file of ['pwa.js', 'sw.js', 'offline.html', 'manifest.webmanifest', 'aroma.js', 'sales.js']) assert(buildSite.includes("'" + file + "'"), file + ' debe publicarse en _site');
   for (const file of ['pwa.js', 'sw.js', 'aroma.js', 'sales.js']) new Script(await read(file), { filename: file });
   assert(swSource.includes("const VERSION = 'elite-v__BUILD_ID__'") && buildSite.includes('replaceAll(') && buildSite.includes('__BUILD_ID__'), 'El build debe versionar el service worker');
@@ -80,7 +98,18 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   await sw.lifecycle('activate');
   assert(!(await sw.caches.keys()).includes('elite-vantigua-pages'), 'activate borra las copias de versiones anteriores');
   assert((await sw.caches.keys()).includes('otra-app-cache'), 'activate no toca cachés ajenas');
-  for (const path of ['/admin.html', '/admin.js', '/admin.css', '/checkout.html', '/checkout.css', '/customer.js']) assert.equal(sw.dispatch(req(path, { mode: path.endsWith('.html') ? 'navigate' : 'no-cors' })), null, path + ' nunca pasa por el service worker');
+  for (const path of ['/admin.js', '/admin.css', '/admin.webmanifest', '/checkout.css', '/customer.js']) assert.equal(sw.dispatch(req(path)), null, path + ' nunca pasa por el service worker');
+  // Panel y carrito: siempre desde la red y nunca guardados; sin internet se muestra la página "Sin conexión".
+  for (const path of ['/admin.html', '/checkout.html', '/admin.html?source=app']) {
+    let page = await sw.dispatch(req(path, { mode: 'navigate' }));
+    assert.match(await page.text(), /de la red/, path + ' con internet llega de la red');
+    await new Promise(r => setTimeout(r, 10));
+    for (const name of await sw.caches.keys()) for (const key of await (await sw.caches.open(name)).keys()) assert(!/\/(admin|checkout)/.test(key.url), path + ' nunca se guarda en el celular (' + key.url + ')');
+    sw.state.online = false;
+    page = await sw.dispatch(req(path, { mode: 'navigate' }));
+    assert.match(await page.text(), /precargado \/offline\.html/, path + ' sin internet muestra "Sin conexión"');
+    sw.state.online = true;
+  }
   assert.equal(sw.dispatch({ method: 'POST', url: 'https://tienda.test/', mode: 'no-cors' }), null, 'solo se atienden GET');
   assert.equal(sw.dispatch({ method: 'GET', url: 'https://ozowziumksrudrotulll.supabase.co/rest/v1/products', mode: 'cors' }), null, 'Supabase y otras direcciones externas no se tocan');
   // Página: red primero, copia si no hay red, aviso "sin conexión" si nunca se visitó.
