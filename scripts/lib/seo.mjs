@@ -77,7 +77,7 @@ export function renderProductPage(p, related = []) {
     '<p class="dialog-description">' + esc(p.description || '') + '</p>' +
     '<div class="dialog-order-actions"><a class="button gold" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer">Pedir por WhatsApp ↗</a><a class="button outline" href="/#producto-' + esc(p.id) + '">Ver en la tienda y agregar al carrito</a></div>' +
     '</div></article>' + relatedHtml + '</main>' +
-    '<footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a></div><p class="copyright">© Elite Scents RD</p></footer><script src="/cookies.js"></script><script defer src="/pwa.js"></script></body></html>';
+    '<footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a></div><p class="copyright">© Elite Scents RD</p></footer><script defer src="/frame-guard.js"></script><script src="/cookies.js"></script><script defer src="/pwa.js"></script></body></html>';
 }
 
 // Datos de la marca para el buscador: nombre, variantes de escritura, logotipo, redes y contacto.

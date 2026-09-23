@@ -1,15 +1,17 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" class="guarded">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,follow">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://ozowziumksrudrotulll.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <title>Mi carrito y pedidos | Elite Scents RD</title>
   <meta name="description" content="Revisa tu carrito, crea tu cuenta y solicita tu pedido en Elite Scents RD. No procesamos pagos en línea.">
   <link rel="stylesheet" href="/tienda.css">
   <link rel="stylesheet" href="/checkout.css">
   <link rel="icon" href="/logo-oficial.webp" type="image/webp">
+  <script src="/frame-guard.js"></script>
 </head>
 <body>
   <div class="announcement">Carrito y pedidos · Sin pagos en línea</div>
@@ -44,7 +46,7 @@
             <button id="loginTab" class="button outline active" type="button">Entrar</button>
             <button id="signupTab" class="button outline" type="button">Crear cuenta</button>
           </div>
-          <form id="authForm" class="stack">
+          <form method="post" id="authForm" class="stack">
             <label>Correo electrónico<input name="email" type="email" autocomplete="email" required></label>
             <label>Contraseña<input name="password" type="password" minlength="8" autocomplete="current-password" required></label>
             <p id="passwordHint" class="security-note hidden">Mínimo 10 caracteres, con mayúscula, minúscula y número. No uses tu correo ni una contraseña común.</p>
@@ -53,14 +55,14 @@
             <div id="authStatus" class="order-status" aria-live="polite"></div>
             <button id="resendConfirm" class="button outline hidden" type="button">Reenviar correo de confirmación</button>
           </form>
-          <form id="recoverForm" class="stack hidden">
+          <form method="post" id="recoverForm" class="stack hidden">
             <p class="security-note">Escribe el correo de tu cuenta. Te enviaremos un enlace de un solo uso para crear una nueva contraseña; solo llega a ese correo.</p>
             <label>Correo electrónico<input name="email" type="email" autocomplete="email" required></label>
             <button class="button gold" type="submit">Enviar enlace</button>
             <button id="recoverCancel" class="button outline" type="button">Volver</button>
             <div id="recoverStatus" class="order-status" aria-live="polite"></div>
           </form>
-          <form id="resetForm" class="stack hidden">
+          <form method="post" id="resetForm" class="stack hidden">
             <p class="security-note">Vas a cambiar la contraseña de <strong id="resetEmail"></strong>. Por tu seguridad te pedimos comprobar tu identidad.</p>
             <label id="resetMfaLabel" class="hidden">Código de tu app de autenticación (6 dígitos)<input name="mfa" inputmode="numeric" autocomplete="one-time-code" maxlength="8"></label>
             <label id="resetIdLabel" class="hidden">Últimos 4 dígitos de la cédula que registraste<input name="last4" inputmode="numeric" autocomplete="off" maxlength="4"></label>
@@ -70,7 +72,7 @@
             <button class="button gold" type="submit">Guardar nueva contraseña</button>
             <div id="resetStatus" class="order-status" aria-live="polite"></div>
           </form>
-          <form id="mfaLoginForm" class="stack hidden">
+          <form method="post" id="mfaLoginForm" class="stack hidden">
             <p class="security-note">Tu cuenta tiene la verificación en dos pasos activada. Abre tu app de autenticación y escribe el código de 6 dígitos de <strong>Elite Scents</strong>.</p>
             <label>Código de 6 dígitos<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required></label>
             <button class="button gold" type="submit">Verificar y entrar</button>
@@ -81,7 +83,7 @@
 
         <div id="customerArea" class="hidden">
           <div class="admin-actions spaced-actions"><div><p class="eyebrow">MI CUENTA</p><h2 class="mb-0">Datos del pedido</h2></div><button id="signOut" type="button" class="button outline">Salir</button></div>
-          <form id="profileForm" class="stack mt-md">
+          <form method="post" id="profileForm" class="stack mt-md">
             <label>Nombre<input name="first_name" maxlength="80" required></label>
             <label>Apellidos<input name="last_name" maxlength="120" required></label>
             <label>Cédula<input name="cedula" maxlength="30" autocomplete="off" required></label>
