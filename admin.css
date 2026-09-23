@@ -45,3 +45,4 @@ body.admin-light input[type="file"]{color:#171714!important}
 .sales-chart-head{align-items:center;margin:6px 0}.sales-chart-head .btn.active{background:#171714;color:#fff}.sales-chart{border:1px solid #ded8cc;background:#fff;padding:12px 12px 4px;margin-bottom:18px}.sales-svg{display:block;width:100%;height:auto}
 .sales-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}.sales-columns h3{margin:0 0 8px;font-size:16px}
 .danger-text{color:#a12c2c}.security-backup{margin-top:18px;padding-top:16px;border-top:1px solid #ded8cc}.security-backup h3{margin:0 0 6px;font-size:16px}
+[data-install-app][hidden]{display:none!important}

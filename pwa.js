@@ -1,5 +1,6 @@
 'use strict';
-// App instalable: registra el service worker y muestra el botón "Instalar la tienda" cuando el celular lo permite.
+// App instalable (la tienda y el panel): registra el service worker y muestra el botón de instalar cuando el celular lo permite.
+// El botón [data-install-app="nombre"] indica qué se instala; cada página enlaza su propio manifiesto.
 (() => {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
@@ -13,14 +14,14 @@
   window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); deferred = event; if (!standalone()) show(true); });
   window.addEventListener('appinstalled', () => { deferred = null; show(false); });
 
-  function help() {
+  function help(name) {
     let dialog = document.getElementById('installHelp');
     if (!dialog) {
       dialog = document.createElement('dialog');
       dialog.id = 'installHelp'; dialog.className = 'install-dialog'; dialog.setAttribute('aria-labelledby', 'installHelpTitle');
-      const title = document.createElement('h2'); title.id = 'installHelpTitle'; title.textContent = 'Instala Elite Scents en tu celular';
+      const title = document.createElement('h2'); title.id = 'installHelpTitle'; title.textContent = 'Instala ' + name + ' en tu celular';
       const steps = document.createElement('ol');
-      ['Toca el botón Compartir de Safari (el cuadro con una flecha hacia arriba).', 'Elige "Añadir a pantalla de inicio".', 'Confirma con "Añadir". Verás el ícono de Elite Scents junto a tus otras apps.'].forEach(text => { const li = document.createElement('li'); li.textContent = text; steps.append(li); });
+      ['Toca el botón Compartir de Safari (el cuadro con una flecha hacia arriba).', 'Elige "Añadir a pantalla de inicio".', 'Confirma con "Añadir". Verás el ícono junto a tus otras apps.'].forEach(text => { const li = document.createElement('li'); li.textContent = text; steps.append(li); });
       const close = document.createElement('button'); close.type = 'button'; close.className = 'button gold'; close.textContent = 'Entendido';
       close.addEventListener('click', () => dialog.close());
       dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
@@ -30,9 +31,10 @@
   }
 
   document.addEventListener('click', async event => {
-    if (!event.target.closest('[data-install-app]')) return;
+    const button = event.target.closest('[data-install-app]');
+    if (!button) return;
     if (deferred) { deferred.prompt(); try { await deferred.userChoice; } catch {} deferred = null; show(false); }
-    else help();
+    else help(button.dataset.installApp || 'Elite Scents');
   });
 
   // iPhone/iPad: Safari no avisa que se puede instalar, así que se muestra el botón con las instrucciones.

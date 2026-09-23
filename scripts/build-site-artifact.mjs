@@ -30,6 +30,7 @@ const FILES = [
   'sw.js',
   'offline.html',
   'manifest.webmanifest',
+  'admin.webmanifest',
   'checkout.css',
   'admin.css',
   'supabase-config.js',

@@ -3,6 +3,7 @@
 //  - Páginas, CSS y JavaScript del sitio: primero la red (siempre lo más nuevo). Sin internet se usa la última copia guardada.
 //  - Imágenes y fuentes: se muestran desde la copia guardada y se renuevan en segundo plano.
 //  - NUNCA se guardan: el panel (/admin), el carrito y las cuentas (/checkout), ni Supabase ni ninguna dirección externa.
+//    Si el panel o el carrito se abren sin internet (por ejemplo, desde la app instalada), se muestra el aviso "Sin conexión".
 // En cada publicación el build reemplaza el marcador de versión de la línea siguiente: así las copias viejas se borran solas.
 const VERSION = 'elite-v__BUILD_ID__';
 const STATIC = VERSION + '-static';
@@ -62,7 +63,12 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || NEVER_CACHE.test(url.pathname)) return;
+  if (url.origin !== self.location.origin) return;
+  if (NEVER_CACHE.test(url.pathname)) {
+    // Siempre desde la red y sin guardar copia; solo si no hay conexión se muestra la página "Sin conexión".
+    if (request.mode === 'navigate') event.respondWith(fetch(request).catch(async () => (await caches.match(OFFLINE_URL)) || Response.error()));
+    return;
+  }
   if (request.mode === 'navigate') { event.respondWith(networkFirst(request, PAGES)); return; }
   if (/\.(?:css|js|json|webmanifest)$/i.test(url.pathname)) { event.respondWith(networkFirst(request, STATIC)); return; }
   if (/\.(?:webp|png|jpe?g|gif|svg|ico|woff2?)$/i.test(url.pathname)) event.respondWith(staleWhileRevalidate(request, IMAGES));
