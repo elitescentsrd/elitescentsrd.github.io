@@ -94,6 +94,7 @@ create table if not exists private.app_secrets (name text primary key, value tex
 insert into private.app_secrets (name, value)
   values ('ip_pepper', replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''))
   on conflict (name) do nothing;
+alter table private.app_secrets enable row level security;
 revoke all on private.app_secrets from public, anon, authenticated;
 
 create or replace function private.cedula_key(p text)
