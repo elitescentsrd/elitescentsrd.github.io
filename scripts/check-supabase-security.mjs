@@ -71,6 +71,27 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
   }
 }
+// 4c. Funciones solo para administradores o clientes con sesión: un visitante no debe poder ejecutarlas.
+//     (Si la ejecución estuviera permitida, admin_list_customers igual devolvería vacío a un visitante, pero el permiso debe estar cerrado.)
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202';
+  for (const [name, body] of [['admin_list_customers', {}], ['verify_recovery_identity', { p_last4: '' }], ['expire_offers', {}]]) {
+    const r = await call('POST', '/rest/v1/rpc/' + name, body);
+    if (denied(r)) record('OK', name + ': EXECUTE revocado para anon', 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', name + ' no existe en Supabase', 'revisar las migraciones aplicadas');
+    else if (name === 'admin_list_customers' && Array.isArray(r.json) && r.json.length > 0) record('FALLO', 'Un visitante puede listar cuentas de clientes', 'HTTP ' + r.status);
+    else record('AVISO', name + ' se puede ejecutar sin sesión (no expone datos, pero el permiso debería estar cerrado)', 'HTTP ' + r.status);
+  }
+}
+// 4d. Ajustes de la tienda (migración 20260922120000_proteccion_pedidos.sql): solo administradores.
+{
+  const r = await call('GET', '/rest/v1/store_settings?select=*&limit=1');
+  if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen store_settings', 'HTTP ' + r.status);
+  else if (r.status === 404 || r.json?.code === 'PGRST205') record('AVISO', 'La tabla store_settings todavía no existe en Supabase', 'aplicar supabase/migrations/20260922120000_proteccion_pedidos.sql');
+  else record('FALLO', 'Un visitante puede leer store_settings', 'HTTP ' + r.status);
+  const w = await call('PATCH', '/rest/v1/store_settings?id=eq.false', { orders_paused: false });
+  denied(w) || w.status === 404 || w.json?.code === 'PGRST205' ? record('OK', 'PATCH /store_settings denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /store_settings NO está denegado a visitantes', 'HTTP ' + w.status);
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

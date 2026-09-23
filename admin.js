@@ -121,7 +121,7 @@
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
     loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
-    loadCustomers(); loadCoupons();
+    loadCustomers(); loadCoupons(); loadStoreSettings();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
   // Pedidos sin atender (estado "nuevo"): contador visible y en el título de la pestaña.
@@ -647,6 +647,74 @@
     catch (err) { status(st, /duplicate|already exists|23505/i.test(err.message) ? 'Ya existe un cupón con ese código.' : err.message, 'error'); }
   });
   $('#coupons-refresh').addEventListener('click', loadCoupons);
+
+  // --- Seguridad: pausar los pedidos por la web (tabla store_settings) y descargar un respaldo ---
+  let ordersPaused = null;
+  function renderOrdersState() {
+    const label = $('#orders-state'), button = $('#orders-pause');
+    label.classList.toggle('danger-text', ordersPaused === true);
+    if (ordersPaused === null) { label.textContent = 'Pedidos por la web: estado no disponible'; button.disabled = true; return; }
+    label.textContent = ordersPaused ? 'Pedidos por la web: PAUSADOS' : 'Pedidos por la web: activos';
+    button.textContent = ordersPaused ? 'Reanudar pedidos por la web' : 'Pausar pedidos por la web';
+    button.classList.toggle('btn-secondary', ordersPaused); button.disabled = false;
+  }
+  async function loadStoreSettings() {
+    const notice = $('#security-notice');
+    try {
+      const rows = await api('/rest/v1/store_settings?select=orders_paused&id=eq.true');
+      ordersPaused = Array.isArray(rows) && rows.length ? Boolean(rows[0].orders_paused) : null;
+      notice.classList.toggle('hidden', ordersPaused !== null);
+      if (ordersPaused === null) notice.textContent = 'No se encontró el ajuste de la tienda: vuelve a ejecutar la migración "protección de pedidos" en Supabase (SQL Editor).';
+    } catch (err) {
+      ordersPaused = null; notice.classList.remove('hidden');
+      notice.textContent = /store_settings|schema cache|could not find|relation/i.test(err.message) ? 'Para usar la pausa falta aplicar la migración "protección de pedidos" en Supabase (SQL Editor).' : 'No se pudo leer el estado de los pedidos: ' + err.message;
+    }
+    renderOrdersState();
+  }
+  $('#orders-pause').addEventListener('click', async () => {
+    if (ordersPaused === null) return;
+    const next = !ordersPaused;
+    if (next && !confirm('¿Pausar los pedidos por la web? Nadie podrá pedir desde la tienda hasta que los reanudes. WhatsApp sigue funcionando.')) return;
+    $('#orders-pause').disabled = true;
+    try { await api('/rest/v1/store_settings?id=eq.true', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ orders_paused: next, updated_at: new Date().toISOString() }) }); }
+    catch (err) { alert(err.message); }
+    await loadStoreSettings();
+  });
+  // Lee una tabla completa en páginas de 1,000 filas (el máximo que entrega Supabase por consulta).
+  async function fetchAll(path) {
+    const rows = [], size = 1000;
+    for (let offset = 0; ; offset += size) {
+      const page = await api(path + (path.includes('?') ? '&' : '?') + 'limit=' + size + '&offset=' + offset);
+      if (!Array.isArray(page)) break;
+      rows.push(...page);
+      if (page.length < size) break;
+    }
+    return rows;
+  }
+  const BACKUP_SOURCES = [
+    ['productos', '/rest/v1/products?select=*&order=id.asc'], ['pedidos', '/rest/v1/orders?select=*&order=id.asc'],
+    ['cuentas_clientes', '/rest/v1/rpc/admin_list_customers?order=cuenta_creada.asc'], ['perfiles_clientes', '/rest/v1/customer_profiles?select=*'],
+    ['cupones', '/rest/v1/coupons?select=*&order=code.asc'], ['usos_de_cupones', '/rest/v1/coupon_redemptions?select=*&order=id.asc'],
+    ['ajustes_tienda', '/rest/v1/store_settings?select=*'],
+  ];
+  $('#backup-download').addEventListener('click', async () => {
+    const st = $('#backup-status'), button = $('#backup-download');
+    button.disabled = true; status(st, 'Preparando respaldo…');
+    const backup = { tienda: 'Elite Scents RD', creado: new Date().toISOString(), aviso: 'Contiene datos personales de clientes. Guárdalo en un lugar privado y no lo compartas.', tablas: {}, sin_acceso: [] };
+    try {
+      for (const [name, path] of BACKUP_SOURCES) {
+        try { backup.tablas[name] = await fetchAll(path); } catch (err) { backup.sin_acceso.push(name + ': ' + err.message); }
+      }
+      if (!backup.tablas.productos?.length) throw new Error('No se pudieron leer los productos; no se descargó nada.');
+      const blob = new Blob([JSON.stringify(backup, null, 1)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = 'respaldo-elite-scents-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const counts = Object.entries(backup.tablas).map(([name, rows]) => rows.length + ' ' + name.replace(/_/g, ' ')).join(', ');
+      status(st, 'Respaldo descargado: ' + counts + '.' + (backup.sin_acceso.length ? ' No se pudo leer: ' + backup.sin_acceso.map(s => s.split(':')[0].replace(/_/g, ' ')).join(', ') + '.' : ''), 'success');
+    } catch (err) { status(st, err.message, 'error'); }
+    finally { button.disabled = false; }
+  });
 
   $('#sales-period').addEventListener('change', renderSales);
   document.querySelectorAll('[data-sales-metric]').forEach(b => b.addEventListener('click', () => { salesMetric = b.dataset.salesMetric; renderSales(); }));

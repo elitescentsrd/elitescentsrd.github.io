@@ -1,6 +1,6 @@
-// Prueba de la migración de cupones con PostgreSQL embebido (PGlite): NO toca Supabase ni necesita claves.
-// Aplica supabase/migrations/20260921130000_cupones.sql dos veces sobre un esquema mínimo que imita Supabase
-// (con una función place_customer_order de ejemplo) y comprueba reglas de descuento, atomicidad, límites, RLS y permisos.
+// Prueba de las migraciones de cupones y de protección de pedidos con PostgreSQL embebido (PGlite): NO toca Supabase ni
+// necesita claves. Aplica cada migración dos veces sobre un esquema mínimo que imita Supabase (con una función
+// place_customer_order de ejemplo) y comprueba reglas de descuento, atomicidad, límites por cuenta, pausa, RLS y permisos.
 // No forma parte de "npm test" porque necesita un paquete que el proyecto no instala:
 //   npm install --no-save @electric-sql/pglite
 //   npm run test:sql
@@ -219,3 +219,76 @@ assert.equal(r.descuento, 1000); assert.equal(r.total, 4000);
 order = await one('select * from public.orders where user_id = $1 order by id desc limit 1', [U1]); assert.equal(order.amount, 'RD$4,000'); assert.equal(order.coupon_code, 'FILA');
 console.log('compatibilidad con una función que devuelve la fila del pedido OK');
 console.log('TODAS LAS PRUEBAS DE CUPONES PASARON');
+
+// ================= Protección de pedidos: límite por cuenta e interruptor de pausa =================
+const protection = await readFile('supabase/migrations/20260922120000_proteccion_pedidos.sql', 'utf8');
+await db.exec('reset role');
+await db.exec(protection);
+await db.exec(protection);
+console.log('migración de protección aplicada 2 veces sin errores');
+const U3 = '33333333-3333-3333-3333-333333333333', U4 = '44444444-4444-4444-4444-444444444444', U5 = '55555555-5555-5555-5555-555555555555';
+await db.exec(`insert into auth.users (id, email) values ('${U3}','u3@x.com'),('${U4}','u4@x.com'),('${U5}','u5@x.com')`);
+const settings = (await db.query('select * from public.store_settings')).rows;
+assert.equal(settings.length, 1); assert.equal(settings[0].orders_paused, false, 'la tienda empieza sin pausa');
+const order1 = async () => (await one('select public.place_customer_order($1::jsonb) as r', [cart(1)])).r;
+const countOf = async uid => (await one('select count(*)::int as n from public.orders where user_id = $1', [uid])).n;
+const ageOrders = async (uid, interval) => { await as(''); await db.query(`update public.orders set created_at = created_at - $2::interval where user_id = $1`, [uid, interval]); };
+
+// Límite de 3 cada 10 minutos
+await as(U3);
+for (let i = 0; i < 3; i++) await order1();
+await throws(() => order1(), /varios pedidos en pocos minutos/, 'el cuarto pedido en 10 minutos se rechaza');
+assert.equal(await countOf(U3), 3, 'el pedido rechazado no se guarda');
+await ageOrders(U3, '11 minutes'); await as(U3);
+await order1();
+assert.equal(await countOf(U3), 4, 'pasados 10 minutos se puede volver a pedir');
+// Límite de 10 cada 24 horas
+while (await countOf(U3) < 10) { await ageOrders(U3, '11 minutes'); await as(U3); await order1(); }
+await ageOrders(U3, '11 minutes'); await as(U3);
+await throws(() => order1(), /máximo de pedidos por hoy/, 'el pedido 11 del día se rechaza');
+await ageOrders(U3, '25 hours'); await as(U3);
+await order1();
+assert.equal(await countOf(U3), 11, 'al día siguiente se puede volver a pedir');
+console.log('límite por cuenta (3 cada 10 minutos, 10 por día) OK');
+
+// Con cupón: si el límite rechaza el pedido, el cupón no se gasta
+await as(''); await addCoupon({ code: 'LIMITE', kind: 'percent', value: 10, one_per_customer: false });
+await as(U4);
+for (let i = 0; i < 3; i++) await order1();
+const limitUsedBefore = (await one(`select used_count from public.coupons where code = 'LIMITE'`)).used_count;
+await throws(() => place(cart(2), 'LIMITE'), /varios pedidos en pocos minutos/, 'con cupón también se aplica el límite');
+assert.equal((await one(`select used_count from public.coupons where code = 'LIMITE'`)).used_count, limitUsedBefore, 'el cupón no se gastó');
+assert.equal((await one(`select count(*)::int as n from public.coupon_redemptions where coupon_code = 'LIMITE'`)).n, 0);
+assert.equal(await countOf(U4), 3);
+console.log('límite con cupón OK (el cupón no se gasta)');
+
+// Interruptor de pausa
+await as(''); await db.query('update public.store_settings set orders_paused = true');
+await as(U5);
+await throws(() => order1(), /pedidos por la web están pausados/, 'con la pausa nadie pide por la web');
+assert.equal(await countOf(U5), 0);
+await as(ADMIN); await db.query(`insert into public.orders (customer_name, phone, items, amount, user_id) values ('Manual', '8090000000', '1x Perfume Uno', 'RD$3,000', null)`);
+await as(''); await db.query(`insert into public.orders (customer_name, phone, items, amount) values ('Editor SQL', '8090000000', '1x Perfume Uno', 'RD$3,000')`);
+assert.equal((await one(`select count(*)::int as n from public.orders where customer_name in ('Manual', 'Editor SQL')`)).n, 2, 'el administrador y el SQL Editor sí pueden registrar pedidos durante la pausa');
+await db.query('update public.store_settings set orders_paused = false');
+await as(U5); await order1();
+assert.equal(await countOf(U5), 1, 'al quitar la pausa se vuelve a pedir');
+console.log('interruptor de pausa OK');
+
+// Permisos: solo el administrador ve y cambia el interruptor
+await db.exec('reset role');
+await as(U1); await db.exec('set role authenticated');
+assert.equal((await db.query('select * from public.store_settings')).rows.length, 0, 'un cliente no ve los ajustes');
+assert.equal((await db.query('update public.store_settings set orders_paused = true')).affectedRows, 0, 'un cliente no puede pausar la tienda');
+await db.exec('reset role');
+await as(ADMIN); await db.exec('set role authenticated');
+assert.equal((await db.query('select * from public.store_settings')).rows.length, 1, 'el administrador ve los ajustes');
+assert.equal((await db.query('update public.store_settings set orders_paused = true, updated_at = now()')).affectedRows, 1, 'el administrador puede pausar');
+assert.equal((await db.query('update public.store_settings set orders_paused = false, updated_at = now()')).affectedRows, 1, 'y reanudar');
+await throws(() => db.query('delete from public.store_settings'), /permission denied/i, 'nadie borra los ajustes desde la web');
+await db.exec('reset role');
+await db.exec('set role anon');
+await throws(() => db.query('select * from public.store_settings'), /permission denied/i, 'un visitante no lee los ajustes');
+await db.exec('reset role');
+console.log('permisos del interruptor OK');
+console.log('TODAS LAS PRUEBAS DE PROTECCIÓN DE PEDIDOS PASARON');
