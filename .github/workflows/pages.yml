@@ -10,10 +10,9 @@ on:
     # Reconstruye la web cada 6 horas para que precios, ofertas y datos estructurados del HTML sigan al día con Supabase.
     - cron: '23 */6 * * *'
 
+# Permisos mínimos: cada trabajo pide solo lo que necesita. Solo "deploy" puede publicar en GitHub Pages.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-${{ github.ref }}
@@ -22,11 +21,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
     env:
       # Antes de esta fecha solo se validan las fotos ya cargadas; desde ella se exigen las 420.
       IMAGE_CUTOFF: '2026-10-20'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # El token de GitHub no se guarda en el disco: ningún paso posterior lo necesita.
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -49,23 +54,47 @@ jobs:
           name: site-review-${{ github.run_number }}
           path: _site
           retention-days: 14
-      - name: Configure Pages
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        uses: actions/configure-pages@v5
       - name: Upload static site
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
+  # Prueba las migraciones de Supabase (cupones, protección de pedidos, RLS) en PostgreSQL embebido.
+  # Va en un trabajo aparte para que el paquete de pruebas nunca pueda tocar el sitio que se publica.
+  sql:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the database test bench (PGlite, exact version)
+        run: npm install --no-save --no-audit --no-fund @electric-sql/pglite@0.5.8
+      - name: Test Supabase migrations
+        run: npm run test:sql
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
