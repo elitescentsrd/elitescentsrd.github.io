@@ -42,6 +42,7 @@
         <div id="authArea">
           <p class="eyebrow">CUENTA DEL CLIENTE</p>
           <h2 id="authTitle">Iniciar sesión</h2>
+          <p id="surveyLoginNote" class="survey-note hidden">🎁 Entra o crea tu cuenta para recibir tu cupón de la encuesta. Tus respuestas ya están guardadas en este dispositivo.</p>
           <div class="auth-tabs">
             <button id="loginTab" class="button outline active" type="button">Entrar</button>
             <button id="signupTab" class="button outline" type="button">Crear cuenta</button>
@@ -83,6 +84,7 @@
 
         <div id="customerArea" class="hidden">
           <div class="admin-actions spaced-actions"><div><p class="eyebrow">MI CUENTA</p><h2 class="mb-0">Datos del pedido</h2></div><button id="signOut" type="button" class="button outline">Salir</button></div>
+          <div id="surveyBox" class="survey-box hidden" aria-live="polite"></div>
           <form method="post" id="profileForm" class="stack mt-md">
             <label>Nombre<input name="first_name" maxlength="80" required></label>
             <label>Apellidos<input name="last_name" maxlength="120" required></label>

@@ -167,6 +167,25 @@
         <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Código</th><th>Descuento</th><th>Reglas</th><th>Vigencia</th><th>Usos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="coupons-body"></tbody></table></div>
       </section>
 
+      <section class="admin-card" id="survey-card">
+        <div class="admin-head"><div><p class="eyebrow">Encuesta</p><h2>Encuesta de clientes</h2><p class="muted">Quien responde la encuesta recibe un cupón personal de un solo uso que solo funciona en su cuenta (una encuesta por cuenta). Comparte el enlace en Instagram y WhatsApp.</p></div><button id="survey-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <p id="survey-notice" class="muted hidden">Para usar la encuesta falta aplicar la migración "encuesta" en Supabase (SQL Editor).</p>
+        <div class="admin-actions survey-link-row"><code id="survey-link">https://elitescentsrd.github.io/encuesta.html</code><button id="survey-copy" class="btn btn-secondary" type="button">Copiar enlace</button><a class="btn btn-secondary" href="/encuesta.html" target="_blank" rel="noopener noreferrer">Ver encuesta ↗</a></div>
+        <form method="post" id="survey-form" class="admin-form">
+          <label class="check-line"><input name="survey_enabled" type="checkbox"> Encuesta activa</label>
+          <label>Cupón (RD$)<input name="survey_amount" type="number" min="1" max="5000" step="1" required></label>
+          <label>Válido por (días)<input name="survey_valid_days" type="number" min="1" max="365" step="1" required></label>
+          <label>Compra mínima (RD$)<input name="survey_min_subtotal" type="number" min="0" step="1"></label>
+          <label>Misma conexión: días sin repetir (0 = no revisar)<input name="survey_ip_days" type="number" min="0" max="365" step="1" required></label>
+          <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar ajustes</button><span id="survey-status" aria-live="polite"></span></div>
+          <p class="span-4 muted">Los cambios aplican a los cupones nuevos; los que ya se entregaron conservan su monto y su fecha.</p>
+          <p class="span-4 muted">Uno por persona: no se entrega otro cupón al mismo teléfono o computadora, a la misma cédula o teléfono del perfil, ni a la misma conexión a internet (por ejemplo, el Wi-Fi de una casa) durante los días elegidos. Al pagar se revisa otra vez la cédula y el teléfono. Por datos móviles a veces muchas personas comparten la misma conexión: si alguien te escribe que lo bloqueó por error, dale un cupón a mano.</p>
+        </form>
+        <div class="sales-kpis" id="survey-kpis"></div>
+        <div id="survey-results" class="survey-results"></div>
+        <div class="admin-actions"><button id="survey-csv" class="btn btn-secondary" type="button">Descargar respuestas (Excel)</button><span id="survey-csv-status" aria-live="polite"></span></div>
+      </section>
+
       <section class="admin-card" id="customers-card">
         <div class="admin-head"><div><p class="eyebrow">Cuentas Clientes</p><h2>Cuentas de clientes</h2><p class="muted">Clientes que crearon una cuenta en la tienda y desde dónde llegaron. Las contraseñas están cifradas por Supabase y nadie puede verlas ni recuperarlas; solo se pueden restablecer.</p></div><button id="customers-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
         <p id="customers-notice" class="muted hidden">Para ver las cuentas falta aplicar la migración "cuentas_clientes" en Supabase (SQL Editor).</p>
@@ -195,6 +214,7 @@
   </main>
   <script src="/supabase-config.js"></script>
   <script src="/sales.js"></script>
+  <script src="/survey.js"></script>
   <script src="/admin.js"></script>
   <script src="/pwa.js"></script>
 </body>

@@ -92,6 +92,29 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
   const w = await call('PATCH', '/rest/v1/store_settings?id=eq.false', { orders_paused: false });
   denied(w) || w.status === 404 || w.json?.code === 'PGRST205' ? record('OK', 'PATCH /store_settings denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /store_settings NO está denegado a visitantes', 'HTTP ' + w.status);
 }
+// 4e. Encuesta (migración 20260923120000_encuesta.sql): survey_info es pública (solo si está activa y el monto del cupón);
+//     enviar la encuesta, ver cupones personales y leer respuestas exige sesión o ser administrador.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  const info = await call('POST', '/rest/v1/rpc/survey_info', {});
+  if (info.status === 200 && info.json && typeof info.json.enabled === 'boolean') {
+    const extra = Object.keys(info.json).filter(k => !['enabled', 'amount', 'valid_days', 'min_subtotal'].includes(k));
+    extra.length ? record('FALLO', 'survey_info devuelve datos de más', extra.join(', ')) : record('OK', 'survey_info pública solo con los datos de la promoción', 'activa: ' + info.json.enabled);
+  } else if (pending(info)) record('AVISO', 'survey_info todavía no existe en Supabase', 'aplicar supabase/migrations/20260923120000_encuesta.sql');
+  else record('FALLO', 'Respuesta inesperada de survey_info', 'HTTP ' + info.status + ' ' + info.text.slice(0, 100));
+  for (const [name, body] of [['submit_survey', { p_answers: {} }], ['my_survey_coupon', {}]]) {
+    const r = await call('POST', '/rest/v1/rpc/' + name, body);
+    if (denied(r)) record('OK', name + ': EXECUTE revocado para anon', 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', name + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260923120000_encuesta.sql');
+    else record('FALLO', 'Un visitante puede ejecutar ' + name, 'HTTP ' + r.status + ' ' + r.text.slice(0, 100));
+  }
+  for (const table of ['survey_responses', 'survey_blocks']) {
+    const s = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(s) || ((s.status === 200 || s.status === 206) && Array.isArray(s.json) && s.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + s.status);
+    else if (pending(s)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260923120000_encuesta.sql');
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + s.status);
+  }
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

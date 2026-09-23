@@ -66,6 +66,44 @@ async function recheckCoupon(){if(!coupon)return;try{await checkCoupon(coupon.co
 async function initCoupons(){
  try{const r=await authFetch('/rest/v1/rpc/preview_coupon',{method:'POST',body:JSON.stringify({p_code:'',p_product_ids:[],p_subtotal:0})});$('#couponBox').classList.toggle('hidden',!(r&&r.ok===false))}catch{$('#couponBox').classList.add('hidden')}
 }
+// --- Encuesta: las respuestas esperan en este dispositivo hasta que la persona entra; entonces se envían y se muestra su cupón personal ---
+const SURVEY_KEY='elite-survey-pending-v1';
+function pendingSurvey(){try{const v=JSON.parse(localStorage.getItem(SURVEY_KEY)||'null');return v&&v.answers&&typeof v.answers==='object'&&Date.now()-Number(v.at)<14*864e5?v:null}catch{return null}}
+// Identificador al azar de este navegador (no contiene datos personales): evita varios cupones de encuesta desde el mismo teléfono o computadora.
+function deviceId(){try{let id=localStorage.getItem('elite-device-id-v1');if(!/^[A-Za-z0-9-]{16,64}$/.test(id||'')){id=crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');localStorage.setItem('elite-device-id-v1',id)}return id}catch{return null}}
+function longDate(v){return new Date(v).toLocaleDateString('es-DO',{day:'numeric',month:'long',year:'numeric'})}
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+function surveyBox(parts){const box=$('#surveyBox');box.replaceChildren(...parts);box.classList.toggle('hidden',!parts.length)}
+function showSurveyCoupon(c,fresh){
+ const detail=money(c.amount)+' de descuento en tu próxima compra'+(Number(c.min_subtotal)>0?' desde '+money(c.min_subtotal):'')+'. Válido hasta el '+longDate(c.ends_at)+'. Un solo uso y solo en tu cuenta.';
+ const actions=el('div','admin-actions'),note=el('p','order-status');
+ const apply=el('button','button gold','Aplicar a mi carrito');apply.type='button';
+ const copy=el('button','button outline','Copiar código');copy.type='button';
+ apply.addEventListener('click',()=>{if(!readCart().length){note.textContent='Tu carrito está vacío: agrega un perfume y vuelve a pulsar "Aplicar a mi carrito".';return}$('#couponCode').value=c.code;applyCoupon();$('#couponBox').scrollIntoView({block:'center',behavior:'smooth'})});
+ copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(c.code);copy.textContent='Copiado ✓'}catch{prompt('Copia tu código:',c.code)}});
+ actions.append(apply,copy);
+ surveyBox([el('p','eyebrow',fresh?'¡GRACIAS! ESTE ES TU CUPÓN':'TU CUPÓN DE LA ENCUESTA'),el('p','survey-code',c.code),el('p','',detail),actions,note]);
+}
+async function surveyInfo(){try{const res=await fetch(base+'/rest/v1/rpc/survey_info',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:'{}'});return res.ok?await res.json():null}catch{return null}}
+async function handleSurvey(){
+ const pending=pendingSurvey();
+ try{
+  if(pending){
+   const r=await authFetch('/rest/v1/rpc/submit_survey',{method:'POST',body:JSON.stringify({p_answers:pending.answers,p_device:deviceId()})});
+   if(r&&r.ok){localStorage.removeItem(SURVEY_KEY);if(r.code){showSurveyCoupon(r,!r.already);return}surveyBox([el('p','order-status',r.message||'Ya llenaste la encuesta.')]);return}
+   if(r&&r.message){if(r.blocked||/no está disponible/.test(r.message))localStorage.removeItem(SURVEY_KEY);surveyBox([el('p','order-status error',r.message)]);return}
+  }
+  const mine=await authFetch('/rest/v1/rpc/my_survey_coupon',{method:'POST',body:'{}'});
+  if(mine&&mine.code&&!mine.used&&!mine.expired&&mine.active){showSurveyCoupon(mine,false);return}
+  if(mine&&mine.responded){surveyBox([]);return}
+  const info=await surveyInfo();
+  if(info&&info.enabled){const link=el('a','button outline','Llenar la encuesta');link.href='/encuesta.html';surveyBox([el('p','','🎁 Responde nuestra encuesta (1 minuto) y recibe un cupón personal de '+money(info.amount)+'.'),link]);return}
+  surveyBox([]);
+ }catch(err){
+  if(!pending){surveyBox([]);return}
+  surveyBox([el('p','order-status error',/survey|schema cache|could not find/i.test(err.message)?'La encuesta todavía no está disponible. Guardamos tus respuestas en este dispositivo: vuelve más tarde para recibir tu cupón.':friendly(err.message))]);
+ }
+}
 function setMode(next,keepStatus){mode=next;$('#loginTab').classList.toggle('active',mode==='login');$('#signupTab').classList.toggle('active',mode==='signup');$('#authTitle').textContent=mode==='login'?'Iniciar sesión':'Crear cuenta';$('#authSubmit').textContent=mode==='login'?'Entrar':'Crear cuenta';const pass=$('#authForm').elements.password;pass.autocomplete=mode==='login'?'current-password':'new-password';if(!keepStatus)$('#authStatus').textContent='';$('#forgotLink').classList.toggle('hidden',mode!=='login');$('#passwordHint').classList.toggle('hidden',mode!=='signup');pass.minLength=mode==='signup'?10:8}
 // Verificación en dos pasos al entrar: si la cuenta tiene un factor TOTP verificado, tras la contraseña se pide el código.
 let mfaPending=null;
@@ -212,7 +250,7 @@ async function handleAuthRedirect(){
 }
 async function afterLogin(){
  $('#authArea').classList.add('hidden');$('#customerArea').classList.remove('hidden');
- try{const user=await authFetch('/auth/v1/user',{method:'GET'});session.user=user;saveSession(session);await loadProfile();renderMfaState(user);await loadOrders();initCoupons()}catch(err){$('#profileStatus').textContent=err.message}
+ try{const user=await authFetch('/auth/v1/user',{method:'GET'});session.user=user;saveSession(session);await loadProfile();renderMfaState(user);await loadOrders();initCoupons();handleSurvey()}catch(err){$('#profileStatus').textContent=err.message}
 }
 async function loadProfile(){
  const uid=session?.user?.id;if(!uid)return;
@@ -323,5 +361,7 @@ $('#clearCart').addEventListener('click',()=>{if(confirm('¿Vaciar el carrito?')
 $('#applyCoupon').addEventListener('click',applyCoupon);$('#removeCoupon').addEventListener('click',removeCoupon);
 $('#couponCode').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applyCoupon()}});
 renderCart();setMode('login');
+// Quien viene de la encuesta sin sesión: aviso y formulario de "Crear cuenta" (la mayoría todavía no tiene cuenta).
+if((pendingSurvey()||/[?&]encuesta\b/.test(location.search))&&!session?.access_token){$('#surveyLoginNote').classList.remove('hidden');setMode('signup')}
 handleAuthRedirect().then(handled=>{if(!handled&&session?.access_token)afterLogin()}).catch(err=>{$('#authStatus').textContent=friendly(err.message)});
 })();
