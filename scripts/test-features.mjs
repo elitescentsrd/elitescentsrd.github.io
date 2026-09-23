@@ -296,4 +296,55 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert((await read('scripts/build-catalog.mjs')).includes("path: 'canales-oficiales.html'") && (await read('sitemap.xml')).includes(SITE_URL + '/canales-oficiales.html'), 'Está en el sitemap');
   console.log('Canales oficiales: página, enlaces y datos de contacto correctos.');
 }
+
+// ---------------------------------------------------------------- Encuesta con cupón personal
+{
+  const S = await runUmd('survey.js'), Q = S.QUESTIONS;
+  assert(Q.length >= 5 && Q.length <= 12, 'Entre 5 y 12 preguntas (la base de datos acepta hasta 12)');
+  assert.equal(new Set(Q.map(q => q.id)).size, Q.length, 'Cada pregunta tiene un id distinto');
+  for (const q of Q) {
+    assert.match(q.id, /^[a-z_]{1,40}$/, 'id válido para la base de datos: ' + q.id);
+    for (const o of q.options || []) assert(o.length <= 80, 'Opción de hasta 80 letras: ' + o);
+    if (q.type === 'multi') assert(q.max && q.max <= 10, q.id + ': máximo de opciones');
+    if (q.type === 'text' || q.type === 'longtext') assert(q.max && q.max <= 300, q.id + ': texto de hasta 300 letras');
+  }
+  assert(Q.filter(q => q.required).length >= 4, 'Al menos 4 preguntas obligatorias (la base de datos exige 4 respondidas)');
+  const full = { para_quien: 'Para mí', aromas: ['Dulces', 'Dulces', 'Florales', 'Inventada', 'Frutales', 'Amaderados'], ocasion: 'Siempre', presupuesto: 'Menos de RD$3,000', favorito: '  Lattafa   Khamrah ', como_nos_conociste: 'Instagram', mejorar: '', otra: 'x' };
+  const c = S.clean(full);
+  assert.deepEqual(plain(c.missing), []);
+  assert.deepEqual(plain(c.answers.aromas), ['Dulces', 'Florales', 'Frutales'], 'Varias opciones: sin repetidas, sin opciones inventadas y hasta el máximo');
+  assert.equal(c.answers.favorito, 'Lattafa Khamrah', 'Texto recortado y sin espacios de más');
+  assert(!('mejorar' in c.answers) && !('otra' in c.answers), 'No guarda respuestas vacías ni preguntas desconocidas');
+  assert(JSON.stringify(c.answers).length < 3000, 'Cabe en el límite de la base de datos');
+  assert.deepEqual(plain(S.clean({ para_quien: 'Otra cosa' }).missing), plain(Q.filter(q => q.required).map(q => q.id)), 'Detecta las obligatorias sin responder');
+  const t = S.tally([{ answers: c.answers, created_at: '2026-09-23T10:00:00Z' }, { answers: { para_quien: 'Para regalar', aromas: ['Dulces'], mejorar: 'Más perfumes árabes' }, created_at: '2026-09-23T11:00:00Z' }]);
+  const aromas = t.find(x => x.id === 'aromas'), dulces = aromas.options.find(o => o.label === 'Dulces');
+  assert.equal(aromas.answered, 2); assert.equal(dulces.count, 2); assert.equal(dulces.percent, 100);
+  assert.deepEqual(plain(t.find(x => x.id === 'mejorar').texts.map(x => x.text)), ['Más perfumes árabes']);
+  const csv = S.toCsv([{ created_at: '2026-09-23T10:00:00Z', coupon_code: 'ES-ABCDEF', answers: { ...c.answers, favorito: '=HYPERLINK("http://x")', mejorar: 'Precios, "mejores"' } }]);
+  assert(csv.startsWith('﻿'), 'El archivo para Excel lleva BOM (así se ven bien las tildes)');
+  assert(csv.includes('"\'=HYPERLINK(""http://x"")"'), 'Un texto que empieza con = no se convierte en fórmula en Excel');
+  assert(csv.includes('"Precios, ""mejores"""'), 'Comas y comillas escapadas');
+  assert.equal(csv.trim().split('\r\n').length, 2, 'Encabezado y una fila');
+  const page = await read('encuesta.html'), pageJs = await read('encuesta.js');
+  assert(page.includes('<form method="post" id="surveyForm"') && page.includes('content="noindex,follow"'), 'La encuesta no se indexa en Google');
+  assert(page.indexOf('/survey.js') > -1 && page.indexOf('/survey.js') < page.indexOf('/encuesta.js'), 'survey.js carga antes que encuesta.js');
+  assert(pageJs.includes("'elite-survey-pending-v1'") && pageJs.includes("'/checkout.html?encuesta=1'") && pageJs.includes('rpc/survey_info'), 'La encuesta guarda las respuestas y lleva a la cuenta');
+  assert(customerJs.includes("SURVEY_KEY='elite-survey-pending-v1'") && customerJs.includes('rpc/submit_survey') && customerJs.includes('rpc/my_survey_coupon'), 'Al entrar a la cuenta se envía la encuesta y se muestra el cupón');
+  for (const id of ['surveyBox', 'surveyLoginNote']) assert(checkoutHtml.includes('id="' + id + '"'), 'checkout.html tiene #' + id);
+  assert(template.includes('id="encuesta-promo" hidden') && template.includes('href="/encuesta.html"') && tiendaJs.includes('rpc/survey_info'), 'La portada muestra la promoción solo si la encuesta está activa');
+  for (const id of ['survey-card', 'survey-form', 'survey-kpis', 'survey-results', 'survey-csv', 'survey-copy', 'survey-notice', 'survey-refresh']) assert(adminHtml.includes('id="' + id + '"'), 'El panel tiene #' + id);
+  assert(adminHtml.indexOf('/survey.js') < adminHtml.indexOf('/admin.js'), 'survey.js carga antes que admin.js');
+  assert(adminJs.includes('source=is.null') && adminJs.includes('/rest/v1/survey_responses?select=*&order=id.asc'), 'Los cupones de la encuesta no llenan la lista de cupones y las respuestas entran en el respaldo');
+  for (const f of ['encuesta.html', 'encuesta.js', 'survey.js']) assert(buildSite.includes("'" + f + "'"), f + ' se publica');
+  assert(!(await read('sitemap.xml')).includes('encuesta'), 'La encuesta no va al sitemap');
+  assert((await read('privacidad.html')).includes('Encuesta de clientes'), 'La política de privacidad explica la encuesta');
+  const sql = (await read('supabase/migrations/20260923120000_encuesta.sql')).replace(/^--.*$/gm, '');
+  assert(/revoke all on function public\.submit_survey\(jsonb\) from public, anon/i.test(sql) && /grant execute on function public\.submit_survey\(jsonb\) to authenticated/i.test(sql), 'Solo con sesión se envía la encuesta');
+  assert(/grant execute on function public\.survey_info\(\) to anon, authenticated/i.test(sql), 'La información pública de la encuesta la ve cualquiera');
+  assert(/alter table public\.survey_responses enable row level security/i.test(sql) && /revoke all on public\.survey_responses from anon, authenticated/i.test(sql), 'Respuestas con RLS');
+  assert(/v_c\.user_id is not null and v_c\.user_id is distinct from p_uid/.test(sql), 'Un cupón personal solo lo usa su dueño');
+  assert(/gen_random_uuid\(\)/.test(sql) && /pg_advisory_xact_lock/.test(sql), 'Código al azar y sin duplicados por envíos simultáneos');
+  console.log('Encuesta: preguntas, limpieza, resultados, Excel, página, carrito, panel y migración correctos.');
+}
 console.log('Pruebas de funciones nuevas superadas.');

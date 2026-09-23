@@ -121,7 +121,7 @@
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
     loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
-    loadCustomers(); loadCoupons(); loadStoreSettings();
+    loadCustomers(); loadCoupons(); loadStoreSettings(); loadSurvey();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
   // Pedidos sin atender (estado "nuevo"): contador visible y en el título de la pestaña.
@@ -620,7 +620,9 @@
   async function loadCoupons() {
     const notice = $('#coupons-notice'), form = $('#coupon-form');
     try {
-      coupons = await api('/rest/v1/coupons?select=*&order=created_at.desc');
+      // Los cupones personales de la encuesta (uno por cliente) se ven en la sección Encuesta, no en esta lista.
+      coupons = await api('/rest/v1/coupons?select=*&source=is.null&order=created_at.desc')
+        .catch(err => { if (/source/i.test(err.message)) return api('/rest/v1/coupons?select=*&order=created_at.desc'); throw err; });
       const uses = await api('/rest/v1/coupon_redemptions?select=coupon_code,discount&limit=5000').catch(() => []);
       couponUse = new Map(); for (const u of uses) { const e = couponUse.get(u.coupon_code) || { count: 0, total: 0 }; e.count += 1; e.total += Number(u.discount) || 0; couponUse.set(u.coupon_code, e); }
       notice.classList.add('hidden'); form.classList.remove('hidden');
@@ -695,7 +697,7 @@
     ['productos', '/rest/v1/products?select=*&order=id.asc'], ['pedidos', '/rest/v1/orders?select=*&order=id.asc'],
     ['cuentas_clientes', '/rest/v1/rpc/admin_list_customers?order=cuenta_creada.asc'], ['perfiles_clientes', '/rest/v1/customer_profiles?select=*'],
     ['cupones', '/rest/v1/coupons?select=*&order=code.asc'], ['usos_de_cupones', '/rest/v1/coupon_redemptions?select=*&order=id.asc'],
-    ['ajustes_tienda', '/rest/v1/store_settings?select=*'],
+    ['ajustes_tienda', '/rest/v1/store_settings?select=*'], ['encuesta_respuestas', '/rest/v1/survey_responses?select=*&order=id.asc'],
   ];
   $('#backup-download').addEventListener('click', async () => {
     const st = $('#backup-status'), button = $('#backup-download');
@@ -714,6 +716,82 @@
       status(st, 'Respaldo descargado: ' + counts + '.' + (backup.sin_acceso.length ? ' No se pudo leer: ' + backup.sin_acceso.map(s => s.split(':')[0].replace(/_/g, ' ')).join(', ') + '.' : ''), 'success');
     } catch (err) { status(st, err.message, 'error'); }
     finally { button.disabled = false; }
+  });
+
+  // --- Encuesta: ajustes, resultados por pregunta y descarga para Excel (las preguntas están en survey.js) ---
+  const SURVEY_URL = 'https://elitescentsrd.github.io/encuesta.html';
+  let surveyResponses = [], surveyCoupons = [];
+  function surveyKpis() {
+    const used = surveyCoupons.filter(c => Number(c.used_count) > 0).length;
+    const surveyOrders = orders.filter(o => /^ES-/.test(String(o.coupon_code || '')) && String(o.status || 'nuevo') !== 'cancelado');
+    const total = surveyOrders.reduce((sum, o) => sum + (window.EliteSales ? window.EliteSales.amountOf(o) : 0), 0);
+    $('#survey-kpis').replaceChildren(
+      kpi('Respuestas', String(surveyResponses.length), ''),
+      kpi('Cupones usados', used + ' de ' + surveyCoupons.length, surveyCoupons.length ? Math.round((used / surveyCoupons.length) * 100) + '% lo usó' : ''),
+      kpi('Pedidos con cupón de encuesta', String(surveyOrders.length), rd(total) + ' en esos pedidos'));
+  }
+  function renderSurveyResults() {
+    const S = window.EliteSurvey, box = $('#survey-results');
+    surveyKpis();
+    if (!S || !surveyResponses.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Todavía no hay respuestas.'; box.replaceChildren(p); return; }
+    box.replaceChildren(...S.tally(surveyResponses).map(q => {
+      const block = document.createElement('div'); block.className = 'survey-result';
+      const title = document.createElement('h3'); title.textContent = q.text + ' (' + q.answered + ')'; block.append(title);
+      if (q.options) {
+        for (const o of q.options) {
+          const row = document.createElement('div'); row.className = 'survey-bar';
+          const label = document.createElement('span'); label.textContent = o.label;
+          const bar = document.createElement('progress'); bar.max = Math.max(q.answered, 1); bar.value = o.count; bar.setAttribute('aria-label', o.label + ': ' + o.count);
+          const count = document.createElement('strong'); count.textContent = o.count + ' (' + o.percent + '%)';
+          row.append(label, bar, count); block.append(row);
+        }
+      } else {
+        const list = document.createElement('ul'); list.className = 'survey-texts';
+        for (const t of q.texts.slice(0, 15)) { const li = document.createElement('li'); li.textContent = t.text + ' · ' + dateText(t.date); list.append(li); }
+        if (!q.texts.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'Sin respuestas todavía.'; list.append(li); }
+        block.append(list);
+      }
+      return block;
+    }));
+  }
+  async function loadSurvey() {
+    const notice = $('#survey-notice'), form = $('#survey-form');
+    try {
+      const [settings] = await api('/rest/v1/store_settings?select=survey_enabled,survey_amount,survey_valid_days,survey_min_subtotal&id=eq.true');
+      surveyResponses = await fetchAll('/rest/v1/survey_responses?select=*&order=created_at.desc');
+      surveyCoupons = await fetchAll('/rest/v1/coupons?select=code,used_count,ends_at,value&source=eq.encuesta');
+      if (settings) { const f = form.elements; f.survey_enabled.checked = Boolean(settings.survey_enabled); f.survey_amount.value = Number(settings.survey_amount); f.survey_valid_days.value = settings.survey_valid_days; f.survey_min_subtotal.value = Number(settings.survey_min_subtotal); }
+      notice.classList.add('hidden'); form.classList.remove('hidden');
+    } catch (err) {
+      surveyResponses = []; surveyCoupons = []; notice.classList.remove('hidden'); form.classList.add('hidden');
+      notice.textContent = /survey|schema cache|could not find|column|relation/i.test(err.message) ? 'Para usar la encuesta falta aplicar la migración "encuesta" en Supabase (SQL Editor).' : 'No se pudo cargar la encuesta: ' + err.message;
+    }
+    renderSurveyResults();
+  }
+  $('#survey-form').addEventListener('submit', async e => {
+    e.preventDefault(); const f = e.currentTarget.elements, st = $('#survey-status');
+    const body = { survey_enabled: f.survey_enabled.checked, survey_amount: Number(f.survey_amount.value), survey_valid_days: Number(f.survey_valid_days.value), survey_min_subtotal: Number(f.survey_min_subtotal.value) || 0, updated_at: new Date().toISOString() };
+    if (!(body.survey_amount >= 1 && body.survey_amount <= 5000)) { status(st, 'El cupón debe ser de RD$1 a RD$5,000.', 'error'); return; }
+    if (!(Number.isInteger(body.survey_valid_days) && body.survey_valid_days >= 1 && body.survey_valid_days <= 365)) { status(st, 'La validez debe ser de 1 a 365 días.', 'error'); return; }
+    if (body.survey_min_subtotal < 0) { status(st, 'La compra mínima no puede ser negativa.', 'error'); return; }
+    status(st, 'Guardando…');
+    try { await api('/rest/v1/store_settings?id=eq.true', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(body) }); status(st, 'Ajustes guardados.', 'success'); await loadSurvey(); }
+    catch (err) { status(st, err.message, 'error'); }
+  });
+  $('#survey-refresh').addEventListener('click', loadSurvey);
+  $('#survey-copy').addEventListener('click', async () => {
+    const button = $('#survey-copy');
+    try { await navigator.clipboard.writeText(SURVEY_URL); button.textContent = 'Copiado ✓'; setTimeout(() => { button.textContent = 'Copiar enlace'; }, 1500); }
+    catch { prompt('Copia el enlace de la encuesta:', SURVEY_URL); }
+  });
+  $('#survey-csv').addEventListener('click', () => {
+    const st = $('#survey-csv-status');
+    if (!window.EliteSurvey || !surveyResponses.length) { status(st, 'Todavía no hay respuestas para descargar.', 'error'); return; }
+    const blob = new Blob([window.EliteSurvey.toCsv(surveyResponses)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob), link = document.createElement('a');
+    link.href = url; link.download = 'encuesta-elite-scents-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    status(st, surveyResponses.length + ' respuestas descargadas. Ábrelas con Excel.', 'success');
   });
 
   $('#sales-period').addEventListener('change', renderSales);
