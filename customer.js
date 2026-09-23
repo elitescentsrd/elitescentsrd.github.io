@@ -69,6 +69,8 @@ async function initCoupons(){
 // --- Encuesta: las respuestas esperan en este dispositivo hasta que la persona entra; entonces se envían y se muestra su cupón personal ---
 const SURVEY_KEY='elite-survey-pending-v1';
 function pendingSurvey(){try{const v=JSON.parse(localStorage.getItem(SURVEY_KEY)||'null');return v&&v.answers&&typeof v.answers==='object'&&Date.now()-Number(v.at)<14*864e5?v:null}catch{return null}}
+// Identificador al azar de este navegador (no contiene datos personales): evita varios cupones de encuesta desde el mismo teléfono o computadora.
+function deviceId(){try{let id=localStorage.getItem('elite-device-id-v1');if(!/^[A-Za-z0-9-]{16,64}$/.test(id||'')){id=crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');localStorage.setItem('elite-device-id-v1',id)}return id}catch{return null}}
 function longDate(v){return new Date(v).toLocaleDateString('es-DO',{day:'numeric',month:'long',year:'numeric'})}
 function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
 function surveyBox(parts){const box=$('#surveyBox');box.replaceChildren(...parts);box.classList.toggle('hidden',!parts.length)}
@@ -87,9 +89,9 @@ async function handleSurvey(){
  const pending=pendingSurvey();
  try{
   if(pending){
-   const r=await authFetch('/rest/v1/rpc/submit_survey',{method:'POST',body:JSON.stringify({p_answers:pending.answers})});
+   const r=await authFetch('/rest/v1/rpc/submit_survey',{method:'POST',body:JSON.stringify({p_answers:pending.answers,p_device:deviceId()})});
    if(r&&r.ok){localStorage.removeItem(SURVEY_KEY);if(r.code){showSurveyCoupon(r,!r.already);return}surveyBox([el('p','order-status',r.message||'Ya llenaste la encuesta.')]);return}
-   if(r&&r.message){if(/no está disponible/.test(r.message))localStorage.removeItem(SURVEY_KEY);surveyBox([el('p','order-status error',r.message)]);return}
+   if(r&&r.message){if(r.blocked||/no está disponible/.test(r.message))localStorage.removeItem(SURVEY_KEY);surveyBox([el('p','order-status error',r.message)]);return}
   }
   const mine=await authFetch('/rest/v1/rpc/my_survey_coupon',{method:'POST',body:'{}'});
   if(mine&&mine.code&&!mine.used&&!mine.expired&&mine.active){showSurveyCoupon(mine,false);return}

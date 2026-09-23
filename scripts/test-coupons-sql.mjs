@@ -22,6 +22,7 @@ grant usage on schema auth to anon, authenticated;
 create schema private;
 grant usage on schema private to authenticated;
 create table public.admin_users (user_id uuid primary key);
+create table public.customer_profiles (user_id uuid primary key, first_name text, last_name text, cedula text, phone text, address text);
 create function private.is_store_admin() returns boolean language sql stable security definer as $$ select exists (select 1 from public.admin_users where user_id = auth.uid()) $$;
 grant execute on function private.is_store_admin() to authenticated;
 create table public.products (id bigint primary key, name text not null, price text not null, original_price text, active boolean not null default true);
@@ -386,4 +387,111 @@ assert.equal((await one('select coupon_code from public.survey_responses where u
 await as(U6); r = await submit(answers); assert.equal(r.ok, true); assert.equal(r.already, true); assert.equal(r.code, null, 'no se regala otro cupón');
 m = await mine(); assert.equal(m.responded, true); assert.equal(m.code, null);
 console.log('permisos y borrado de cupones de encuesta OK');
+
+// ================= Uno por persona: dispositivo, identidad (cédula o teléfono) y conexión (IP) =================
+await db.exec('reset role'); await as('');
+// La función de pedidos de prueba copia el teléfono y la cédula del perfil, como la real.
+await db.exec(`
+drop function public.place_customer_order(jsonb);
+create function public.place_customer_order(p_items jsonb) returns jsonb language plpgsql security definer set search_path = '' as $$
+declare v_uid uuid := (select auth.uid()); v_p public.products; v_prof public.customer_profiles; v_id bigint; v_total numeric;
+begin
+  select * into v_prof from public.customer_profiles where user_id = v_uid;
+  select * into v_p from public.products where id = (p_items -> 0 ->> 'product_id')::bigint;
+  v_total := replace((regexp_match(v_p.price, '([0-9][0-9,.]*)'))[1], ',', '')::numeric;
+  insert into public.orders (customer_name, phone, cedula, items, amount, user_id) values ('Cliente', v_prof.phone, v_prof.cedula, '1x ' || v_p.name, 'RD$' || to_char(v_total, 'FM999,999,999'), v_uid) returning id into v_id;
+  return jsonb_build_object('order_id', v_id);
+end $$;
+grant execute on function public.place_customer_order(jsonb) to authenticated;
+update public.store_settings set survey_amount = 300, survey_valid_days = 30, survey_min_subtotal = 0, survey_ip_days = 30;
+`);
+const P = n => 'a1000000-0000-0000-0000-' + String(n).padStart(12, '0');
+const people = Array.from({ length: 14 }, (_, i) => P(i));
+await db.query(`insert into auth.users (id, email) select unnest($1::uuid[]), 'p' || generate_series(1, 14) || '@x.com'`, [people]);
+const profile = async (uid, cedula, phone) => { await as(''); await db.query(`insert into public.customer_profiles (user_id, cedula, phone) values ($1, $2, $3) on conflict (user_id) do update set cedula = excluded.cedula, phone = excluded.phone`, [uid, cedula, phone]); };
+const headers = async h => { await db.query(`select set_config('request.headers', $1, false)`, [h ? JSON.stringify(h) : '']); };
+const submitFrom = async (uid, device) => { await as(uid); return (await one('select public.submit_survey($1::jsonb, $2) as r', [JSON.stringify(answers), device || null])).r; };
+const blocks = async reason => (await one('select count(*)::int as n from public.survey_blocks where reason = $1', [reason])).n;
+const [A, B, C, D, E, F, G, H, I, J, K, L, M, N] = people;
+
+// Dispositivo: la misma persona crea otra cuenta en el mismo teléfono
+await headers(null);
+await profile(A, '001-1234567-8', '(809) 555-1111');
+r = await submitFrom(A, 'dispositivo-telefono-ana-0001');
+assert.equal(r.ok, true, 'la primera cuenta en ese teléfono recibe su cupón');
+const codeA = r.code;
+r = await submitFrom(B, 'dispositivo-telefono-ana-0001');
+assert.equal(r.ok, false); assert.equal(r.blocked, true); assert.equal(r.reason, 'dispositivo'); assert.match(r.message, /teléfono o computadora/);
+assert.equal((await one('select count(*)::int as n from public.coupons where user_id = $1', [B])).n, 0, 'la segunda cuenta en el mismo teléfono no recibe cupón');
+assert.equal(await blocks('dispositivo'), 1, 'el intento queda anotado');
+r = await submitFrom(B, 'dispositivo-telefono-ana-0001'); assert.equal(await blocks('dispositivo'), 1, 'repetir el intento no llena la lista (uno por hora)');
+r = await submitFrom(B, 'corto'); assert.equal(r.ok, true, 'un identificador con formato inválido se ignora (no bloquea)');
+console.log('uno por dispositivo OK');
+
+// Identidad al enviar: otra cuenta con la misma cédula o el mismo teléfono (escrito distinto)
+await profile(C, '00112345678', '809-555-9999'); r = await submitFrom(C, 'dispositivo-computadora-0002');
+assert.equal(r.reason, 'identidad', 'misma cédula con guiones o sin guiones');
+await profile(D, '40200000001', '+1 809 555 1111'); r = await submitFrom(D, 'dispositivo-computadora-0003');
+assert.equal(r.reason, 'identidad', 'mismo teléfono con o sin el 1 del país');
+assert.equal(await blocks('identidad'), 2);
+console.log('uno por cédula y teléfono al enviar OK');
+
+// Conexión: la misma IP (el Wi-Fi de la casa) dentro de los días elegidos
+await headers({ 'cf-connecting-ip': '200.88.10.20', 'x-forwarded-for': '1.1.1.1' });
+await profile(E, '40211111111', '8095552222'); r = await submitFrom(E, 'dispositivo-e-000000000004');
+assert.equal(r.ok, true, 'la primera cuenta en ese Wi-Fi recibe su cupón');
+const ipRow = await one('select ip_hash from public.survey_responses where user_id = $1', [E]);
+assert.match(ipRow.ip_hash, /^[0-9a-f]{64}$/, 'la IP se guarda cifrada'); assert(!ipRow.ip_hash.includes('200.88'), 'nunca en texto');
+await profile(F, '40222222222', '8095553333'); r = await submitFrom(F, 'dispositivo-f-000000000005');
+assert.equal(r.reason, 'conexion', 'otra cuenta en el mismo Wi-Fi no recibe cupón'); assert.match(r.message, /Wi-Fi/);
+await headers({ 'x-forwarded-for': '200.88.10.20, 10.0.0.1' }); r = await submitFrom(F, 'dispositivo-f-000000000005');
+assert.equal(r.reason, 'conexion', 'sin Cloudflare se usa la primera IP de x-forwarded-for');
+await as(''); await db.query(`update public.survey_responses set created_at = created_at - interval '31 days' where user_id = $1`, [E]);
+await headers({ 'cf-connecting-ip': '200.88.10.20' }); r = await submitFrom(F, 'dispositivo-f-000000000005');
+assert.equal(r.ok, true, 'pasados los días elegidos, la misma conexión puede volver a recibir');
+await as(''); await db.query('update public.store_settings set survey_ip_days = 0');
+await headers({ 'cf-connecting-ip': '200.88.10.20' }); await profile(G, '40233333333', '8095554444'); r = await submitFrom(G, 'dispositivo-g-000000000006');
+assert.equal(r.ok, true, 'con 0 días la conexión no se revisa');
+// IPv6: cada aparato de la casa tiene su propia dirección, pero todos comparten la primera mitad (/64) de la red de la casa
+await as(''); await db.query('update public.store_settings set survey_ip_days = 30');
+await headers({ 'cf-connecting-ip': '2800:ba0:1a2b:3c4d:1111:2222:3333:4444' }); await profile(J, '40244444444', '8095556666'); r = await submitFrom(J, 'dispositivo-j-000000000009');
+assert.equal(r.ok, true, 'el primer teléfono de la casa (IPv6) recibe su cupón');
+await headers({ 'cf-connecting-ip': '2800:0BA0:1A2B:3C4D:9999:8888:7777:6666' }); await profile(K, '40255555555', '8095557777'); r = await submitFrom(K, 'dispositivo-k-000000000010');
+assert.equal(r.reason, 'conexion', 'otro aparato en el mismo Wi-Fi con IPv6 (otra dirección, misma red de la casa) no recibe cupón');
+await headers({ 'cf-connecting-ip': '2800:ba0:1a2b:ffff:1111:2222:3333:4444' }); r = await submitFrom(K, 'dispositivo-k-000000000010');
+assert.equal(r.ok, true, 'otra red IPv6 (otra casa) sí recibe');
+// Un encabezado raro no rompe nada, y las IPv4 escritas como IPv6 (::ffff:) no se juntan todas en una sola
+await headers({ 'x-forwarded-for': 'basura:::1' }); await profile(L, '40266666666', '8095558888'); r = await submitFrom(L, 'dispositivo-l-000000000011');
+assert.equal(r.ok, true, 'un encabezado con una IP inválida no da error');
+await headers({ 'x-forwarded-for': '::ffff:190.80.1.2' }); await profile(M, '40277777777', '8095559999'); r = await submitFrom(M, 'dispositivo-m-000000000012');
+assert.equal(r.ok, true, 'una IPv4 escrita como IPv6 recibe su cupón');
+await headers({ 'x-forwarded-for': '190.80.1.2' }); await profile(N, '40288888888', '8295550000'); r = await submitFrom(N, 'dispositivo-n-000000000013');
+assert.equal(r.reason, 'conexion', 'la misma IPv4, escrita de las dos formas, es la misma conexión');
+await headers({ 'x-forwarded-for': '::ffff:190.80.9.9' }); r = await submitFrom(N, 'dispositivo-n-000000000013');
+assert.equal(r.ok, true, 'las IPv4 escritas como IPv6 no se juntan todas en una sola conexión');
+console.log('uno por conexión (Wi-Fi) con días configurables OK (IPv4 e IPv6)');
+
+// Identidad al pagar: alguien llena la encuesta SIN perfil y después pone la cédula de otra persona que ya lo usó
+await headers(null);
+await as(A); r = await place(cart(1), codeA); assert.equal(r.descuento, 300, 'Ana usa su cupón');
+r = await submitFrom(H, 'dispositivo-h-000000000007'); assert.equal(r.ok, true, 'sin perfil todavía no se puede comparar al enviar'); const codeH = r.code;
+await profile(H, '001-1234567-8', '8290000000');
+await as(H); r = await preview(codeH, [1], 3000); assert.equal(r.ok, false); assert.match(r.message, /uno por persona/, 'al pagar se detecta la misma cédula');
+r = await place(cart(1), codeH); assert.equal(r.ok, false, 'y no se puede usar');
+await as(''); await db.query(`update public.orders set status = 'cancelado' where user_id = $1 and coupon_code = $2`, [A, codeA]);
+await as(H); r = await preview(codeH, [1], 3000); assert.equal(r.ok, true, 'si el pedido de la otra cuenta se canceló, sí se puede usar');
+await profile(I, '40299999999', '8091110000'); r = await submitFrom(I, 'dispositivo-i-000000000008'); await as(I); r = await preview(r.code, [1], 3000);
+assert.equal(r.ok, true, 'una persona distinta usa su cupón sin problema');
+console.log('uno por persona al pagar (cédula o teléfono en pedidos) OK');
+
+// Permisos de la lista de bloqueos
+await db.exec('set role authenticated'); await as(B);
+assert.equal((await db.query('select * from public.survey_blocks')).rows.length, 0, 'un cliente no ve los bloqueos');
+await db.exec('reset role'); await as(ADMIN); await db.exec('set role authenticated');
+assert.equal((await db.query('select * from public.survey_blocks')).rows.length, 6, 'el administrador ve los bloqueos');
+await db.exec('reset role'); await db.exec('set role anon');
+await throws(() => db.query('select * from public.survey_blocks'), /permission denied/i, 'un visitante no ve los bloqueos');
+await throws(() => db.query('select private.request_ip_hash()'), /permission denied/i, 'nadie de afuera usa las funciones privadas');
+await db.exec('reset role');
+console.log('permisos de la lista de bloqueos OK');
 console.log('TODAS LAS PRUEBAS DE LA ENCUESTA PASARON');

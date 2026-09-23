@@ -340,7 +340,23 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(!(await read('sitemap.xml')).includes('encuesta'), 'La encuesta no va al sitemap');
   assert((await read('privacidad.html')).includes('Encuesta de clientes'), 'La política de privacidad explica la encuesta');
   const sql = (await read('supabase/migrations/20260923120000_encuesta.sql')).replace(/^--.*$/gm, '');
-  assert(/revoke all on function public\.submit_survey\(jsonb\) from public, anon/i.test(sql) && /grant execute on function public\.submit_survey\(jsonb\) to authenticated/i.test(sql), 'Solo con sesión se envía la encuesta');
+  assert(/revoke all on function public\.submit_survey\(jsonb, text\) from public, anon/i.test(sql) && /grant execute on function public\.submit_survey\(jsonb, text\) to authenticated/i.test(sql), 'Solo con sesión se envía la encuesta');
+  assert(/drop function if exists public\.submit_survey\(jsonb\);/i.test(sql), 'La versión vieja de submit_survey se borra (evita que haya dos y Supabase no sepa cuál usar)');
+  // Uno por persona: dispositivo, cédula o teléfono, y conexión (IP cifrada), también al pagar.
+  assert(/'dispositivo'/.test(sql) && /'identidad'/.test(sql) && /'conexion'/.test(sql) && /survey_ip_days/.test(sql), 'Revisa dispositivo, identidad y conexión');
+  assert(/encode\(sha256\(/.test(sql) && /ip_pepper/.test(sql) && !/ip_hash\s*text\s*,?\s*--.*texto/i.test(sql), 'La IP se guarda cifrada con una clave secreta propia');
+  assert(/cf-connecting-ip/.test(sql) && /split_part\(coalesce\(\w+ ->> 'x-forwarded-for', ''\), ',', 1\)/.test(sql), 'IP según Cloudflare o la primera de x-forwarded-for (lo que recomienda Supabase)');
+  assert(/set_masklen\(v_addr, 64\)/.test(sql) && /::ffff:0\.0\.0\.0\/96/.test(sql), 'IPv6: se agrupa por la red de la casa (/64); las IPv4 escritas como IPv6 cuentan como IPv4');
+  assert(/when v_c\.source = 'encuesta' and private\.survey_identity_used\(p_uid\)/.test(sql), 'Al pagar se revisa otra vez la cédula y el teléfono');
+  assert(/alter table public\.survey_blocks enable row level security/i.test(sql) && /revoke all on public\.survey_blocks from anon, authenticated/i.test(sql), 'La lista de bloqueos solo la ve el administrador');
+  assert(/revoke all on private\.app_secrets from public, anon, authenticated/i.test(sql), 'La clave secreta no la lee nadie de afuera');
+  assert(customerJs.includes("localStorage.getItem('elite-device-id-v1')") && customerJs.includes('p_device:deviceId()'), 'La cuenta envía el identificador al azar del navegador');
+  assert(customerJs.includes('if(r.blocked||'), 'Si se bloquea por repetido, no se vuelve a intentar en cada entrada');
+  assert(adminHtml.includes('name="survey_ip_days"') && adminJs.includes('survey_ip_days: Number(') && adminJs.includes("/rest/v1/survey_blocks?select=reason,created_at"), 'El panel ajusta los días de la conexión y muestra los bloqueos');
+  assert(adminJs.includes("/^ES-/.test(code)"), 'Los códigos ES- quedan reservados para la encuesta');
+  assert(!adminJs.includes("survey_responses?select=*&order=created_at.desc"), 'El panel no descarga las huellas (IP cifrada, dispositivo) para mostrar resultados');
+  const privacy = await read('privacidad.html');
+  assert(privacy.includes('identificador al azar de tu navegador') && privacy.includes('versión cifrada de tu dirección IP'), 'La privacidad explica cómo se evita el abuso');
   assert(/grant execute on function public\.survey_info\(\) to anon, authenticated/i.test(sql), 'La información pública de la encuesta la ve cualquiera');
   assert(/alter table public\.survey_responses enable row level security/i.test(sql) && /revoke all on public\.survey_responses from anon, authenticated/i.test(sql), 'Respuestas con RLS');
   assert(/v_c\.user_id is not null and v_c\.user_id is distinct from p_uid/.test(sql), 'Un cupón personal solo lo usa su dueño');

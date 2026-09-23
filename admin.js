@@ -636,6 +636,7 @@
     e.preventDefault(); const couponForm = e.currentTarget, f = couponForm.elements, st = $('#coupon-status');
     const code = f.code.value.trim().toUpperCase().replace(/\s+/g, ''), kind = f.kind.value, value = Number(f.value.value);
     if (!/^[A-Z0-9_-]{3,24}$/.test(code)) { status(st, 'El código debe tener de 3 a 24 letras, números, guion o guion bajo, sin espacios.', 'error'); return; }
+    if (/^ES-/.test(code)) { status(st, 'Los códigos que empiezan con ES- están reservados para los cupones de la encuesta. Elige otro.', 'error'); return; }
     if (!(value > 0)) { status(st, 'Escribe el valor del descuento.', 'error'); return; }
     if (kind === 'percent' && value > 90) { status(st, 'El porcentaje máximo permitido es 90%.', 'error'); return; }
     const starts = f.starts_at.value ? new Date(f.starts_at.value) : null, ends = f.ends_at.value ? new Date(f.ends_at.value) : null;
@@ -720,15 +721,17 @@
 
   // --- Encuesta: ajustes, resultados por pregunta y descarga para Excel (las preguntas están en survey.js) ---
   const SURVEY_URL = 'https://elitescentsrd.github.io/encuesta.html';
-  let surveyResponses = [], surveyCoupons = [];
+  let surveyResponses = [], surveyCoupons = [], surveyBlocks = [];
   function surveyKpis() {
     const used = surveyCoupons.filter(c => Number(c.used_count) > 0).length;
     const surveyOrders = orders.filter(o => /^ES-/.test(String(o.coupon_code || '')) && String(o.status || 'nuevo') !== 'cancelado');
     const total = surveyOrders.reduce((sum, o) => sum + (window.EliteSales ? window.EliteSales.amountOf(o) : 0), 0);
+    const byReason = reason => surveyBlocks.filter(b => b.reason === reason).length;
     $('#survey-kpis').replaceChildren(
       kpi('Respuestas', String(surveyResponses.length), ''),
       kpi('Cupones usados', used + ' de ' + surveyCoupons.length, surveyCoupons.length ? Math.round((used / surveyCoupons.length) * 100) + '% lo usó' : ''),
-      kpi('Pedidos con cupón de encuesta', String(surveyOrders.length), rd(total) + ' en esos pedidos'));
+      kpi('Pedidos con cupón de encuesta', String(surveyOrders.length), rd(total) + ' en esos pedidos'),
+      kpi('Intentos repetidos bloqueados', String(surveyBlocks.length), 'mismo teléfono o computadora: ' + byReason('dispositivo') + ' · misma cédula o teléfono: ' + byReason('identidad') + ' · misma conexión: ' + byReason('conexion'), surveyBlocks.length ? 'warn' : ''));
   }
   function renderSurveyResults() {
     const S = window.EliteSurvey, box = $('#survey-results');
@@ -757,20 +760,22 @@
   async function loadSurvey() {
     const notice = $('#survey-notice'), form = $('#survey-form');
     try {
-      const [settings] = await api('/rest/v1/store_settings?select=survey_enabled,survey_amount,survey_valid_days,survey_min_subtotal&id=eq.true');
-      surveyResponses = await fetchAll('/rest/v1/survey_responses?select=*&order=created_at.desc');
+      const [settings] = await api('/rest/v1/store_settings?select=survey_enabled,survey_amount,survey_valid_days,survey_min_subtotal,survey_ip_days&id=eq.true');
+      surveyResponses = await fetchAll('/rest/v1/survey_responses?select=id,created_at,coupon_code,answers&order=created_at.desc');
       surveyCoupons = await fetchAll('/rest/v1/coupons?select=code,used_count,ends_at,value&source=eq.encuesta');
-      if (settings) { const f = form.elements; f.survey_enabled.checked = Boolean(settings.survey_enabled); f.survey_amount.value = Number(settings.survey_amount); f.survey_valid_days.value = settings.survey_valid_days; f.survey_min_subtotal.value = Number(settings.survey_min_subtotal); }
+      surveyBlocks = await fetchAll('/rest/v1/survey_blocks?select=reason,created_at&order=created_at.desc');
+      if (settings) { const f = form.elements; f.survey_enabled.checked = Boolean(settings.survey_enabled); f.survey_amount.value = Number(settings.survey_amount); f.survey_valid_days.value = settings.survey_valid_days; f.survey_min_subtotal.value = Number(settings.survey_min_subtotal); f.survey_ip_days.value = settings.survey_ip_days; }
       notice.classList.add('hidden'); form.classList.remove('hidden');
     } catch (err) {
-      surveyResponses = []; surveyCoupons = []; notice.classList.remove('hidden'); form.classList.add('hidden');
+      surveyResponses = []; surveyCoupons = []; surveyBlocks = []; notice.classList.remove('hidden'); form.classList.add('hidden');
       notice.textContent = /survey|schema cache|could not find|column|relation/i.test(err.message) ? 'Para usar la encuesta falta aplicar la migración "encuesta" en Supabase (SQL Editor).' : 'No se pudo cargar la encuesta: ' + err.message;
     }
     renderSurveyResults();
   }
   $('#survey-form').addEventListener('submit', async e => {
     e.preventDefault(); const f = e.currentTarget.elements, st = $('#survey-status');
-    const body = { survey_enabled: f.survey_enabled.checked, survey_amount: Number(f.survey_amount.value), survey_valid_days: Number(f.survey_valid_days.value), survey_min_subtotal: Number(f.survey_min_subtotal.value) || 0, updated_at: new Date().toISOString() };
+    const body = { survey_enabled: f.survey_enabled.checked, survey_amount: Number(f.survey_amount.value), survey_valid_days: Number(f.survey_valid_days.value), survey_min_subtotal: Number(f.survey_min_subtotal.value) || 0, survey_ip_days: Number(f.survey_ip_days.value), updated_at: new Date().toISOString() };
+    if (!(Number.isInteger(body.survey_ip_days) && body.survey_ip_days >= 0 && body.survey_ip_days <= 365)) { status(st, 'Los días de la misma conexión deben ser de 0 a 365.', 'error'); return; }
     if (!(body.survey_amount >= 1 && body.survey_amount <= 5000)) { status(st, 'El cupón debe ser de RD$1 a RD$5,000.', 'error'); return; }
     if (!(Number.isInteger(body.survey_valid_days) && body.survey_valid_days >= 1 && body.survey_valid_days <= 365)) { status(st, 'La validez debe ser de 1 a 365 días.', 'error'); return; }
     if (body.survey_min_subtotal < 0) { status(st, 'La compra mínima no puede ser negativa.', 'error'); return; }

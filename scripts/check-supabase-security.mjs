@@ -108,10 +108,12 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else if (pending(r)) record('AVISO', name + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260923120000_encuesta.sql');
     else record('FALLO', 'Un visitante puede ejecutar ' + name, 'HTTP ' + r.status + ' ' + r.text.slice(0, 100));
   }
-  const s = await call('GET', '/rest/v1/survey_responses?select=*&limit=1');
-  if (denied(s) || ((s.status === 200 || s.status === 206) && Array.isArray(s.json) && s.json.length === 0)) record('OK', 'Visitantes no leen survey_responses', 'HTTP ' + s.status);
-  else if (pending(s)) record('AVISO', 'La tabla survey_responses todavía no existe en Supabase', 'aplicar supabase/migrations/20260923120000_encuesta.sql');
-  else record('FALLO', 'Un visitante puede leer survey_responses', 'HTTP ' + s.status);
+  for (const table of ['survey_responses', 'survey_blocks']) {
+    const s = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(s) || ((s.status === 200 || s.status === 206) && Array.isArray(s.json) && s.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + s.status);
+    else if (pending(s)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260923120000_encuesta.sql');
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + s.status);
+  }
 }
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {

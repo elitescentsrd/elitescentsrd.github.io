@@ -176,8 +176,10 @@
           <label>Cupón (RD$)<input name="survey_amount" type="number" min="1" max="5000" step="1" required></label>
           <label>Válido por (días)<input name="survey_valid_days" type="number" min="1" max="365" step="1" required></label>
           <label>Compra mínima (RD$)<input name="survey_min_subtotal" type="number" min="0" step="1"></label>
+          <label>Misma conexión: días sin repetir (0 = no revisar)<input name="survey_ip_days" type="number" min="0" max="365" step="1" required></label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar ajustes</button><span id="survey-status" aria-live="polite"></span></div>
           <p class="span-4 muted">Los cambios aplican a los cupones nuevos; los que ya se entregaron conservan su monto y su fecha.</p>
+          <p class="span-4 muted">Uno por persona: no se entrega otro cupón al mismo teléfono o computadora, a la misma cédula o teléfono del perfil, ni a la misma conexión a internet (por ejemplo, el Wi-Fi de una casa) durante los días elegidos. Al pagar se revisa otra vez la cédula y el teléfono. Por datos móviles a veces muchas personas comparten la misma conexión: si alguien te escribe que lo bloqueó por error, dale un cupón a mano.</p>
         </form>
         <div class="sales-kpis" id="survey-kpis"></div>
         <div id="survey-results" class="survey-results"></div>
