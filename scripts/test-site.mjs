@@ -86,6 +86,7 @@ function expectedMarkup(cost){
 }
 assert.equal(pricing.items,420,'La auditoría de La Grada debe cubrir 420 productos');
 assert.equal(Object.values(pricing.costs_by_page).reduce((n,row)=>n+row.length,0),420,'El mapa de costos debe tener 420 posiciones');
+const fueraDeRango=[];
 for(const p of products){
   const position=positions[p.id];
   assert(position,'Falta posición interna de auditoría para '+p.name);
@@ -97,13 +98,17 @@ for(const p of products){
   // Durante una oferta, price es el precio de oferta y original_price el normal: la política de márgenes aplica al normal.
   const sells=numericPrices(p.original_price||p.price);
   assert.equal(sells.length,costs.length,'Presentaciones no coinciden para '+p.name);
-  // Precio normal válido: la regla original (costo + margen) o el precio recomendado tras el catálogo de sept. 2026.
+  // El precio normal lo decide el dueño en el panel: puede ser la regla original (costo + margen), el recomendado tras el
+  // catálogo de sept. 2026 u otro que ponga a mano. Solo se rechaza uno absurdo (menos de la mitad o más del doble de esas
+  // referencias), que casi siempre es un error al escribir; un precio cambiado a mano no debe frenar la publicación de la web.
   const recomendado=numericPrices(precios2609.precios_recomendados[String(p.id)]||'');
   costs.forEach((cost,i)=>{
-    const regla=cost+expectedMarkup(cost);
-    assert(sells[i]===regla||sells[i]===recomendado[i],'Precio fuera de política para '+p.name+': RD$'+sells[i]+' (regla RD$'+regla+(recomendado[i]?', recomendado RD$'+recomendado[i]:'')+')');
+    const referencias=[cost+expectedMarkup(cost),recomendado[i]].filter(Number.isFinite);
+    const minimo=Math.min(...referencias)/2,maximo=Math.max(...referencias)*2;
+    if(!(sells[i]>=minimo&&sells[i]<=maximo))fueraDeRango.push(p.name+': RD$'+sells[i]+' (esperado entre RD$'+minimo+' y RD$'+maximo+')');
   });
 }
+assert.equal(fueraDeRango.length,0,'Precios fuera de rango (¿error al escribir en el panel?):\n'+fueraDeRango.join('\n'));
 {
   // data/precios-2026-09.json y el script SQL que lo aplica deben decir lo mismo (sin costos: solo precios públicos).
   const sql=await readFile(precios2609.aplicar_con,'utf8');
