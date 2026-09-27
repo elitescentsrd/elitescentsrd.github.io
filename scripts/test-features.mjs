@@ -13,7 +13,9 @@ const [indexHtml, template, tiendaJs, adminHtml, adminJs, checkoutHtml, customer
   read('index.html'), read('src/index.template.html'), read('tienda.js'), read('admin.html'), read('admin.js'), read('checkout.html'), read('customer.js'), read('scripts/build-site-artifact.mjs'), read('sw.js'),
 ]);
 const products = JSON.parse(indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]);
-assert.equal(products.length, 420);
+// 420 perfumes; algunos pueden estar ocultos mientras se confirman con La Grada (data/precios-2026-09.json).
+const ocultables = JSON.parse(await read('data/precios-2026-09.json')).ocultos.length;
+assert(products.length >= 420 - ocultables && products.length <= 420, 'Productos visibles fuera de rango: ' + products.length);
 const runUmd = async file => { const ctx = { module: { exports: {} } }; vm.runInNewContext(await read(file), ctx, { filename: file }); return ctx.module.exports; };
 const plain = value => JSON.parse(JSON.stringify(value)); // los objetos creados dentro de vm tienen otro prototipo
 const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].map(m => m[1]))];
@@ -133,7 +135,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const expected = { 'Pimienta rosa': 'especiado', 'Toronja rosada': 'fresco', 'Water Peony': 'floral', 'Manzana verde': 'frutal', 'Flor de azahar': 'floral', 'Ámbar gris': 'amaderado', 'Haba tonka': 'dulce', 'Notas marinas': 'fresco', 'Musgo de roble': 'amaderado', 'Cuero': 'especiado', 'Coconut Water': 'frutal', 'Té verde': 'fresco', 'Vainilla': 'dulce', 'Bergamota': 'fresco', 'Oud': 'amaderado', 'Jazmín': 'floral', 'Canela': 'especiado', 'Piña': 'frutal', 'Almizcle': null };
   for (const [note, family] of Object.entries(expected)) assert.equal(A.familyOf(note), family, 'Familia de "' + note + '"');
   const withFamily = products.filter(p => A.familiesOf(p).length);
-  assert.equal(withFamily.length, 420, 'Los 420 perfumes deben tener al menos una familia de aroma');
+  assert.equal(withFamily.length, products.length, 'Todos los perfumes deben tener al menos una familia de aroma');
   const perFamily = {}; for (const p of products) for (const f of A.familiesOf(p)) perFamily[f] = (perFamily[f] || 0) + 1;
   for (const family of Object.keys(A.FAMILIES)) assert((perFamily[family] || 0) >= 100, 'La familia ' + family + ' debe tener perfumes suficientes (' + (perFamily[family] || 0) + ')');
   const scenario = (answers, check) => { const { items, total } = A.recommend(products, answers, 6); assert(items.length > 0 && total >= items.length); check(items); return items; };
@@ -159,13 +161,13 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(template.indexOf('/aroma.js') > -1 && template.indexOf('/aroma.js') < template.indexOf('/tienda.js'), 'aroma.js debe cargar antes que tienda.js');
   assert((template.match(/data-open-finder/g) || []).length >= 2, 'El buscador debe tener al menos dos accesos');
   assert(tiendaJs.includes("if(finderDialog&&Aroma)"), 'Sin aroma.js la tienda debe seguir funcionando');
-  console.log('Encuentra tu perfume: familias de los 420 perfumes, recomendaciones y pantalla correctas.');
+  console.log('Encuentra tu perfume: familias de los ' + products.length + ' perfumes, recomendaciones y pantalla correctas.');
 }
 
 // ---------------------------------------------------------------- Archivo de productos para Google / Instagram
 {
   const { xml, included, skipped } = merchantFeed(products, new Date('2026-09-21T12:00:00Z'));
-  assert.equal(included + skipped.length, 420); assert(included >= 410, 'Casi todos los perfumes deben estar en el archivo (' + included + ')');
+  assert.equal(included + skipped.length, products.length); assert(included >= products.length - 10, 'Casi todos los perfumes deben estar en el archivo (' + included + ')');
   assert.equal((xml.match(/<item>/g) || []).length, included); assert.equal((xml.match(/<\/item>/g) || []).length, included);
   assert(!/&(?!amp;|lt;|gt;|quot;|#39;)/.test(xml), 'El XML no puede tener & sin escapar');
   assert(!Array.from(xml).some(ch => { const c = ch.codePointAt(0); return c < 9 || c === 11 || c === 12 || (c > 13 && c < 32); }), 'Sin caracteres de control');
