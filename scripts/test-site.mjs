@@ -18,6 +18,8 @@ const enrichment = JSON.parse(enrichmentText);
 const pricing = JSON.parse(pricingText);
 // page/slot son datos internos de la auditoría de precios; no forman parte del HTML público.
 const positions = JSON.parse(positionsText);
+// Precios públicos después del catálogo de La Grada de sept. 2026 (sin costos) y perfumes que se pueden ocultar mientras se confirman.
+const precios2609 = JSON.parse(await readFile('data/precios-2026-09.json', 'utf8'));
 new Script(js,{filename:'tienda.js'});
 
 const products = JSON.parse(html.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1] || '[]');
@@ -25,17 +27,24 @@ const productSchemas = [...html.matchAll(/<script type="application\/ld\+json">(
   .map(match => JSON.parse(match[1]))
   .filter(item => item['@type'] === 'Product');
 
-assert.equal(products.length, 420, 'Deben pre-renderizarse los 420 productos');
+// Catálogo: 420 perfumes; los de precios2609.ocultos pueden estar ocultos (active = false) mientras se confirman con La Grada.
+const TOTAL = 420, N = products.length, ocultables = new Set(precios2609.ocultos.map(Number));
+assert(N >= TOTAL - ocultables.size && N <= TOTAL, 'Deben pre-renderizarse entre ' + (TOTAL - ocultables.size) + ' y ' + TOTAL + ' productos (hay ' + N + ')');
+{
+  const visibles = new Set(products.map(p => Number(p.id)));
+  const faltan = Object.keys(enrichment).map(Number).filter(id => !visibles.has(id) && !ocultables.has(id));
+  assert.deepEqual(faltan, [], 'Solo pueden faltar perfumes de la lista de ocultos (data/precios-2026-09.json)');
+}
 for(const p of products){assert(p.id!=null);assert(String(p.name||'').trim());assert(String(p.price||'').match(/\d/));}
-assert.equal((html.match(/data-product-id=/g) || []).length, 420, 'Debe existir una tarjeta estática por producto');
+assert.equal((html.match(/data-product-id=/g) || []).length, N, 'Debe existir una tarjeta estática por producto');
 for(const p of products) assert(html.includes('data-open-product="'+p.id+'"'),'Falta Ver detalles: '+p.name);
-assert.equal(productSchemas.length, 420, 'Debe existir un Product JSON-LD por producto');
+assert.equal(productSchemas.length, N, 'Debe existir un Product JSON-LD por producto');
 assert(productSchemas.every(item => item.name && item.brand?.name && item.offers?.priceCurrency === 'DOP'));
 // El JSON-LD nunca debe declarar una lámina completa (/pages/page-XX.webp)
 // como foto de un producto individual. Mientras un producto no tenga foto
 // propia, "image" debe estar ausente, no apuntar a la lámina.
 assert(productSchemas.every(item => !item.image || item.image.every(url => !url.includes('/pages/page-'))), 'El JSON-LD no debe usar la lámina completa como imagen de producto');
-assert.equal((html.match(/US\$\d+ aprox\./g) || []).length, 420, 'Cada tarjeta debe mostrar el precio aproximado en USD');
+assert.equal((html.match(/US\$\d+ aprox\./g) || []).length, N, 'Cada tarjeta debe mostrar el precio aproximado en USD');
 // catalogo.html (el visor de las 36 láminas completas) ya no se publica en
 // _site/; el enlace del footer no debe reaparecer por accidente.
 assert(!template.includes('/catalogo.html'), 'La plantilla no debe enlazar catalogo.html: ya no se publica');
@@ -54,11 +63,11 @@ assert(checkout.includes('id="placeOrder"'));
 assert(customer.includes('/rest/v1/rpc/place_customer_order'));
 assert(customer.includes("CART_KEY='elite-scents-cart-v3'"));
 assert.equal(Object.keys(enrichment).length, 420, 'Cada producto debe tener una ficha de notas con su fuente');
-assert.equal(products.filter(product => product.notes_top?.length && product.notes_heart?.length && product.notes_base?.length).length, 420, 'Los 420 productos deben tener salida, corazón y fondo');
+assert.equal(products.filter(product => product.notes_top?.length && product.notes_heart?.length && product.notes_base?.length).length, N, 'Todos los productos deben tener salida, corazón y fondo');
 assert(products.every(product => ![...product.notes_top, ...product.notes_heart, ...product.notes_base].includes('Información pendiente')), 'No deben quedar notas pendientes');
 assert(Object.values(enrichment).every(item => /^https:\/\//.test(item.source)), 'Cada ficha debe registrar una fuente web');
 
-console.log('Pruebas superadas: 420 productos con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
+console.log('Pruebas superadas: ' + N + ' productos visibles (de 420) con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
 
 
 
@@ -77,6 +86,7 @@ function expectedMarkup(cost){
 }
 assert.equal(pricing.items,420,'La auditoría de La Grada debe cubrir 420 productos');
 assert.equal(Object.values(pricing.costs_by_page).reduce((n,row)=>n+row.length,0),420,'El mapa de costos debe tener 420 posiciones');
+const fueraDeRango=[];
 for(const p of products){
   const position=positions[p.id];
   assert(position,'Falta posición interna de auditoría para '+p.name);
@@ -88,7 +98,39 @@ for(const p of products){
   // Durante una oferta, price es el precio de oferta y original_price el normal: la política de márgenes aplica al normal.
   const sells=numericPrices(p.original_price||p.price);
   assert.equal(sells.length,costs.length,'Presentaciones no coinciden para '+p.name);
-  costs.forEach((cost,i)=>assert.equal(sells[i],cost+expectedMarkup(cost),'Precio fuera de política para '+p.name));
+  // El precio normal lo decide el dueño en el panel: puede ser la regla original (costo + margen), el recomendado tras el
+  // catálogo de sept. 2026 u otro que ponga a mano. Solo se rechaza uno absurdo (menos de la mitad o más del doble de esas
+  // referencias), que casi siempre es un error al escribir; un precio cambiado a mano no debe frenar la publicación de la web.
+  const recomendado=numericPrices(precios2609.precios_recomendados[String(p.id)]||'');
+  costs.forEach((cost,i)=>{
+    const referencias=[cost+expectedMarkup(cost),recomendado[i]].filter(Number.isFinite);
+    const minimo=Math.min(...referencias)/2,maximo=Math.max(...referencias)*2;
+    if(!(sells[i]>=minimo&&sells[i]<=maximo))fueraDeRango.push(p.name+': RD$'+sells[i]+' (esperado entre RD$'+minimo+' y RD$'+maximo+')');
+  });
+}
+assert.equal(fueraDeRango.length,0,'Precios fuera de rango (¿error al escribir en el panel?):\n'+fueraDeRango.join('\n'));
+{
+  // data/precios-2026-09.json y el script SQL que lo aplica deben decir lo mismo (sin costos: solo precios públicos).
+  const sql=await readFile(precios2609.aplicar_con,'utf8');
+  const bloque=nombre=>sql.slice(sql.indexOf(nombre+'('),sql.indexOf('),\n\n',sql.indexOf(nombre+'(')));
+  const filas=nombre=>[...bloque(nombre).matchAll(/^\s+\((\d+)(?:::bigint)?((?:, '[^']*')*)\)/gm)].map(m=>[m[1],...[...m[2].matchAll(/'([^']*)'/g)].map(x=>x[1])]);
+  const subir=Object.fromEntries(filas('subir').map(([id,,nuevo])=>[id,nuevo]));
+  const ofertas=Object.fromEntries(filas('ofertas').map(([id,antes,ahora])=>[id,{antes,ahora}]));
+  assert.deepEqual(subir,precios2609.subir,'El SQL debe subir exactamente los precios de data/precios-2026-09.json');
+  assert.deepEqual(ofertas,precios2609.ofertas,'El SQL debe crear exactamente las ofertas de data/precios-2026-09.json');
+  assert.deepEqual(filas('ocultar').map(([id])=>Number(id)),precios2609.ocultos,'El SQL debe ocultar exactamente los perfumes de data/precios-2026-09.json');
+  // Cada presentación sube al precio recomendado (o se queda igual si ese tamaño no cambia) y al menos una sube.
+  for(const [id,antes,nuevo] of filas('subir')){
+    const a=numericPrices(antes),n=numericPrices(nuevo),r=numericPrices(precios2609.precios_recomendados[id]);
+    assert(n.length===a.length&&n.every((v,i)=>v===r[i]||v===a[i])&&n.some((v,i)=>v>a[i]),'Subida incoherente para #'+id+': '+antes+' → '+nuevo);
+  }
+  // Cada oferta es el precio recomendado y es menor que el precio de hoy en todas sus presentaciones.
+  for(const [id,{antes,ahora}] of Object.entries(precios2609.ofertas)){
+    const a=numericPrices(antes),b=numericPrices(ahora);
+    assert(ahora===precios2609.precios_recomendados[id]&&a.length===b.length&&b.every((v,i)=>v<a[i]),'Oferta incoherente para #'+id+': '+antes+' → '+ahora);
+  }
+  assert(!/costo|cost/i.test(JSON.stringify(precios2609.precios_recomendados))&&!('costs_by_page' in precios2609),'El archivo público de precios no debe incluir costos');
+  assert(/^\s*with modo\(deshacer\) as \(values \(false\)\)/m.test(sql),'El script SQL debe quedar en modo aplicar (deshacer = false)');
 }
 assert(checkout.includes('name="cedula" maxlength="30" autocomplete="off" required'),'La cédula debe ser obligatoria');
 assert(customer.includes('profile.reportValidity()'),'El checkout debe validar los datos antes de ordenar');
@@ -140,7 +182,7 @@ assert(html.includes('data-bg="/img/productos/thumbs/'),'Las tarjetas restantes 
   }
   assert.equal(withoutPhoto,0,'Ningún producto debe quedar con "Foto próximamente" (420 de 420 con foto)');
   const localSchemas=productSchemas.filter(s=>s.image&&s.image.every(u=>/^https:\/\//.test(u)&&!u.includes('/pages/page-')));
-  assert.equal(localSchemas.length,420,'Los 420 Product JSON-LD deben tener imagen individual absoluta');
+  assert.equal(localSchemas.length,N,'Todos los Product JSON-LD deben tener imagen individual absoluta');
 }
 
 // Carga por lote en el panel administrativo.
@@ -217,7 +259,7 @@ assert(customer.includes('async function finishMfaLogin(code)')&&customer.includ
 assert(checkout.includes('id="mfaLoginForm"')&&checkout.includes('id="disableMfa"')&&checkout.includes('id="mfaLink"'),'checkout.html debe incluir el código al entrar, desactivar y abrir en la app');
 // --- Descripciones propias: una por producto, con datos reales (nombre, notas), sin texto repetido ---
 assert(products.every(p=>String(p.description||'').length>=120&&p.description.includes(p.name)),'Cada producto debe tener una descripción propia con su nombre');
-assert(new Set(products.map(p=>p.description)).size>=415,'Las descripciones no deben repetirse (salvo productos idénticos)');
+assert(new Set(products.map(p=>p.description)).size>=N-5,'Las descripciones no deben repetirse (salvo productos idénticos)');
 assert(productSchemas.every(s=>String(s.description||'').length>=120),'El JSON-LD debe usar la descripción propia');
 // --- SEO: marca, páginas por perfume y sitemap ---
 {
@@ -250,9 +292,9 @@ assert(productSchemas.every(s=>String(s.description||'').length>=120),'El JSON-L
     assert(page.includes('<h1 class="detail-title">'+p.name.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')+'</h1>'),'h1 con el nombre en '+path);
     const title=page.match(/<title>([^<]*)<\/title>/)[1]; titles.add(title);
   }
-  assert.equal(paths.size,420,'Debe haber 420 páginas de perfume distintas');
-  assert(titles.size>=415,'Los títulos de las páginas de perfume no deben repetirse');
-  assert.equal((sitemap.match(/<image:image>/g)||[]).length,420,'El sitemap debe incluir la foto de cada perfume');
+  assert.equal(paths.size,N,'Debe haber una página de perfume distinta por producto');
+  assert(titles.size>=N-5,'Los títulos de las páginas de perfume no deben repetirse');
+  assert.equal((sitemap.match(/<image:image>/g)||[]).length,N,'El sitemap debe incluir la foto de cada perfume');
   for(const u of [SITE_URL+'/',SITE_URL+'/pedidos-envios.html',SITE_URL+'/privacidad.html']) assert(sitemap.includes('<loc>'+u+'</loc>'),'El sitemap debe incluir '+u);
   assert(!sitemap.includes('catalogo.html')&&!sitemap.includes('admin.html')&&!sitemap.includes('checkout.html'),'El sitemap no debe listar páginas retiradas ni privadas');
   // El slug de tienda.js (enlaces de las tarjetas dibujadas por JavaScript) debe ser idéntico al del build.
