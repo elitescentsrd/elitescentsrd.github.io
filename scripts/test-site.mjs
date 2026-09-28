@@ -132,6 +132,21 @@ assert.equal(fueraDeRango.length,0,'Precios fuera de rango (¿error al escribir 
   assert(!/costo|cost/i.test(JSON.stringify(precios2609.precios_recomendados))&&!('costs_by_page' in precios2609),'El archivo público de precios no debe incluir costos');
   assert(/^\s*with modo\(deshacer\) as \(values \(false\)\)/m.test(sql),'El script SQL debe quedar en modo aplicar (deshacer = false)');
 }
+{
+  // Script del 28-sep: los del catálogo de La Grada quedan disponibles, los que no están quedan visibles como agotados,
+  // y algunos precios se ajustan a la competencia (solo precios públicos, sin costos).
+  const sql=await readFile('supabase/migrations/20260928120000_disponibilidad_y_precios.sql','utf8');
+  const bloque=nombre=>{const i=sql.indexOf('insert into '+nombre+' (');assert(i>0,'Falta la lista '+nombre);return sql.slice(i,sql.indexOf('\n\n',i))};
+  const ids=nombre=>[...bloque(nombre).matchAll(/^\s+\((\d+)\)[,;]/gm)].map(m=>Number(m[1]));
+  const catalogo=ids('catalogo'),agotados=ids('agotados');
+  assert.deepEqual(catalogo,Object.keys(precios2609.precios_recomendados).map(Number).sort((a,b)=>a-b),'El catálogo del script debe ser el de data/precios-2026-09.json');
+  assert.deepEqual(agotados,[...precios2609.ocultos].sort((a,b)=>a-b),'Los agotados del script deben ser los que no están en el catálogo de La Grada');
+  assert.equal(new Set([...catalogo,...agotados,...Object.keys(enrichment).map(Number)]).size,TOTAL,'Catálogo + agotados deben ser los 420 perfumes');
+  const precios=[...bloque('precios').matchAll(/^\s+\((\d+), '([^']*)', '([^']*)'\)[,;]/gm)];
+  assert(precios.length>0&&precios.every(([,,antes,nuevo])=>antes!==nuevo&&numericPrices(antes).length===numericPrices(nuevo).length&&/^RD\$[0-9,]+( \/ RD\$[0-9,]+)*$/.test(nuevo)),'Cada precio del script debe cambiar y tener las mismas presentaciones');
+  assert(/select false as deshacer;/.test(sql)&&/-- FIN\s*$/.test(sql),'El script del 28-sep debe quedar en modo aplicar y completo');
+  assert(!/costo|cost|margen|ganancia/i.test(sql.replace(/--[^\n]*/g,'')),'El script no debe incluir costos ni márgenes (fuera de los comentarios)');
+}
 assert(checkout.includes('name="cedula" maxlength="30" autocomplete="off" required'),'La cédula debe ser obligatoria');
 assert(customer.includes('profile.reportValidity()'),'El checkout debe validar los datos antes de ordenar');
 assert(adminJs.includes("'preparando'") && adminJs.includes("'enviado'"),'Admin debe usar estados válidos');
