@@ -66,7 +66,9 @@ async function openFile(file) {
 }
 
 async function closeDoc() {
-  if (S.pdf) await S.pdf.destroy().catch(() => {});
+  const old = S.pdf;
+  S.pdf = null;
+  if (old) await old.destroy().catch(() => {});
   Object.assign(S, { file: null, bytes: null, pdf: null, pages: [], sizes: [], detections: [], downloaded: false, zoom: 1 });
   S.rendered = new Map();
   $('#pages').replaceChildren();
@@ -167,7 +169,7 @@ function renderReview() {
   const pagesBox = $('#pages');
   pagesBox.replaceChildren();
   S.rendered = new Map();
-  const observer = new IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) drawPage(Number(e.target.dataset.page)); }), { root: $('#viewer'), rootMargin: '800px 0px' });
+  const observer = new IntersectionObserver(entries => entries.forEach(e => { if (e.isIntersecting) drawPage(Number(e.target.dataset.page)).catch(err => console.warn('No se pudo dibujar la página', err)); }), { root: $('#viewer'), rootMargin: '800px 0px' });
   S.sizes.forEach((size, p) => {
     const wrap = el('div', { class: 'page-wrap', dataset: { page: p }, role: 'group', 'aria-label': 'Página ' + (p + 1) + ' de ' + S.sizes.length });
     wrap.append(el('span', { class: 'page-no' }, 'Página ' + (p + 1) + (S.pages[p].ocr ? ' · escaneada' : '')), el('canvas', { 'aria-hidden': 'true' }));
@@ -182,19 +184,28 @@ function renderReview() {
 }
 
 async function drawPage(p) {
+  if (!S.pdf) return;
   const wrap = $('.page-wrap[data-page="' + p + '"]');
   if (!wrap) return;
   const cssW = S.sizes[p].w * baseScale() * S.zoom;
   const scale = Math.min((cssW * (window.devicePixelRatio || 1)) / S.sizes[p].w, 2600 / S.sizes[p].w);
   if (S.rendered.get(p) === scale) return;
   S.rendered.set(p, scale);
-  const page = await S.pdf.getPage(p + 1);
-  const vp = page.getViewport({ scale });
+  const pdf = S.pdf, rendered = S.rendered;
   const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
-  canvas.setAttribute('aria-hidden', 'true');
-  await page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, annotationMode: pdfjs.AnnotationMode.ENABLE }).promise;
-  if (S.rendered.get(p) !== scale) return;
+  try {
+    const page = await pdf.getPage(p + 1);
+    const vp = page.getViewport({ scale });
+    canvas.width = Math.ceil(vp.width); canvas.height = Math.ceil(vp.height);
+    canvas.setAttribute('aria-hidden', 'true');
+    await page.render({ canvasContext: canvas.getContext('2d', { alpha: false }), viewport: vp, annotationMode: pdfjs.AnnotationMode.ENABLE }).promise;
+  } catch (err) {
+    // Si entretanto se cerró el documento (otro archivo, "Anonimizar otro documento"), el dibujo cancelado no importa.
+    if (pdf !== S.pdf || err?.name === 'RenderingCancelledException') return;
+    rendered.delete(p);
+    throw err;
+  }
+  if (pdf !== S.pdf || S.rendered.get(p) !== scale || !wrap.isConnected) return;
   wrap.querySelector('canvas').replaceWith(canvas);
 }
 
@@ -202,7 +213,7 @@ function applyZoom() {
   const b = baseScale();
   $$('.page-wrap').forEach(w => { const p = Number(w.dataset.page); w.style.setProperty('--page-w', Math.round(S.sizes[p].w * b * S.zoom) + 'px'); });
   $('#zoomLevel').textContent = Math.round(S.zoom * 100) + ' %';
-  S.rendered.forEach((_, p) => drawPage(p));
+  S.rendered.forEach((_, p) => drawPage(p).catch(err => console.warn('No se pudo dibujar la página', err)));
 }
 let zoomTimer;
 function setZoom(z) { S.zoom = Math.max(0.5, Math.min(3, Math.round(z * 100) / 100)); clearTimeout(zoomTimer); $$('.page-wrap').forEach(w => { const p = Number(w.dataset.page); w.style.setProperty('--page-w', Math.round(S.sizes[p].w * baseScale() * S.zoom) + 'px'); }); $('#zoomLevel').textContent = Math.round(S.zoom * 100) + ' %'; zoomTimer = setTimeout(applyZoom, 200); }
