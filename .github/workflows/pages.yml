@@ -80,6 +80,28 @@ jobs:
       - name: Test Supabase migrations
         run: npm run test:sql
 
+  # Opaco (herramienta de anonimización de PDF en /opaco/): recorrido completo en Chromium (acceso, análisis, OCR,
+  # descarga del PDF censurado y comprobación de que no conserva los datos, créditos y pago simulado).
+  opaco:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the browser driver (playwright-core, exact version; uses the runner's Chrome)
+        run: npm install --no-save --no-audit --no-fund playwright-core@1.63.0
+      - name: Opaco end-to-end test
+        run: npm run test:opaco:e2e
+        env:
+          CHROMIUM: /usr/bin/google-chrome
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build

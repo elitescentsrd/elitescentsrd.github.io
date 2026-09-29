@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Entrar o crear cuenta · Opaco</title>
+<meta name="description" content="Accede a Opaco o crea una cuenta gratuita con 5 créditos para anonimizar tus primeros documentos PDF.">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Entrar o crear cuenta · Opaco">
+<meta property="og:description" content="Accede a Opaco o crea una cuenta gratuita con 5 créditos para anonimizar tus primeros documentos PDF.">
+<meta property="og:url" content="https://elitescentsrd.github.io/opaco/acceso.html">
+<meta property="og:image" content="https://elitescentsrd.github.io/opaco/img/despues.png">
+<meta name="theme-color" content="#1e3a5f">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/opaco.css">
+<script src="js/frame-guard.js"></script>
+<script type="module" src="js/acceso.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Saltar al contenido</a>
+<div class="demo-bar" role="note"><strong>Versión de demostración.</strong> Los pagos son simulados: no se cobra nada ni se piden datos de tarjeta.</div>
+<header class="site-header"><div class="container">
+  <a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="26" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="9" y="9" width="14" height="4.5" fill="#0a0a0a"/><path d="M9 18h14M9 22.5h9" stroke="currentColor" stroke-width="2.2"/></svg><span>Opaco</span></a>
+  <nav class="nav" aria-label="Principal"><a href="./#como-funciona">Cómo funciona</a><a href="./#seguridad">Seguridad</a><a href="./#precios">Precios</a><a href="./#preguntas">Preguntas</a></nav>
+  <div class="header-actions">
+    <span data-auth="out"><a class="btn btn-ghost btn-sm hide-sm" href="acceso.html">Entrar</a> <a class="btn btn-primary btn-sm" href="acceso.html?modo=registro">Probar gratis</a></span>
+    <span data-auth="in" hidden><a class="btn btn-ghost btn-sm hide-sm" href="cuenta.html">Mi cuenta</a> <a class="btn btn-primary btn-sm" href="app.html">Abrir Opaco</a></span>
+  </div>
+</div></header>
+<main id="main">
+<section class="page">
+  <div class="auth-card">
+    <div class="tabs" role="tablist" aria-label="Acceso">
+      <button type="button" role="tab" id="tabLogin" aria-selected="true" aria-controls="loginForm">Iniciar sesión</button>
+      <button type="button" role="tab" id="tabRegister" aria-selected="false" aria-controls="registerForm">Crear cuenta</button>
+    </div>
+
+    <form id="loginForm" role="tabpanel" aria-labelledby="tabLogin" novalidate>
+      <h1 class="sr-only">Iniciar sesión</h1>
+      <div class="field"><label for="loginEmail">Correo electrónico</label><input id="loginEmail" name="email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="loginPassword">Contraseña</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary btn-block" type="submit">Entrar</button>
+      <p class="form-status" id="loginStatus" role="status" aria-live="polite"></p>
+      <div class="demo-credentials">
+        <strong>Cuenta de prueba</strong><br>
+        Correo: <code>prueba@opaco.demo</code><br>
+        Contraseña: <code>PruebaOpaco-2026</code><br>
+        <button type="button" class="btn btn-link" id="fillDemo">Rellenar con la cuenta de prueba</button>
+      </div>
+    </form>
+
+    <form id="registerForm" role="tabpanel" aria-labelledby="tabRegister" novalidate hidden>
+      <h1 class="sr-only">Crear cuenta</h1>
+      <p class="muted small">Plan Gratuito con <strong>5 créditos</strong> (5 páginas) para probar Opaco. Sin tarjeta.</p>
+      <div class="field"><label for="regName">Nombre y apellidos</label><input id="regName" name="name" type="text" autocomplete="name" required></div>
+      <div class="field"><label for="regCompany">Empresa o despacho <span class="muted">(opcional)</span></label><input id="regCompany" name="company" type="text" autocomplete="organization"></div>
+      <div class="field"><label for="regEmail">Correo electrónico</label><input id="regEmail" name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="regPassword">Contraseña</label><input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="10" required aria-describedby="regPasswordHint"><span class="hint" id="regPasswordHint">Al menos 10 caracteres, con letras y números.</span></div>
+      <label class="check"><input type="checkbox" name="accept" id="regAccept" required><span>He leído y acepto los <a href="terminos.html" target="_blank" rel="noopener">términos y condiciones</a> y la <a href="privacidad.html" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+      <button class="btn btn-primary btn-block" type="submit">Crear cuenta gratis</button>
+      <p class="form-status" id="registerStatus" role="status" aria-live="polite"></p>
+    </form>
+    <p class="muted small" id="storageNote">En esta versión de demostración, las cuentas se guardan en este navegador.</p>
+  </div>
+</section>
+</main>
+<footer class="site-footer"><div class="container">
+  <div class="footer-grid">
+    <div><a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="26" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="9" y="9" width="14" height="4.5" fill="#0a0a0a"/><path d="M9 18h14M9 22.5h9" stroke="currentColor" stroke-width="2.2"/></svg><span>Opaco</span></a><p class="muted small footer-about">Anonimización de documentos PDF para gestorías, despachos de abogados y departamentos de recursos humanos. Los documentos se procesan en tu navegador y no se suben a ningún servidor.</p></div>
+    <div><h4>Producto</h4><ul><li><a href="./#como-funciona">Cómo funciona</a></li><li><a href="./#precios">Precios</a></li><li><a href="app.html">Abrir la herramienta</a></li><li><a href="acceso.html">Entrar</a></li></ul></div>
+    <div><h4>Legal</h4><ul><li><a href="aviso-legal.html">Aviso legal</a></li><li><a href="privacidad.html">Política de privacidad</a></li><li><a href="terminos.html">Términos y condiciones</a></li><li><a href="cookies.html">Política de cookies</a></li></ul></div>
+  </div>
+  <div class="footer-bottom"><span>© 2026 Opaco</span><span>Versión de demostración · los pagos son simulados</span></div>
+</div></footer>
+</body>
+</html>

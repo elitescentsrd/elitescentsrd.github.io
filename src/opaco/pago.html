@@ -1,0 +1,27 @@
+<!--{"title": "Planes y pago · Opaco", "description": "Elige el plan de Opaco que necesitas. Pago simulado en esta versión de demostración.", "script": "pago.js", "private": true, "layout": "app", "bodyClass": "app-body", "noFooter": true}-->
+<section class="tool">
+  <div class="section-head">
+    <h1>Planes</h1>
+    <p class="muted">Un crédito equivale a una página procesada. Los créditos de los planes de pago se renuevan cada mes.</p>
+  </div>
+  <div class="pricing" id="plans"></div>
+
+  <div class="checkout" id="checkout" hidden>
+    <article class="card">
+      <div class="card-title"><h2>Pago</h2><span class="badge badge-demo">Simulado</span></div>
+      <div class="stamp" role="note"><strong>Modo demostración: no se cobra nada.</strong> Esta pantalla imita una pasarela de pago. No escribas aquí datos de ninguna tarjeta real: los campos están bloqueados y no se envía nada.</div>
+      <div class="fake-card" aria-hidden="true">
+        <div class="field"><span class="label">Titular de la tarjeta</span><input type="text" value="—" disabled tabindex="-1"></div>
+        <div class="field"><span class="label">Número de tarjeta</span><input type="text" value="•••• •••• •••• ••••" disabled tabindex="-1"></div>
+        <div class="grid-2"><div class="field"><span class="label">Caducidad</span><input type="text" value="MM/AA" disabled tabindex="-1"></div><div class="field"><span class="label">CVC</span><input type="text" value="•••" disabled tabindex="-1"></div></div>
+      </div>
+      <button type="button" class="btn btn-primary btn-block btn-lg" id="payButton">Confirmar (simulación, 0 €)</button>
+      <p class="form-status" id="payStatus" role="status" aria-live="polite"></p>
+    </article>
+    <article class="card">
+      <div class="card-title"><h2>Resumen</h2></div>
+      <div id="summary"></div>
+      <p class="muted small" id="summaryNote"></p>
+    </article>
+  </div>
+</section>

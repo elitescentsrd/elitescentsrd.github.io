@@ -1,0 +1,36 @@
+<!--{"title": "Entrar o crear cuenta · Opaco", "description": "Accede a Opaco o crea una cuenta gratuita con 5 créditos para anonimizar tus primeros documentos PDF.", "script": "acceso.js", "private": true}-->
+<section class="page">
+  <div class="auth-card">
+    <div class="tabs" role="tablist" aria-label="Acceso">
+      <button type="button" role="tab" id="tabLogin" aria-selected="true" aria-controls="loginForm">Iniciar sesión</button>
+      <button type="button" role="tab" id="tabRegister" aria-selected="false" aria-controls="registerForm">Crear cuenta</button>
+    </div>
+
+    <form id="loginForm" role="tabpanel" aria-labelledby="tabLogin" novalidate>
+      <h1 class="sr-only">Iniciar sesión</h1>
+      <div class="field"><label for="loginEmail">Correo electrónico</label><input id="loginEmail" name="email" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="loginPassword">Contraseña</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required></div>
+      <button class="btn btn-primary btn-block" type="submit">Entrar</button>
+      <p class="form-status" id="loginStatus" role="status" aria-live="polite"></p>
+      <div class="demo-credentials">
+        <strong>Cuenta de prueba</strong><br>
+        Correo: <code>prueba@opaco.demo</code><br>
+        Contraseña: <code>PruebaOpaco-2026</code><br>
+        <button type="button" class="btn btn-link" id="fillDemo">Rellenar con la cuenta de prueba</button>
+      </div>
+    </form>
+
+    <form id="registerForm" role="tabpanel" aria-labelledby="tabRegister" novalidate hidden>
+      <h1 class="sr-only">Crear cuenta</h1>
+      <p class="muted small">Plan Gratuito con <strong>5 créditos</strong> (5 páginas) para probar Opaco. Sin tarjeta.</p>
+      <div class="field"><label for="regName">Nombre y apellidos</label><input id="regName" name="name" type="text" autocomplete="name" required></div>
+      <div class="field"><label for="regCompany">Empresa o despacho <span class="muted">(opcional)</span></label><input id="regCompany" name="company" type="text" autocomplete="organization"></div>
+      <div class="field"><label for="regEmail">Correo electrónico</label><input id="regEmail" name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="regPassword">Contraseña</label><input id="regPassword" name="password" type="password" autocomplete="new-password" minlength="10" required aria-describedby="regPasswordHint"><span class="hint" id="regPasswordHint">Al menos 10 caracteres, con letras y números.</span></div>
+      <label class="check"><input type="checkbox" name="accept" id="regAccept" required><span>He leído y acepto los <a href="terminos.html" target="_blank" rel="noopener">términos y condiciones</a> y la <a href="privacidad.html" target="_blank" rel="noopener">política de privacidad</a>.</span></label>
+      <button class="btn btn-primary btn-block" type="submit">Crear cuenta gratis</button>
+      <p class="form-status" id="registerStatus" role="status" aria-live="polite"></p>
+    </form>
+    <p class="muted small" id="storageNote">En esta versión de demostración, las cuentas se guardan en este navegador.</p>
+  </div>
+</section>

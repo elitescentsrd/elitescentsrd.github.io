@@ -1,0 +1,71 @@
+<!--{"title": "Mi cuenta · Opaco", "description": "Plan, créditos, historial de uso y facturación de tu cuenta de Opaco.", "script": "cuenta.js", "private": true, "layout": "app", "bodyClass": "app-body", "noFooter": true}-->
+<section class="tool">
+  <h1 class="sr-only">Mi cuenta</h1>
+  <div class="tool-alerts" id="alerts"></div>
+  <div class="account-grid">
+    <div class="stack">
+      <article class="card">
+        <div class="card-title"><h2>Créditos</h2><a class="btn btn-primary btn-sm" href="app.html">Anonimizar un documento</a></div>
+        <p class="big-number"><span data-user="credits">0</span> <small class="muted">de <span data-user="allotment">0</span></small></p>
+        <div class="meter" data-user="meter"><span></span></div>
+        <p class="muted small" id="creditsNote"></p>
+      </article>
+      <article class="card">
+        <div class="card-title"><h2>Movimientos</h2><span class="muted small">1 crédito = 1 página</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="num">Créditos</th></tr></thead><tbody id="usage"></tbody></table></div>
+        <p class="muted small">Por privacidad no guardamos el nombre ni el contenido de los documentos, solo cuántas páginas se procesaron.</p>
+      </article>
+      <article class="card">
+        <div class="card-title"><h2>Facturas</h2><span class="badge badge-demo">Simuladas</span></div>
+        <div class="table-wrap"><table><thead><tr><th>Número</th><th>Fecha</th><th>Concepto</th><th class="num">Importe</th></tr></thead><tbody id="invoices"></tbody></table></div>
+      </article>
+    </div>
+    <div class="stack">
+      <article class="card">
+        <div class="card-title"><h2>Plan</h2><span class="badge" id="planBadge"></span></div>
+        <dl class="kv" id="planInfo"></dl>
+        <div class="button-row" id="planActions"></div>
+        <p class="form-status" id="planStatus" role="status" aria-live="polite"></p>
+      </article>
+      <article class="card" id="demoTools">
+        <div class="card-title"><h2>Herramientas de demostración</h2><span class="badge badge-demo">Demo</span></div>
+        <p class="small muted">Para probar la facturación sin esperar un mes.</p>
+        <div class="button-row">
+          <button type="button" class="btn btn-ghost btn-sm" id="simulateRenewal">Simular fin de mes</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="resetDemo" hidden>Restablecer la cuenta de prueba</button>
+        </div>
+        <p class="form-status" id="demoStatus" role="status" aria-live="polite"></p>
+      </article>
+      <article class="card">
+        <div class="card-title"><h2>Datos de la cuenta</h2></div>
+        <form id="profileForm" novalidate>
+          <div class="field"><label for="pName">Nombre y apellidos</label><input id="pName" name="name" type="text" autocomplete="name" required></div>
+          <div class="field"><label for="pCompany">Empresa o despacho</label><input id="pCompany" name="company" type="text" autocomplete="organization"></div>
+          <div class="field"><span class="label">Correo electrónico</span><span data-user="email"></span></div>
+          <button type="submit" class="btn btn-ghost btn-sm">Guardar cambios</button>
+          <p class="form-status" id="profileStatus" role="status" aria-live="polite"></p>
+        </form>
+      </article>
+      <article class="card">
+        <div class="card-title"><h2>Seguridad</h2></div>
+        <form id="passwordForm" novalidate>
+          <input type="text" name="username" autocomplete="username" hidden>
+          <div class="field"><label for="pwCurrent">Contraseña actual</label><input id="pwCurrent" name="current" type="password" autocomplete="current-password" required></div>
+          <div class="field"><label for="pwNext">Nueva contraseña</label><input id="pwNext" name="next" type="password" autocomplete="new-password" required><span class="hint">Al menos 10 caracteres, con letras y números.</span></div>
+          <button type="submit" class="btn btn-ghost btn-sm">Cambiar contraseña</button>
+          <p class="form-status" id="passwordStatus" role="status" aria-live="polite"></p>
+        </form>
+        <hr>
+        <details>
+          <summary class="small">Eliminar la cuenta</summary>
+          <form id="deleteForm" novalidate>
+            <p class="small muted">Se borrarán tu cuenta, tus créditos y tu historial. No se puede deshacer.</p>
+            <div class="field"><label for="delPassword">Escribe tu contraseña para confirmar</label><input id="delPassword" name="password" type="password" autocomplete="current-password" required></div>
+            <button type="submit" class="btn btn-danger btn-sm">Eliminar mi cuenta</button>
+            <p class="form-status" id="deleteStatus" role="status" aria-live="polite"></p>
+          </form>
+        </details>
+      </article>
+    </div>
+  </div>
+</section>

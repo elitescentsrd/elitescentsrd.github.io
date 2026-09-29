@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-catalog.mjs",
-    "test": "node scripts/test-site.mjs && node scripts/test-features.mjs && node scripts/test-security.mjs && node scripts/test-photos-render.mjs",
+    "test": "node scripts/test-site.mjs && node scripts/test-features.mjs && node scripts/test-security.mjs && npm run test:opaco && node scripts/test-photos-render.mjs",
+    "test:opaco": "node scripts/test-opaco-detector.mjs && node scripts/test-opaco-site.mjs",
+    "test:opaco:e2e": "node scripts/test-opaco-e2e.mjs",
     "test:images": "node scripts/check-product-images.mjs",
     "test:sql": "node scripts/test-coupons-sql.mjs",
     "test:security": "node scripts/check-supabase-security.mjs",
