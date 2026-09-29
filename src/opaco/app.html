@@ -1,0 +1,97 @@
+<!--{"title": "Anonimizar un documento · Opaco", "description": "Sube un PDF, revisa los datos personales detectados y descarga una copia censurada de verdad.", "script": "app.js", "private": true, "layout": "app", "csp": "app", "bodyClass": "app-body", "noFooter": true}-->
+<section class="tool">
+  <h1 class="sr-only">Anonimizar un documento</h1>
+  <div class="tool-alerts" id="alerts"></div>
+
+  <div id="stepUpload">
+    <div class="dropzone" id="dropzone">
+      <div class="icon-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><path d="M12 17v-6"/><path d="m9 13 3-3 3 3"/></svg></div>
+      <h2>Arrastra aquí un PDF</h2>
+      <p class="muted">Contratos, nóminas, facturas o cualquier documento, digital o escaneado. Hasta 200 páginas y 60 MB.</p>
+      <label class="btn btn-primary btn-lg" for="fileInput">Seleccionar un PDF</label>
+      <input type="file" id="fileInput" accept="application/pdf,.pdf" class="sr-only">
+      <div><span class="local-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>El documento se procesa en tu navegador: no se sube a ningún servidor.</span></div>
+      <div class="samples"><span class="muted">¿No tienes uno a mano? Prueba con un ejemplo ficticio:</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-sample="nomina-ejemplo.pdf">Nómina · 1 pág.</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-sample="contrato-ejemplo.pdf">Contrato · 2 págs.</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-sample="factura-escaneada-ejemplo.pdf">Factura escaneada · 1 pág.</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="stepConfirm" hidden>
+    <div class="file-card">
+      <div class="pdf-icon" aria-hidden="true">PDF</div>
+      <div><h2 id="fileName"></h2><p class="muted" id="fileInfo"></p></div>
+      <div class="button-row"><button type="button" class="btn btn-ghost" id="changeFile">Cambiar archivo</button><button type="button" class="btn btn-primary" id="analyze">Analizar</button></div>
+    </div>
+    <div class="tool-alerts" id="confirmAlert"></div>
+  </div>
+
+  <div id="stepProgress" class="progress" hidden>
+    <strong id="progressTitle">Analizando el documento…</strong>
+    <div class="meter"><span id="progressBar"></span></div>
+    <p class="muted small" id="progressText" role="status" aria-live="polite"></p>
+  </div>
+
+  <div id="stepReview" class="workspace" hidden>
+    <div class="viewer" id="viewer">
+      <div class="viewer-bar">
+        <button type="button" class="btn btn-ghost btn-sm" id="zoomOut" aria-label="Alejar">−</button>
+        <span class="zoom" id="zoomLevel">100 %</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="zoomIn" aria-label="Acercar">+</button>
+        <span class="sep"></span>
+        <button type="button" class="btn btn-ghost btn-sm toggle-btn" id="peek" aria-pressed="false" title="Muestra en semitransparente lo que hay debajo de los recuadros, para revisarlos">Ver debajo</button>
+        <button type="button" class="btn btn-ghost btn-sm toggle-btn" id="drawMode" aria-pressed="false" title="Arrastra sobre la página para tapar cualquier zona">Dibujar recuadro</button>
+        <span class="muted small" id="viewerHint">Haz clic en un recuadro para quitarlo o volver a ponerlo.</span>
+      </div>
+      <div class="pages" id="pages"></div>
+    </div>
+    <aside class="sidebar" aria-labelledby="sidebarTitle">
+      <div class="sidebar-head">
+        <h2 id="sidebarTitle">Datos detectados</h2>
+        <div class="summary-counts" id="counts"></div>
+        <label class="add-label" for="addText">¿Falta algo? Tápalo en todo el documento:</label>
+        <form class="add-text" id="addTextForm" novalidate>
+          <input id="addText" type="search" placeholder="Texto a tapar" autocomplete="off">
+          <button class="btn btn-ghost btn-sm" type="submit">Añadir</button>
+        </form>
+        <p class="form-status small" id="addStatus" role="status" aria-live="polite"></p>
+      </div>
+      <div class="sidebar-body" id="list"></div>
+      <div class="sidebar-foot">
+        <button type="button" class="btn btn-dark btn-lg btn-block" id="downloadOpen">Descargar PDF censurado</button>
+        <button type="button" class="btn btn-link" id="restart">Anonimizar otro documento</button>
+      </div>
+    </aside>
+  </div>
+
+  <dialog id="exportDialog" aria-labelledby="exportTitle">
+    <div class="dialog-body">
+      <h2 id="exportTitle">Descargar el PDF censurado</h2>
+      <p class="small" id="exportSummary"></p>
+      <div id="exportOptions">
+        <div class="field"><label for="outName">Nombre del archivo</label><input id="outName" type="text" autocomplete="off"><span class="hint">Revisa que el nombre no contenga datos personales.</span></div>
+        <label class="option"><input type="checkbox" id="keepText" checked><span><strong>Conservar como texto buscable lo que no está censurado</strong><span>Así el PDF se puede seguir buscando y copiando. Lo censurado nunca se conserva.</span></span></label>
+        <div class="field"><label for="quality">Calidad de imagen</label>
+          <select id="quality"><option value="150">Estándar (150 ppp): archivo más ligero</option><option value="200" selected>Alta (200 ppp): recomendada</option><option value="300">Máxima (300 ppp): para imprimir</option></select>
+        </div>
+        <details><summary class="small">Qué cambia respecto al PDF original</summary>
+          <ul class="note-list">
+            <li>Cada página pasa a ser una imagen con los recuadros ya fundidos: lo tapado deja de existir en el archivo.</li>
+            <li>El archivo suele pesar más que el original.</li>
+            <li>Se pierden los enlaces, los formularios rellenables, los comentarios, los adjuntos, los marcadores y las firmas digitales.</li>
+            <li>Se eliminan los metadatos (autor, título, programa de origen).</li>
+            <li>Sin la opción de texto buscable, el texto no se puede seleccionar ni buscar.</li>
+          </ul>
+        </details>
+      </div>
+      <div id="exportProgress" hidden><div class="meter"><span id="exportBar"></span></div><p class="small muted" id="exportText" role="status" aria-live="polite"></p></div>
+      <div id="exportResult" class="tool-alerts" hidden></div>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn btn-ghost" id="exportCancel">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="exportGo">Generar y descargar</button>
+    </div>
+  </dialog>
+</section>

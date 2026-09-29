@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Planes y pago · Opaco</title>
+<meta name="description" content="Elige el plan de Opaco que necesitas. Pago simulado en esta versión de demostración.">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Planes y pago · Opaco">
+<meta property="og:description" content="Elige el plan de Opaco que necesitas. Pago simulado en esta versión de demostración.">
+<meta property="og:url" content="https://elitescentsrd.github.io/opaco/pago.html">
+<meta property="og:image" content="https://elitescentsrd.github.io/opaco/img/despues.png">
+<meta name="theme-color" content="#1e3a5f">
+<link rel="icon" href="img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/opaco.css">
+<script src="js/frame-guard.js"></script>
+<script type="module" src="js/pago.js"></script>
+</head>
+<body class="app-body">
+<a class="skip" href="#main">Saltar al contenido</a>
+<div class="demo-bar" role="note"><strong>Versión de demostración.</strong> Los pagos son simulados: no se cobra nada ni se piden datos de tarjeta.</div>
+<header class="site-header app-header"><div class="container">
+  <a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="26" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="9" y="9" width="14" height="4.5" fill="#0a0a0a"/><path d="M9 18h14M9 22.5h9" stroke="currentColor" stroke-width="2.2"/></svg><span>Opaco</span></a>
+  <div class="header-actions" data-auth="in" hidden>
+    <a class="credit-pill" href="cuenta.html" data-user="pill" title="Créditos disponibles (1 crédito = 1 página)"><span class="hide-sm">Créditos</span> <strong><span data-user="credits">0</span> / <span data-user="allotment">0</span></strong><span class="meter" data-user="meter"><span></span></span></a>
+    <a class="btn btn-ghost btn-sm hide-sm" href="pago.html">Mejorar plan</a>
+    <div class="menu">
+      <button class="btn btn-ghost btn-sm" id="menuButton" aria-haspopup="true" aria-expanded="false" aria-controls="menuList"><span data-user="name">Cuenta</span> ▾</button>
+      <div class="menu-list" id="menuList" hidden>
+        <div class="who"><strong data-user="name"></strong><span data-user="email"></span><br>Plan <span data-user="plan"></span></div>
+        <a href="app.html">Anonimizar un documento</a>
+        <a href="cuenta.html">Mi cuenta y créditos</a>
+        <a href="pago.html">Planes y precios</a>
+        <button type="button" data-action="logout">Cerrar sesión</button>
+      </div>
+    </div>
+  </div>
+</div></header>
+<main id="main">
+<section class="tool">
+  <div class="section-head">
+    <h1>Planes</h1>
+    <p class="muted">Un crédito equivale a una página procesada. Los créditos de los planes de pago se renuevan cada mes.</p>
+  </div>
+  <div class="pricing" id="plans"></div>
+
+  <div class="checkout" id="checkout" hidden>
+    <article class="card">
+      <div class="card-title"><h2>Pago</h2><span class="badge badge-demo">Simulado</span></div>
+      <div class="stamp" role="note"><strong>Modo demostración: no se cobra nada.</strong> Esta pantalla imita una pasarela de pago. No escribas aquí datos de ninguna tarjeta real: los campos están bloqueados y no se envía nada.</div>
+      <div class="fake-card" aria-hidden="true">
+        <div class="field"><span class="label">Titular de la tarjeta</span><input type="text" value="—" disabled tabindex="-1"></div>
+        <div class="field"><span class="label">Número de tarjeta</span><input type="text" value="•••• •••• •••• ••••" disabled tabindex="-1"></div>
+        <div class="grid-2"><div class="field"><span class="label">Caducidad</span><input type="text" value="MM/AA" disabled tabindex="-1"></div><div class="field"><span class="label">CVC</span><input type="text" value="•••" disabled tabindex="-1"></div></div>
+      </div>
+      <button type="button" class="btn btn-primary btn-block btn-lg" id="payButton">Confirmar (simulación, 0 €)</button>
+      <p class="form-status" id="payStatus" role="status" aria-live="polite"></p>
+    </article>
+    <article class="card">
+      <div class="card-title"><h2>Resumen</h2></div>
+      <div id="summary"></div>
+      <p class="muted small" id="summaryNote"></p>
+    </article>
+  </div>
+</section>
+</main>
+
+</body>
+</html>

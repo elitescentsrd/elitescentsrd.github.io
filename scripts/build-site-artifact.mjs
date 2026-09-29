@@ -44,9 +44,9 @@ const FILES = [
   'social-card.png',
 ];
 
-// Única carpeta pública: las fotos individuales de producto (img/productos/).
-// El catálogo antiguo (láminas) quedó archivado en archive/, fuera del artefacto.
-const DIRS = ['img'];
+// Carpetas públicas: las fotos individuales de producto (img/productos/) y Opaco (opaco/, la herramienta de
+// anonimización de PDF, independiente de la tienda). El catálogo antiguo (láminas) quedó archivado en archive/.
+const DIRS = ['img', 'opaco'];
 
 // Nunca deben aparecer en el artefacto publicado, aunque alguien los
 // reintroduzca sin querer en FILES/DIRS más arriba.
