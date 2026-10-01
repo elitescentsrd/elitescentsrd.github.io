@@ -73,9 +73,12 @@ export function renderProductPage(p, related = []) {
     '<p class="eyebrow">' + esc(p.brand || BRAND) + '</p><h1 class="detail-title">' + esc(p.name) + '</h1>' +
     (onOffer ? '<span class="offer-badge detail-offer">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<p class="detail-price' + (onOffer ? ' price-offer' : '') + '">' + (onOffer ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small> ' : '') + '<strong>' + (onOffer ? 'Ahora ' : '') + esc(price) + '</strong></p>' +
-    '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + '</dd></div>' + notes + '</dl>' +
+    '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + '</dd></div>' +
+    (p.inspired_by ? '<div class="inspired-fact"><dt>Inspirado en</dt><dd>' + esc(p.inspired_by) + '</dd></div>' : '') + notes + '</dl>' +
+    (p.inspired_by ? '<p class="inspired-note">Referencia de estilo del aroma: no es el perfume original. Las marcas mencionadas pertenecen a sus dueños.</p>' : '') +
     '<p class="dialog-description">' + esc(p.description || '') + '</p>' +
-    '<div class="dialog-order-actions"><a class="button gold" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer">Pedir por WhatsApp ↗</a><a class="button outline" href="/#producto-' + esc(p.id) + '">Ver en la tienda y agregar al carrito</a></div>' +
+    '<div class="dialog-order-actions"><a class="button gold" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer">Pedir por WhatsApp ↗</a><a class="button outline" href="/#producto-' + esc(p.id) + '">Ver en la tienda y agregar al carrito</a>' +
+    (availability === 'agotado' || availability === 'encargo' ? '<a class="button outline" href="/#avisame-' + esc(p.id) + '">🔔 Avísame cuando llegue</a>' : '') + '</div>' +
     '</div></article>' + relatedHtml + '</main>' +
     '<footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a></div><p class="copyright">© Elite Scents RD</p></footer><script defer src="/frame-guard.js"></script><script src="/cookies.js"></script><script defer src="/pwa.js"></script></body></html>';
 }

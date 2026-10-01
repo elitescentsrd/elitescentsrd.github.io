@@ -20,6 +20,10 @@ const pricing = JSON.parse(pricingText);
 const positions = JSON.parse(positionsText);
 // Precios públicos después del catálogo de La Grada de sept. 2026 (sin costos) y perfumes que se pueden ocultar mientras se confirman.
 const precios2609 = JSON.parse(await readFile('data/precios-2026-09.json', 'utf8'));
+// Perfumes nuevos del catálogo de La Grada (números 421 en adelante): existen en la tienda cuando se aplica su script SQL.
+const nuevos2609 = JSON.parse(await readFile('data/perfumes-nuevos-2026-09.json', 'utf8'));
+const idsNuevos = new Set(Object.keys(nuevos2609.perfumes).map(Number)), notasPendientes = new Set(nuevos2609.notas_pendientes.map(Number));
+const inspirado = JSON.parse(await readFile('data/inspirado-en.json', 'utf8')).perfumes;
 new Script(js,{filename:'tienda.js'});
 
 const products = JSON.parse(html.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1] || '[]');
@@ -27,13 +31,22 @@ const productSchemas = [...html.matchAll(/<script type="application\/ld\+json">(
   .map(match => JSON.parse(match[1]))
   .filter(item => item['@type'] === 'Product');
 
-// Catálogo: 420 perfumes; los de precios2609.ocultos pueden estar ocultos (active = false) mientras se confirman con La Grada.
-const TOTAL = 420, N = products.length, ocultables = new Set(precios2609.ocultos.map(Number));
-assert(N >= TOTAL - ocultables.size && N <= TOTAL, 'Deben pre-renderizarse entre ' + (TOTAL - ocultables.size) + ' y ' + TOTAL + ' productos (hay ' + N + ')');
+// Catálogo: 420 perfumes + los nuevos de La Grada; los de precios2609.ocultos pueden estar ocultos (active = false) y los
+// nuevos aparecen cuando se aplica su script SQL (antes de eso la tienda sigue con 420).
+const BASE = 420, TOTAL = BASE + idsNuevos.size, N = products.length, ocultables = new Set(precios2609.ocultos.map(Number));
+assert(N >= BASE - ocultables.size && N <= TOTAL, 'Deben pre-renderizarse entre ' + (BASE - ocultables.size) + ' y ' + TOTAL + ' productos (hay ' + N + ')');
 {
   const visibles = new Set(products.map(p => Number(p.id)));
-  const faltan = Object.keys(enrichment).map(Number).filter(id => !visibles.has(id) && !ocultables.has(id));
-  assert.deepEqual(faltan, [], 'Solo pueden faltar perfumes de la lista de ocultos (data/precios-2026-09.json)');
+  const faltan = [...Object.keys(enrichment).map(Number), ...idsNuevos].filter(id => !visibles.has(id) && !ocultables.has(id) && !idsNuevos.has(id));
+  assert.deepEqual(faltan, [], 'Solo pueden faltar perfumes de la lista de ocultos (data/precios-2026-09.json) o nuevos sin aplicar');
+  const nuevosVisibles = [...idsNuevos].filter(id => visibles.has(id)).length;
+  assert(nuevosVisibles === 0 || nuevosVisibles === idsNuevos.size, 'Los perfumes nuevos llegan todos juntos (hay ' + nuevosVisibles + ' de ' + idsNuevos.size + ')');
+  assert.equal(Math.min(...idsNuevos), nuevos2609.primer_id); assert.equal(Math.max(...idsNuevos), nuevos2609.ultimo_id);
+  for (const p of products.filter(x => idsNuevos.has(Number(x.id)))) {
+    const n = nuevos2609.perfumes[String(p.id)];
+    assert.equal(p.name, n.name, 'Nombre del perfume nuevo #' + p.id);
+    assert(p.image_url && p.image_url.endsWith(n.foto.replace('img/productos/', '')), 'Foto del perfume nuevo #' + p.id);
+  }
 }
 for(const p of products){assert(p.id!=null);assert(String(p.name||'').trim());assert(String(p.price||'').match(/\d/));}
 assert.equal((html.match(/data-product-id=/g) || []).length, N, 'Debe existir una tarjeta estática por producto');
@@ -55,19 +68,42 @@ assert(!template.toLowerCase().includes('confirmar la autenticidad'));
 assert(css.includes('aspect-ratio:4/3'), 'El recorte del modal debe excluir textos y precios del catálogo');
 assert(js.includes("applyTheme(preferredTheme())"), 'El tema elegido debe inicializarse');
 assert(js.includes("$('#dialogPriceUsd').textContent=usdPrice(p)"), 'El modal debe mostrar USD');
-assert(js.includes('function openProduct(p)'));
+assert(/function openProduct\(p[,)]/.test(js), 'tienda.js debe abrir la ficha del perfume');
 assert(js.includes('function addToCart(p)'));
 assert(template.includes('id="dialogAddCart"'));
 const checkout=await readFile('checkout.html','utf8'),customer=await readFile('customer.js','utf8');
 assert(checkout.includes('id="placeOrder"'));
 assert(customer.includes('/rest/v1/rpc/place_customer_order'));
 assert(customer.includes("CART_KEY='elite-scents-cart-v3'"));
-assert.equal(Object.keys(enrichment).length, 420, 'Cada producto debe tener una ficha de notas con su fuente');
-assert.equal(products.filter(product => product.notes_top?.length && product.notes_heart?.length && product.notes_base?.length).length, N, 'Todos los productos deben tener salida, corazón y fondo');
+assert.equal(Object.keys(enrichment).length, TOTAL - notasPendientes.size, 'Cada producto debe tener una ficha de notas con su fuente (menos los nuevos con notas pendientes)');
+assert(!Object.keys(enrichment).some(id => notasPendientes.has(Number(id))), 'Un perfume con notas pendientes no tiene ficha');
+assert.equal(products.filter(product => product.notes_top?.length && product.notes_heart?.length && product.notes_base?.length).length, products.filter(p => !notasPendientes.has(Number(p.id))).length, 'Todos los productos deben tener salida, corazón y fondo (menos los nuevos con notas pendientes)');
 assert(products.every(product => ![...product.notes_top, ...product.notes_heart, ...product.notes_base].includes('Información pendiente')), 'No deben quedar notas pendientes');
 assert(Object.values(enrichment).every(item => /^https:\/\//.test(item.source)), 'Cada ficha debe registrar una fuente web');
 
-console.log('Pruebas superadas: ' + N + ' productos visibles (de 420) con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
+// «Inspirado en…»: cada referencia tiene su fuente y el script SQL escribe exactamente estas.
+{
+  for (const [id, item] of Object.entries(inspirado)) {
+    assert(/^https:\/\//.test(item.fuente), 'La referencia de #' + id + ' debe tener una fuente web');
+    assert(item.referencia.length >= 2 && item.referencia.length <= 120, 'Referencia de #' + id);
+    assert(Number(id) <= BASE ? enrichment[id] : idsNuevos.has(Number(id)), 'La referencia de #' + id + ' es de un perfume de la tienda');
+  }
+  for (const p of products) if (p.inspired_by) assert(p.inspired_by.length >= 2 && p.inspired_by.length <= 120, 'Referencia válida en #' + p.id);
+  const sql = await readFile(nuevos2609.aplicar_con, 'utf8');
+  const bloque = nombre => sql.slice(sql.indexOf('insert into ' + nombre + ' ('), sql.indexOf('\n\n', sql.indexOf('insert into ' + nombre + ' (')));
+  const filasInspirados = [...bloque('inspirados').matchAll(/^\s+\((\d+), '((?:[^']|'')*)'\)[,;]/gm)].map(m => [m[1], m[2].replace(/''/g, "'")]);
+  assert.deepEqual(Object.fromEntries(filasInspirados), Object.fromEntries(Object.entries(inspirado).filter(([id]) => Number(id) <= BASE).map(([id, v]) => [id, v.referencia])), 'El script escribe las referencias de data/inspirado-en.json');
+  const filasNuevos = [...bloque('nuevos').matchAll(/^\s+\((\d+), '((?:[^']|'')*)', '((?:[^']|'')*)', '((?:[^']|'')*)'/gm)];
+  assert.equal(filasNuevos.length, idsNuevos.size, 'El script agrega todos los perfumes nuevos');
+  for (const [, id, name, brand, price] of filasNuevos) {
+    const n = nuevos2609.perfumes[id];
+    assert(n && n.name === name.replace(/''/g, "'") && n.brand === brand.replace(/''/g, "'") && n.price === price, 'Perfume nuevo #' + id + ' igual en el script y en el archivo de datos');
+    assert(/^RD\$[0-9,]+$/.test(price), 'Precio público del perfume nuevo #' + id);
+  }
+  assert(!/costo|margen|ganancia/i.test(JSON.stringify(nuevos2609.perfumes)) && !/"cost/i.test(JSON.stringify(nuevos2609)), 'El archivo público de perfumes nuevos no tiene costos');
+}
+
+console.log('Pruebas superadas: ' + N + ' productos visibles (de ' + TOTAL + ') con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
 
 
 
@@ -88,6 +124,12 @@ assert.equal(pricing.items,420,'La auditoría de La Grada debe cubrir 420 produc
 assert.equal(Object.values(pricing.costs_by_page).reduce((n,row)=>n+row.length,0),420,'El mapa de costos debe tener 420 posiciones');
 const fueraDeRango=[];
 for(const p of products){
+  if(idsNuevos.has(Number(p.id))){
+    const esperado=numericPrices(nuevos2609.perfumes[String(p.id)].price),sells=numericPrices(p.original_price||p.price);
+    assert.equal(sells.length,esperado.length,'Presentaciones del perfume nuevo '+p.name);
+    sells.forEach((v,i)=>{if(!(v>=esperado[i]/2&&v<=esperado[i]*2))fueraDeRango.push(p.name+': RD$'+v+' (esperado cerca de RD$'+esperado[i]+')')});
+    continue;
+  }
   const position=positions[p.id];
   assert(position,'Falta posición interna de auditoría para '+p.name);
   const page=pricing.costs_by_page[String(position.page)];
@@ -141,7 +183,7 @@ assert.equal(fueraDeRango.length,0,'Precios fuera de rango (¿error al escribir 
   const catalogo=ids('catalogo'),agotados=ids('agotados');
   assert.deepEqual(catalogo,Object.keys(precios2609.precios_recomendados).map(Number).sort((a,b)=>a-b),'El catálogo del script debe ser el de data/precios-2026-09.json');
   assert.deepEqual(agotados,[...precios2609.ocultos].sort((a,b)=>a-b),'Los agotados del script deben ser los que no están en el catálogo de La Grada');
-  assert.equal(new Set([...catalogo,...agotados,...Object.keys(enrichment).map(Number)]).size,TOTAL,'Catálogo + agotados deben ser los 420 perfumes');
+  assert.equal(new Set([...catalogo,...agotados,...Object.keys(enrichment).map(Number).filter(id=>id<=BASE)]).size,BASE,'Catálogo + agotados deben ser los 420 perfumes');
   const precios=[...bloque('precios').matchAll(/^\s+\((\d+), '([^']*)', '([^']*)'\)[,;]/gm)];
   assert(precios.length>0&&precios.every(([,,antes,nuevo])=>antes!==nuevo&&numericPrices(antes).length===numericPrices(nuevo).length&&/^RD\$[0-9,]+( \/ RD\$[0-9,]+)*$/.test(nuevo)),'Cada precio del script debe cambiar y tener las mismas presentaciones');
   assert(/select false as deshacer;/.test(sql)&&/-- FIN\s*$/.test(sql),'El script del 28-sep debe quedar en modo aplicar y completo');
@@ -173,7 +215,7 @@ assert(html.includes('data-bg="/img/productos/thumbs/'),'Las tarjetas restantes 
 {
   const { readdir, stat } = await import('node:fs/promises');
   const thumbs=(await readdir('img/productos/thumbs')).filter(f=>f.endsWith('.webp')), fulls=(await readdir('img/productos')).filter(f=>/\.jpg$/i.test(f));
-  assert.equal(thumbs.length,420,'Debe haber 420 miniaturas WebP para las tarjetas');
+  assert.equal(thumbs.length,TOTAL,'Debe haber una miniatura WebP por perfume ('+TOTAL+')');
   for(const f of fulls) assert(thumbs.includes(f.replace(/\.jpg$/i,'.webp')),'Falta la miniatura de '+f);
   for(const f of thumbs){const s=(await stat('img/productos/thumbs/'+f)).size; assert(s>500&&s<40*1024,'La miniatura debe pesar menos de 40 KB: '+f+' '+s);}
   assert(!/(background-image:url\(&quot;|data-bg=")\/img\/productos\/[0-9]/.test(html),'Las tarjetas no deben usar la foto grande, solo la miniatura');
@@ -187,7 +229,7 @@ assert(html.includes('data-bg="/img/productos/thumbs/'),'Las tarjetas restantes 
     const m=/^([0-9]{4,})-[a-z0-9-]+\.(jpe?g|png|webp)$/i.exec(f); assert(m,'Nombre de foto no válido: '+f);
     assert(!byId.has(Number(m[1])),'Foto duplicada para el ID '+Number(m[1])); byId.set(Number(m[1]),f);
   }
-  assert.equal(files.length,420,'Debe haber 420 fotos individuales en img/productos');
+  assert.equal(files.length,TOTAL,'Debe haber una foto individual por perfume en img/productos ('+TOTAL+')');
   for(const p of products){
     const f=byId.get(Number(p.id)); assert(f,'Falta la foto de #'+p.id+' '+p.name);
     const buf=await readFile('img/productos/'+f), size=imageSize(buf), kb=buf.length;
@@ -195,7 +237,7 @@ assert(html.includes('data-bg="/img/productos/thumbs/'),'Las tarjetas restantes 
     assert(kb<=3*1024*1024,'Foto de más de 3 MB: '+f);
     assert(p.image_url&&(p.image_url.endsWith('/'+f)||/^https:\/\//.test(p.image_url)),'La tarjeta de #'+p.id+' debe usar su foto');
   }
-  assert.equal(withoutPhoto,0,'Ningún producto debe quedar con "Foto próximamente" (420 de 420 con foto)');
+  assert.equal(withoutPhoto,0,'Ningún producto debe quedar con "Foto próximamente" (todos con foto)');
   const localSchemas=productSchemas.filter(s=>s.image&&s.image.every(u=>/^https:\/\//.test(u)&&!u.includes('/pages/page-')));
   assert.equal(localSchemas.length,N,'Todos los Product JSON-LD deben tener imagen individual absoluta');
 }

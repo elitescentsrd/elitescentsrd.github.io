@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { SITE_URL, productPath, productUrl, absoluteUrl, brandSchemaScript } from './lib/seo.mjs';
 const USD_RATE_DOP = 63;
 // Se pide select=* (funciona aunque una migración de columnas aún no se haya aplicado) y se publican solo estos campos.
-const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at'];
+const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at', 'inspired_by'];
 const template = await readFile('src/index.template.html', 'utf8');
 const enrichment = JSON.parse(await readFile('data/product-enrichment.json', 'utf8'));
 const config = await readFile('supabase-config.js', 'utf8');
@@ -24,6 +24,27 @@ if (!Array.isArray(databaseProducts) || databaseProducts.length === 0) throw new
 // en data/product-positions.json (que nunca se publica) y no llegan al HTML
 // ni al JSON público del catálogo.
 const positions = {};
+// «Nuevos»: perfumes agregados después de la carga inicial del catálogo (el día en que se creó la mayoría), de los últimos 90 días.
+// created_at no se publica: solo se usa aquí para elegir los números de perfume de la sección.
+function newArrivals(rows, now = Date.now()) {
+  const day = row => String(row.created_at || '').slice(0, 10);
+  const perDay = new Map();
+  for (const row of rows) if (day(row)) perDay.set(day(row), (perDay.get(day(row)) || 0) + 1);
+  const bulk = [...perDay.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+  return rows.filter(row => bulk && day(row) > bulk && now - Date.parse(row.created_at) < 90 * 864e5 && row.availability !== 'agotado')
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)) || a.sort_order - b.sort_order || a.id - b.id)
+    .slice(0, 12).map(row => Number(row.id));
+}
+// «Lo más vendido»: la base de datos devuelve solo números de perfume (nunca pedidos ni clientes). Si todavía no existe
+// la función o hay pocas ventas, la sección no se muestra.
+async function bestSellers() {
+  try {
+    const res = await fetch(url.replace(/\/$/, '') + '/rest/v1/rpc/best_sellers', { method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_days: 120, p_limit: 12 }), signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows.map(row => Number(row.product_id)).filter(Number.isFinite) : [];
+  } catch { return []; }
+}
 const products = databaseProducts.map(({ page, slot, ...rest }) => {
   const product = Object.fromEntries(PUBLIC_FIELDS.filter(k => rest[k] !== undefined).map(k => [k, rest[k]]));
   positions[product.id] = { page, slot };
@@ -31,6 +52,9 @@ const products = databaseProducts.map(({ page, slot, ...rest }) => {
   return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
 });
 await writeFile('data/product-positions.json', JSON.stringify(positions, null, 1) + '\n');
+const visibleIds = new Set(products.map(p => Number(p.id)));
+const soldIds = (await bestSellers()).filter(id => visibleIds.has(id));
+const homeSections = { vendidos: soldIds.length >= 4 ? soldIds : [], nuevos: newArrivals(databaseProducts) };
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const nums = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Number(v.replace(/[,.]/g, ''))).filter(Number.isFinite);
@@ -100,7 +124,8 @@ function card(p, index) {
   return '<article class="perfume" id="producto-' + esc(p.id) + '" data-product-id="' + esc(p.id) + '">' +
     visual(p, index) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' + (p.original_price ? '<span class="offer-badge">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
-    '<h3><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a></h3><div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
+    '<h3><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a></h3>' + (p.inspired_by ? '<p class="inspired">Inspirado en <span>' + esc(p.inspired_by) + '</span></p>' : '') + '<div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
+    (availability === 'agotado' || availability === 'encargo' ? '<button type="button" class="notify-link" data-notify-product="' + esc(p.id) + '">🔔 Avísame cuando llegue</button>' : '') +
     '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><a href="' + esc(whatsapp(p)) + '" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a></div></article>';
 }
 function schema(p) {
@@ -121,7 +146,8 @@ function schema(p) {
 }
 
 const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="grid" aria-busy="false">\n' + products.map(card).join('\n') + '\n</div>\n' +
-  '<script type="application/json" id="preRenderedProducts">' + JSON.stringify(products).replace(/</g, '\\u003c') + '<\/script>\n<!-- PRODUCT_CATALOG_END -->';
+  '<script type="application/json" id="preRenderedProducts">' + JSON.stringify(products).replace(/</g, '\\u003c') + '<\/script>\n' +
+  '<script type="application/json" id="homeSections">' + JSON.stringify(homeSections) + '<\/script>\n<!-- PRODUCT_CATALOG_END -->';
 const schemas = '<!-- PRODUCT_JSON_LD_START -->\n' + products.map(schema).join('\n') + '\n<!-- PRODUCT_JSON_LD_END -->';
 const output = template
   .replace(/<!-- PRODUCT_CATALOG_START -->[\s\S]*?<!-- PRODUCT_CATALOG_END -->/, catalog)
@@ -136,7 +162,7 @@ await writeFile('index.html', output);
 const today = new Date().toISOString().slice(0, 10);
 const STATIC_PAGES = [
   { path: 'pedidos-envios.html', lastmod: '2026-09-20', changefreq: 'monthly', priority: '0.6' },
-  { path: 'privacidad.html', lastmod: '2026-09-23', changefreq: 'yearly', priority: '0.3' },
+  { path: 'privacidad.html', lastmod: '2026-09-30', changefreq: 'yearly', priority: '0.3' },
   { path: 'canales-oficiales.html', lastmod: '2026-09-21', changefreq: 'yearly', priority: '0.4' },
 ];
 const sitemapUrl = (loc, lastmod, changefreq, priority) =>
@@ -152,4 +178,5 @@ const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://w
 await writeFile('sitemap.xml', sitemap);
 
 console.log('Catálogo pre-renderizado: ' + products.length + ' productos con JSON-LD.');
+console.log('Portada: ' + homeSections.vendidos.length + ' más vendidos, ' + homeSections.nuevos.length + ' nuevos.');
 console.log('sitemap.xml actualizado (lastmod de portada: ' + today + ').');

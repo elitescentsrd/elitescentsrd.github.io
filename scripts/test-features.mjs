@@ -13,9 +13,10 @@ const [indexHtml, template, tiendaJs, adminHtml, adminJs, checkoutHtml, customer
   read('index.html'), read('src/index.template.html'), read('tienda.js'), read('admin.html'), read('admin.js'), read('checkout.html'), read('customer.js'), read('scripts/build-site-artifact.mjs'), read('sw.js'),
 ]);
 const products = JSON.parse(indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]);
-// 420 perfumes; algunos pueden estar ocultos mientras se confirman con La Grada (data/precios-2026-09.json).
+// 420 perfumes + los nuevos de La Grada (cuando se aplica su script); algunos pueden estar ocultos (data/precios-2026-09.json).
 const ocultables = JSON.parse(await read('data/precios-2026-09.json')).ocultos.length;
-assert(products.length >= 420 - ocultables && products.length <= 420, 'Productos visibles fuera de rango: ' + products.length);
+const nuevosTotal = Object.keys(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).perfumes).length;
+assert(products.length >= 420 - ocultables && products.length <= 420 + nuevosTotal, 'Productos visibles fuera de rango: ' + products.length);
 const runUmd = async file => { const ctx = { module: { exports: {} } }; vm.runInNewContext(await read(file), ctx, { filename: file }); return ctx.module.exports; };
 const plain = value => JSON.parse(JSON.stringify(value)); // los objetos creados dentro de vm tienen otro prototipo
 const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].map(m => m[1]))];
@@ -135,7 +136,9 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const expected = { 'Pimienta rosa': 'especiado', 'Toronja rosada': 'fresco', 'Water Peony': 'floral', 'Manzana verde': 'frutal', 'Flor de azahar': 'floral', 'Ámbar gris': 'amaderado', 'Haba tonka': 'dulce', 'Notas marinas': 'fresco', 'Musgo de roble': 'amaderado', 'Cuero': 'especiado', 'Coconut Water': 'frutal', 'Té verde': 'fresco', 'Vainilla': 'dulce', 'Bergamota': 'fresco', 'Oud': 'amaderado', 'Jazmín': 'floral', 'Canela': 'especiado', 'Piña': 'frutal', 'Almizcle': null };
   for (const [note, family] of Object.entries(expected)) assert.equal(A.familyOf(note), family, 'Familia de "' + note + '"');
   const withFamily = products.filter(p => A.familiesOf(p).length);
-  assert.equal(withFamily.length, products.length, 'Todos los perfumes deben tener al menos una familia de aroma');
+  // Los perfumes nuevos sin notas verificadas todavía (data/perfumes-nuevos-2026-09.json → notas_pendientes) no tienen familia.
+  const pendientes = new Set(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).notas_pendientes.map(Number));
+  assert.equal(withFamily.length, products.filter(p => !pendientes.has(Number(p.id))).length, 'Todos los perfumes con notas deben tener al menos una familia de aroma');
   const perFamily = {}; for (const p of products) for (const f of A.familiesOf(p)) perFamily[f] = (perFamily[f] || 0) + 1;
   for (const family of Object.keys(A.FAMILIES)) assert((perFamily[family] || 0) >= 100, 'La familia ' + family + ' debe tener perfumes suficientes (' + (perFamily[family] || 0) + ')');
   const scenario = (answers, check) => { const { items, total } = A.recommend(products, answers, 6); assert(items.length > 0 && total >= items.length); check(items); return items; };
@@ -364,5 +367,126 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(/v_c\.user_id is not null and v_c\.user_id is distinct from p_uid/.test(sql), 'Un cupón personal solo lo usa su dueño');
   assert(/gen_random_uuid\(\)/.test(sql) && /pg_advisory_xact_lock/.test(sql), 'Código al azar y sin duplicados por envíos simultáneos');
   console.log('Encuesta: preguntas, limpieza, resultados, Excel, página, carrito, panel y migración correctos.');
+}
+// ---------------------------------------------------------------- Cobros, precios sugeridos, ganancia y compras (finanzas.js)
+{
+  const F = await runUmd('finanzas.js');
+  const eq = (actual, expected, message) => assert.deepEqual(plain(actual), expected, message); // los objetos de vm tienen otro prototipo
+  // Parámetros de EJEMPLO (los reales están solo en la base de datos, nunca en GitHub).
+  const params = { logistica: 100, ganancia_minima: 500, curva: [[1000, 0.5], [3000, 0.3]], estrategias: { gancho: { factor: 0.8, descuento: 0.1 }, normal: { factor: 1, descuento: 0.05 }, exclusivo: { factor: 1.2, descuento: 0 } } };
+  assert.equal(F.validParams({}), null, 'Sin fórmula no hay sugeridos');
+  assert.equal(F.suggestPrice(0, 'normal', params), null);
+  assert.equal(F.suggestPrice(1900, 'normal', params).price, 2850, 'costo 1,900: margen interpolado 40% → 2,800 → termina en 50');
+  assert.equal(F.suggestPrice(1900, 'normal', params, 2600).price, 2550, 'la competencia baja el precio, pero nunca del piso de ganancia');
+  assert.equal(F.suggestPrice(400, 'gancho', params).price, 1050, 'costo bajo: manda la ganancia mínima');
+  assert.equal(F.suggestPrice(9900, 'exclusivo', params).price, 13650, 'por encima de la curva se usa el último margen');
+  for (const c of [300, 1234, 2750, 5000, 14900]) for (const st of ['gancho', 'normal', 'exclusivo']) for (const comp of [null, 1000, 99999]) {
+    const r = F.suggestPrice(c, st, params, comp);
+    assert(r.price % 100 === 50 && r.price >= c + params.logistica + params.ganancia_minima, 'Siempre termina en 50 y deja la ganancia mínima: ' + c + ' ' + st + ' ' + comp);
+  }
+  assert.equal(F.suggestText([1900, 2400], 'normal', params, 2600).text, 'RD$2,550 / RD$3,350', 'Un sugerido por presentación');
+  eq(plain(F.currentProfit({ price: 'RD$3,000' }, [1900], params)).map(x => x.profit), [1000]);
+  // Revisión del precio de hoy: ±RD$50 no cuenta, «a nivel de la competencia», piso y tope de RD$6,950.
+  const review = (price, costs, extra = {}) => F.reviewPrice({ price, availability: 'disponible', ...extra }, costs, extra.strategy || 'normal', params, extra.competitor);
+  assert.equal(review('RD$2,900', [1900]).differs, false, 'RD$50 sobre el sugerido (2,850) se mantiene');
+  eq([review('RD$3,000', [1900]).differs, review('RD$3,000', [1900]).text, review('RD$3,000', [1900]).items[0].state], [true, 'RD$2,850', 'alto']);
+  eq([review('RD$2,700', [1900]).text, review('RD$2,700', [1900]).items[0].state], ['RD$2,850', 'bajo'], 'Por debajo del sugerido: puedes subir');
+  eq([review('RD$2,450', [1900]).text, review('RD$2,450', [1900]).items[0].state], ['RD$2,850', 'bajo-piso'], 'Bajo el piso de ganancia');
+  const market = review('RD$3,000', [1900], { competitor: 3100 });
+  eq([market.differs, market.items[0].state, market.text], [false, 'mercado', 'RD$3,000'], 'Entre el sugerido y la competencia: ya está a nivel de la competencia');
+  assert.equal(review('RD$3,200', [1900], { competitor: 3100 }).text, 'RD$2,850', 'Más caro que la competencia: se sugiere bajar');
+  const cap = review('RD$6,950', [5500]);
+  eq([cap.suggestion.text, cap.items[0].capped, cap.differs, cap.text], ['RD$7,250', true, false, 'RD$6,950'], 'Disponible bajo RD$7,000: tope de RD$6,950 para no pasar a «Solo por encargo»');
+  assert.equal(review('RD$6,500', [5500]).text, 'RD$6,950', 'Sube solo hasta el tope');
+  eq([review('RD$7,500', [5500], { availability: 'encargo' }).text, review('RD$6,500', [5500], { availability: 'encargo' }).items[0].capped], ['RD$7,250', false], 'Por encargo: sin tope');
+  assert.equal(review('RD$6,950', [5500], { availability: 'agotado' }).differs, false, 'Agotado bajo RD$7,000: también con tope (al volver queda «Disponible»)');
+  eq([review('RD$6,950', [6500]).items[0].capped, review('RD$6,950', [6500]).text], [false, 'RD$8,550'], 'Sin tope si RD$6,950 deja menos de la ganancia mínima');
+  const two = review('RD$2,900 / RD$3,000', [1900, 2400]);
+  eq([two.differs, two.text, two.items.map(x => x.state)], [true, 'RD$2,900 / RD$3,350', ['igual', 'bajo']], 'Solo cambia la presentación que lo necesita');
+  eq([review('RD$2,900 / RD$3,600', [1900]).mismatch, review('RD$2,900 / RD$3,600', [1900]).differs, review('RD$2,900 / RD$3,600', [1900]).text], [true, false, 'RD$2,900 / RD$3,600'], 'Un costo por presentación o no se cambia');
+  eq([review('', [1900]).differs, review('', [1900]).text], [true, 'RD$2,850'], 'Perfume nuevo: el sugerido');
+  assert.equal(F.reviewPrice({ price: 'RD$2,900' }, [1900], 'normal', {}, null), null, 'Sin fórmula no hay revisión');
+
+  const orders = [
+    { id: 1, status: 'entregado', amount: 'RD$3,600', customer_name: 'Gabriel Pérez', phone: '809-555-1234', items: '1x Armaf Odyssey Aqua (100 ML)', created_at: '2026-09-20T10:00:00Z' },
+    { id: 2, status: 'confirmado', amount: 'RD$5,000', customer_name: 'Ana', phone: '8295550000', items: '1x Lattafa Asad', created_at: '2026-09-21T10:00:00Z' },
+    { id: 3, status: 'nuevo', amount: 'RD$2,000', customer_name: 'Luis', phone: '8490000000', created_at: '2026-09-22T10:00:00Z' },
+    { id: 4, status: 'cancelado', amount: 'RD$9,000', customer_name: 'Pedro', phone: '8091111111', created_at: '2026-09-22T10:00:00Z' },
+    { id: 5, status: 'enviado', amount: 'RD$2,500', customer_name: 'Rosa', phone: '8092222222', created_at: '2026-09-23T10:00:00Z' },
+  ];
+  const payments = [{ order_id: 1, amount: 1000, paid_on: '2026-09-21' }, { order_id: 5, amount: 2500, paid_on: '2026-09-25' }, { order_id: 1, amount: '500.50', paid_on: '2026-09-28' }];
+  const b = F.balances(orders, payments);
+  eq(b.rows.map(r => [r.order.id, r.due, r.state]), [[2, 5000, 'pendiente'], [1, 2099.5, 'abonado'], [5, 0, 'pagado']], 'Saldos: solo pedidos vendidos, ordenados por lo pendiente');
+  eq(plain(b.totals), { due: 7099.5, paid: 4000.5, open: 2, customers: 2 });
+  assert.equal(b.rows[1].last, '2026-09-28', 'Fecha del último abono');
+  const reminder = F.reminderText(b.rows[1]);
+  assert(reminder.startsWith('Hola Gabriel,') && reminder.includes('#1') && reminder.includes('Pendiente: RD$2,100') && reminder.includes('Abonado: RD$1,501'), 'Recordatorio amable con el balance');
+  assert.equal(F.waLink('809-555-1234', 'x'), 'https://wa.me/18095551234?text=x', 'WhatsApp con el 1 del país');
+  assert.equal(F.collected(payments, new Date('2026-09-22'), new Date('2026-09-30')), 3000.5, 'Cobrado en el período');
+  assert(F.restockText('Ana María', { id: 7, name: 'Lattafa Asad', size: '100 ML', price: 'RD$2,950' }).startsWith('Hola Ana, te escribe Elite Scents RD: ya tenemos Lattafa Asad (100 ML) a RD$2,950.'), 'Mensaje de «ya llegó»');
+
+  eq(plain(F.parseLines('2x Lattafa Asad (100 ML)\n1x Club de Nuit; 3 × Perfume Raro (50 ML)')), [{ name: 'Lattafa Asad', qty: 2, size: '100 ML' }, { name: 'Club de Nuit', qty: 1, size: '' }, { name: 'Perfume Raro', qty: 3, size: '50 ML' }]);
+  const catalog = [{ id: 10, name: 'Lattafa Asad', size: '100 ML', availability: 'encargo' }, { id: 11, name: 'Club de Nuit', size: '105 ML', availability: 'disponible' }, { id: 12, name: 'Duo', size: '50 ML / 100 ML', availability: 'agotado' }, { id: 13, name: 'Agotado Esperado', size: '100 ML', availability: 'agotado' }];
+  const pendientes = [{ id: 7, status: 'nuevo', items: '2x Lattafa Asad (100 ML)\n1x Club de Nuit' }, { id: 8, status: 'confirmado', items: '1x Duo (100 ML)\n1x lattafa asad (100 ML)\n1x Algo Que No Existe' }, { id: 9, status: 'entregado', items: '5x Lattafa Asad' }];
+  const avisos = [{ product_id: 13, status: 'pendiente' }, { product_id: 13, status: 'pendiente' }, { product_id: 10, status: 'pendiente' }, { product_id: 13, status: 'avisado' }];
+  let compra = F.purchaseList(pendientes, catalog, avisos, {});
+  eq(compra.rows.map(r => [r.product.id, r.size, r.qty, r.waiting, r.orders]), [[10, '100 ML', 3, 1, [7, 8]], [12, '100 ML', 1, 0, [8]], [13, '100 ML', 0, 2, []]], 'Compra: suma pedidos pendientes, la presentación correcta y los agotados con gente esperando');
+  eq(plain(compra.unmatched), [{ order: 8, text: '1x Algo Que No Existe' }], 'Las líneas que no coinciden se muestran aparte');
+  compra = F.purchaseList(pendientes, catalog, avisos, { includeAvailable: true, includeWaiting: false });
+  eq(compra.rows.map(r => r.product.id), [10, 11, 12], 'Con disponibles y sin los que solo tienen avisos');
+  const texto = F.purchaseText(compra.rows.map(r => ({ ...r, buy: r.qty })));
+  assert(texto.startsWith('Hola La Grada') && texto.includes('3x Lattafa Asad (100 ML)') && texto.includes('1x Duo (100 ML)'), 'Mensaje para el suplidor');
+
+  const csv = 'id;perfume;costo;estrategia;competencia\n10;Lattafa Asad;"1,750";Gancho;2900\n;Club de Nuit;2 850 / 3 400;;\n99;No existe;100;;\n12;Duo;;;\n13;Agotado Esperado;abc;;';
+  const imp = F.parseCostsCsv(csv, catalog);
+  eq(imp.rows.map(r => [r.product.id, r.costs, r.strategy, r.competitor]), [[10, [1750], 'gancho', 2900], [11, [2850, 3400], null, null]], 'Lee costos por número o por nombre, con punto y coma o coma');
+  eq(imp.errors, ['Fila 4: no se encontró «No existe».', 'Fila 6: costo no válido para Agotado Esperado.']);
+  eq(F.parseCostsCsv('nombre,precio\nX,1', catalog).rows, [], 'Sin columna de costo no lee nada');
+  const exported = F.costsCsv(catalog, new Map([[10, [1750]]]), new Map([[10, 'gancho']]), new Map([[10, 2900]]));
+  assert(exported.startsWith('﻿id,perfume,tamaño,precio,costo,estrategia,competencia'), 'CSV para Excel con acentos (BOM)');
+  eq(F.parseCostsCsv(exported, catalog).rows.map(r => [r.product.id, r.costs, r.strategy, r.competitor]), [[10, [1750], 'gancho', 2900]], 'Lo que se descarga se vuelve a subir igual');
+
+  const ventas = [
+    { id: 20, status: 'entregado', created_at: '2026-09-15T12:00:00', amount: 'RD$6,000', items: '2x Lattafa Asad (100 ML)' },
+    { id: 21, status: 'confirmado', created_at: '2026-09-16T12:00:00', amount: 'RD$2,500', items: '1x Duo (100 ML)' },
+    { id: 22, status: 'confirmado', created_at: '2026-09-17T12:00:00', amount: 'RD$3,000', items: '1x Club de Nuit' },
+    { id: 23, status: 'nuevo', created_at: '2026-09-18T12:00:00', amount: 'RD$9,000', items: '1x Lattafa Asad' },
+  ];
+  const ganancia = F.profitSummary(ventas, catalog, new Map([[10, [1750]], [12, [1000, 1800]]]), params, { months: 2, now: new Date(2026, 8, 30) });
+  eq(plain(ganancia.months), [{ month: '2026-08', sales: 0, cost: 0, profit: 0, orders: 0, unknown: 0 }, { month: '2026-09', sales: 8500, cost: 5600, profit: 2900, orders: 2, unknown: 1 }], 'Ganancia real por mes (costo + logística por unidad; sin costo aparte)');
+  assert.equal(ganancia.perOrder.get('21').cost, 1900, 'Usa el costo de la presentación pedida');
+
+  // Panel: cada elemento que usa admin.js existe; finanzas.js carga antes y se publica.
+  for (const id of idsUsed(adminJs, /\$\('#([A-Za-z][\w-]*)'\)/g)) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en admin.html');
+  assert(adminHtml.indexOf('/finanzas.js') > -1 && adminHtml.indexOf('/finanzas.js') < adminHtml.indexOf('/admin.js'), 'finanzas.js carga antes que admin.js');
+  for (const file of ['finanzas.js', 'lista-precios.js', 'lista-precios.css']) assert(buildSite.includes("'" + file + "'"), file + ' debe publicarse');
+  for (const table of ['order_payments', 'restock_alerts', 'product_costs']) assert(adminJs.includes("'/rest/v1/" + table + '?select=*'), 'El respaldo y el panel leen ' + table);
+  assert(!/style="/.test(adminHtml), 'El panel sigue sin estilos en línea');
+  assert(!/\b(0\.55|0\.22|0\.14|1\.15)\b/.test(await read('finanzas.js')) && !/logistica:\s*\d/.test(adminJs), 'La fórmula real no está en el código público');
+
+  // Tienda: «Inspirado en…», «Avísame», secciones de la portada y la lista de precios.
+  for (const id of ['specialFilter', 'dialogInspired', 'notifyBox', 'notifyForm', 'notifyStatus', 'destacados']) assert(tiendaJs.includes("$('#" + id + "')") && template.includes('id="' + id + '"'), 'Falta #' + id + ' en la plantilla o en tienda.js');
+  assert(/<form method="post" id="notifyForm"/.test(template) && tiendaJs.includes("rpc/request_restock_alert"), 'El formulario «Avísame» usa la función de la base de datos');
+  assert(['vendidos', 'ofertas', 'nuevos'].every(k => template.includes('data-shelf="' + k + '"') && template.includes('data-shelf-all="' + k + '"')), 'Tres secciones en la portada con «Ver todos»');
+  assert(template.includes('<option value="ofertas">En oferta</option>') && tiendaJs.includes('function specialMatches('), 'Filtro «Mostrar» (oferta, nuevos, más vendidos)');
+  assert(tiendaJs.includes('p.inspired_by,...allNotes(p)'), 'El buscador encuentra por el perfume de referencia');
+  assert(template.includes('¿Qué significa «Inspirado en…»?') && template.includes('pertenecen a sus dueños'), 'Aclaración de «Inspirado en»');
+  const home = JSON.parse(indexHtml.match(/<script type="application\/json" id="homeSections">([\s\S]*?)<\/script>/)[1]);
+  const visibles = new Set(products.map(p => Number(p.id)));
+  assert(Array.isArray(home.vendidos) && Array.isArray(home.nuevos) && [...home.vendidos, ...home.nuevos].every(id => visibles.has(id)), 'Las secciones de la portada solo usan perfumes visibles');
+  assert(home.vendidos.length === 0 || home.vendidos.length >= 4, '«Lo más vendido» aparece con al menos 4 perfumes');
+  assert(!/created_at/.test(indexHtml.match(/id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]), 'La fecha de creación no se publica');
+  const sample = { ...products[0], inspired_by: 'Creed Aventus', availability: 'agotado' };
+  const page = renderProductPage(sample, []);
+  assert(page.includes('<dt>Inspirado en</dt><dd>Creed Aventus</dd>') && page.includes('no es el perfume original') && page.includes('href="/#avisame-' + sample.id + '"'), 'La página del perfume muestra la referencia y «Avísame»');
+  assert(!JSON.stringify([...page.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => m[1])).includes('Aventus'), 'La referencia no va en los datos estructurados');
+  assert(!merchantFeed([{ ...sample, availability: 'disponible', image_url: '/img/productos/0001-x.jpg' }]).xml.includes('Aventus'), 'Ni en el archivo para Google/Instagram');
+  const { renderPriceList } = await import('./lib/lista-precios.mjs');
+  const lista = renderPriceList([...products.slice(0, 5), sample], new Date('2026-09-30T15:00:00Z'));
+  assert.equal((lista.match(/<li class="item"/g) || []).length, 6, 'Un renglón por perfume');
+  assert(lista.includes('noindex') && lista.includes('Content-Security-Policy') && lista.includes('Inspirado en Creed Aventus') && lista.includes('30 de septiembre de 2026'), 'Lista imprimible con fecha, CSP y sin indexar');
+  assert(!/<script(?![^>]*\bsrc=)[^>]*>[^<]/.test(lista), 'Sin JavaScript en línea');
+  new Script(await read('lista-precios.js'), { filename: 'lista-precios.js' }); new Script(await read('finanzas.js'), { filename: 'finanzas.js' });
+  console.log('Cobros, precio sugerido, ganancia, compras, «Avísame», «Inspirado en», portada y lista de precios correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');

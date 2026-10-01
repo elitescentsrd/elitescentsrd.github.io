@@ -120,7 +120,7 @@
   function showAdmin() {
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
-    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));});
+    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));loadFinanzas();});
     loadCustomers(); loadCoupons(); loadStoreSettings(); loadSurvey();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
@@ -195,8 +195,8 @@
         api('/rest/v1/products?select=*&order=sort_order.asc,name.asc'),
         api('/rest/v1/orders?select=*&order=created_at.desc')
       ]);
-      renderProducts(productQuery?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(productQuery)):products); renderOrders();
-      applyOfferUi(); renderOffers();
+      renderProducts(productQuery?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(productQuery)):products);
+      applyOfferUi(); renderOffers(); renderFinanzas();
     } catch (err) { status(productStatus, err.message, 'error'); }
   }
   function renderProducts(list = products) {
@@ -229,6 +229,7 @@
       const items=document.createElement('td');items.textContent=o.items||'—';
       const total=document.createElement('td');total.textContent=o.amount||'—';
       if(o.coupon_code){const note=document.createElement('small');note.textContent='Cupón '+o.coupon_code+' (−'+money(o.discount_amount)+')';total.append(document.createElement('br'),note)}
+      if(paymentsReady&&F&&F.SOLD.includes(String(o.status||'nuevo'))){const b=F.balances([o],payments).rows[0];if(b&&b.total){const note=document.createElement('small');note.className='order-balance'+(b.due>0?' due':'');note.textContent=b.due>0?'Abonado '+rd(b.paid)+' · Falta '+rd(b.due):'Pagado ✓';total.append(note)}}
       const manage=document.createElement('td');manage.className='admin-actions';
       const statusSelect=document.createElement('select');
       ['nuevo','confirmado','preparando','enviado','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
@@ -257,12 +258,13 @@
     for (const name of ['id','name','brand','price','size','gender','availability','sort_order','description','image_url']) if (form.elements[name]) form.elements[name].value=p[name]??'';
     form.elements.notes_top.value=(p.notes_top||[]).join(', '); form.elements.notes_heart.value=(p.notes_heart||[]).join(', '); form.elements.notes_base.value=(p.notes_base||[]).join(', ');
     form.elements.gallery_urls.value=(p.gallery_urls||[]).join('\n'); form.elements.active.checked=p.active!==false;
+    form.elements.inspired_by.value=p.inspired_by||''; {const cr=costRows.get(Number(p.id)); form.elements.cost.value=cr?cr.costs.map(Number).map(c=>c.toLocaleString('en-US')).join(' / '):''; form.elements.strategy.value=cr?.strategy||'normal';} updateSuggestion();
     // Con oferta activa, "Precio" muestra el precio normal y "Precio de oferta" el vigente.
     if(p.original_price){form.elements.price.value=p.original_price;form.elements.offer_price.value=p.price;form.elements.offer_label.value=p.offer_label||'';form.elements.offer_ends.value=toLocalInput(p.offer_ends_at)}
     else{form.elements.offer_price.value='';form.elements.offer_label.value='';form.elements.offer_ends.value=''}
     $('#form-title').textContent='Editar perfume'; $('#cancel-edit').classList.remove('hidden'); form.scrollIntoView({behavior:'smooth'});
   }
-  function resetForm() { form.reset(); form.elements.id.value=''; form.elements.active.checked=true; form.elements.sort_order.value=0; $('#form-title').textContent='Agregar perfume'; $('#cancel-edit').classList.add('hidden'); }
+  function resetForm() { form.reset(); form.elements.id.value=''; form.elements.active.checked=true; form.elements.sort_order.value=0; $('#form-title').textContent='Agregar perfume'; $('#cancel-edit').classList.add('hidden'); updateSuggestion(); }
   $('#cancel-edit').addEventListener('click', resetForm);
   async function upload(file, prefix) {
     if (file.size > MAX_IMAGE_BYTES) throw new Error('Cada imagen debe pesar menos de 3 MB.');
@@ -284,6 +286,7 @@
       const priceText=normalizePrice(fd.get('price')), rawPrice=priceText?1:NaN;
       const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:priceText,size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,image_url:imageUrl||null,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
       if(!payload.name||!Number.isFinite(rawPrice)) throw new Error('Completa el nombre y un precio válido.');
+      if(hasInspired()){const insp=String(fd.get('inspired_by')||'').trim();if(insp.length===1)throw new Error('«Inspirado en» debe tener al menos 2 letras (o déjalo vacío).');payload.inspired_by=insp||null;}
       if(offersEnabled()){
         const offerText=normalizePrice(fd.get('offer_price'));
         if(offerText){
@@ -295,8 +298,9 @@
         } else Object.assign(payload,{original_price:null,offer_label:null,offer_ends_at:null});
       }
       const path=id?'/rest/v1/products?id=eq.'+encodeURIComponent(id):'/rest/v1/products';
-      await api(path,{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
-      status(productStatus,'Producto guardado.','success'); resetForm(); await loadAll();
+      const saved=await api(path,{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
+      const costNote=await saveProductCost(id||(Array.isArray(saved)&&saved[0]?saved[0].id:null));
+      status(productStatus,'Producto guardado.'+costNote,'success'); resetForm(); await loadAll();
     } catch(err){status(productStatus,err.message,'error')}
   });
   // --- Carga de fotos por lote: el ID del producto sale del nombre del archivo (0012-nombre.jpg). ---
@@ -552,7 +556,7 @@
         kpi('Ventas confirmadas', rd(t.sales), (p ? versus(t.sales, p.sales) : '') || t.soldCount + ' pedido(s) confirmado(s)'),
         kpi('Ticket promedio', t.soldCount ? rd(t.average) : '—', 'por pedido confirmado'),
         kpi('Por confirmar', rd(t.pendingAmount), t.pendingCount + ' pedido(s) nuevo(s)', t.pendingCount ? 'warn' : ''),
-        kpi('Cancelados', String(t.cancelled), ''));
+        kpi('Cancelados', String(t.cancelled), ''), ...financeKpis(s.range));
       const title = salesMetric === 'orders' ? 'Pedidos por día' : 'Ventas confirmadas por día (RD$)';
       $('#sales-chart-title').textContent = title; $('#sales-chart').setAttribute('aria-label', 'Gráfico: ' + title.toLowerCase());
       $('#sales-chart').replaceChildren(salesChart(s.days));
@@ -699,6 +703,7 @@
     ['cuentas_clientes', '/rest/v1/rpc/admin_list_customers?order=cuenta_creada.asc'], ['perfiles_clientes', '/rest/v1/customer_profiles?select=*'],
     ['cupones', '/rest/v1/coupons?select=*&order=code.asc'], ['usos_de_cupones', '/rest/v1/coupon_redemptions?select=*&order=id.asc'],
     ['ajustes_tienda', '/rest/v1/store_settings?select=*'], ['encuesta_respuestas', '/rest/v1/survey_responses?select=*&order=id.asc'],
+    ['abonos', '/rest/v1/order_payments?select=*&order=id.asc'], ['avisos_reposicion', '/rest/v1/restock_alerts?select=*&order=id.asc'], ['costos_privados', '/rest/v1/product_costs?select=*&order=product_id.asc'],
   ];
   $('#backup-download').addEventListener('click', async () => {
     const st = $('#backup-status'), button = $('#backup-download');
@@ -797,6 +802,414 @@
     link.href = url; link.download = 'encuesta-elite-scents-' + new Date().toISOString().slice(0, 10) + '.csv';
     document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
     status(st, surveyResponses.length + ' respuestas descargadas. Ábrelas con Excel.', 'success');
+  });
+
+  // --- Cobros, «Avísame cuando llegue», lista de compra, costos privados y ganancia (los cálculos viven en finanzas.js) ---
+  const F = window.EliteFinanzas;
+  let payments = [], paymentsReady = null, alerts = [], alertsReady = null, costRows = new Map(), costsReady = null, pricingParams = null;
+  const MIGRATION_NOTE = 'falta aplicar la migración "funciones y perfumes nuevos" en Supabase (SQL Editor).';
+  // Solo «no existe» (tabla, columna o función sin la migración); un error de validación («violates check constraint») se muestra tal cual.
+  const missing = err => /schema cache|could not find the|does not exist|42P01|42703|PGRST20[2-5]/i.test(String(err?.message || err));
+  const todayInput = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+  const dayText = v => v ? new Date(String(v).length === 10 ? v + 'T12:00:00' : v).toLocaleDateString('es-DO', { dateStyle: 'medium' }) : '—';
+  const cell = (text, className) => { const td = document.createElement('td'); td.textContent = text; if (className) td.className = className; return td; };
+  const tag = (text, kind) => { const s = document.createElement('span'); s.className = 'tag ' + (kind || ''); s.textContent = text; return s; };
+  const button = (text, onClick, secondary = true) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (secondary ? ' btn-secondary' : ''); b.textContent = text; b.addEventListener('click', onClick); return b; };
+  const costsOf = id => (costRows.get(Number(id))?.costs || []).map(Number).filter(n => n > 0);
+  function download(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type })), link = document.createElement('a');
+    link.href = url; link.download = name; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+  async function copyText(text, el) {
+    try { await navigator.clipboard.writeText(text); status(el, 'Copiado ✓ Pégalo en WhatsApp.', 'success'); }
+    catch { prompt('Copia este texto:', text); }
+  }
+
+  async function loadFinanzas() {
+    await Promise.all([loadPayments(), loadAlerts(), loadCosts()]);
+    renderFinanzas();
+  }
+  const hasInspired = () => Object.prototype.hasOwnProperty.call(products[0] || {}, 'inspired_by');
+  function renderFinanzas() {
+    renderOrders();
+    $('#inspired-label').classList.toggle('hidden', products.length > 0 && !hasInspired());
+    ['#cost-label', '#strategy-label'].forEach(sel => $(sel).classList.toggle('hidden', costsReady === false || !F));
+    if (!F) return;
+    renderReceivables(); renderRestock(); renderPurchase(); renderCosts(); renderProfit(); updateSuggestion();
+  }
+
+  // ---------------- Cuentas por cobrar y abonos
+  async function loadPayments() {
+    const notice = $('#receivables-notice');
+    try { payments = await fetchAll('/rest/v1/order_payments?select=*&order=paid_on.asc,id.asc'); paymentsReady = true; notice.classList.add('hidden'); }
+    catch (err) { payments = []; paymentsReady = false; notice.classList.remove('hidden'); notice.textContent = missing(err) ? 'Para registrar abonos ' + MIGRATION_NOTE : 'No se pudieron cargar los abonos: ' + err.message; }
+  }
+  const startOfMonth = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); };
+  const startOfToday = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+  const oldDelivered = rows => rows.filter(r => String(r.order.status) === 'entregado' && r.paid === 0 && r.due > 0 && Date.parse(r.order.created_at) < startOfToday().getTime());
+  function renderReceivables() {
+    if (!F || !$('#receivables-body')) return;
+    const b = F.balances(orders, payments), t = b.totals, q = $('#receivables-search').value.trim().toLocaleLowerCase('es'), view = $('#receivables-view').value;
+    $('#receivables-kpis').replaceChildren(
+      kpi('Por cobrar', rd(t.due), t.open + ' pedido(s) de ' + t.customers + ' cliente(s)', t.due > 0 ? 'warn' : ''),
+      kpi('Cobrado este mes', rd(F.collected(payments, startOfMonth(), null)), ''),
+      kpi('Abonos registrados', String(payments.length), rd(t.paid) + ' en total'));
+    const list = b.rows.filter(r => (view === 'all' || (view === 'open' ? r.due > 0 : r.total > 0 && r.due <= 0)) &&
+      (!q || [r.order.customer_name, r.order.phone, '#' + r.order.id].join(' ').toLocaleLowerCase('es').includes(q)));
+    $('#receivables-body').replaceChildren(...(list.length ? list.map(receivableRow) : [emptyRow(8, view === 'open' ? 'No hay saldos pendientes.' : 'No hay pedidos en esta vista.')]));
+    const old = oldDelivered(b.rows), settle = $('#receivables-settle-old');
+    settle.classList.toggle('hidden', !paymentsReady || !old.length);
+    settle.textContent = 'Marcar como pagados ' + old.length + ' pedido(s) entregados antes de hoy y sin abonos';
+  }
+  function receivableRow(r) {
+    const o = r.order, tr = document.createElement('tr');
+    const who = document.createElement('td'); who.textContent = o.customer_name || '—';
+    if (o.phone) { const small = document.createElement('small'); small.className = 'order-balance'; small.textContent = o.phone; who.append(small); }
+    const due = document.createElement('td'); due.className = 'num'; due.append(r.total ? (r.due > 0 ? tag(rd(r.due), r.paid > 0 ? 'warn' : 'bad') : tag('Pagado', 'ok')) : tag('Sin total', 'warn'));
+    const actions = document.createElement('td'); actions.className = 'admin-actions';
+    if (paymentsReady && r.total > 0 && r.due > 0) actions.append(button('Registrar abono', () => openPayment(r), false));
+    if (paymentsReady && payments.some(p => String(p.order_id) === String(o.id))) actions.append(button('Ver abonos', () => openPayment(r)));
+    if (r.due > 0 && o.phone) { const wa = document.createElement('a'); wa.className = 'btn btn-secondary'; wa.target = '_blank'; wa.rel = 'noopener noreferrer'; wa.href = F.waLink(o.phone, F.reminderText(r)); wa.textContent = 'Recordar por WhatsApp'; actions.append(wa); }
+    tr.append(cell('#' + o.id), who, cell(dayText(o.created_at)), cell(r.total ? rd(r.total) : (o.amount || '—'), 'num'), cell(rd(r.paid), 'num'), due, cell(dayText(r.last)), actions);
+    return tr;
+  }
+  let paymentRow = null;
+  function openPayment(r, keepStatus) {
+    paymentRow = r; const f = $('#payment-form');
+    $('#payment-title').textContent = 'Abonos del pedido #' + r.order.id + ' · ' + (r.order.customer_name || '');
+    $('#payment-summary').textContent = 'Total ' + rd(r.total) + ' · Abonado ' + rd(r.paid) + ' · Pendiente ' + rd(r.due) + (r.order.items ? ' · ' + String(r.order.items).split(/\r?\n/).join(', ') : '');
+    f.elements.amount.value = r.due > 0 ? Math.round(r.due) : ''; f.elements.method.value = 'efectivo'; f.elements.paid_on.value = todayInput(); f.elements.note.value = '';
+    f.querySelectorAll('button[type="submit"],#payment-full').forEach(b => b.classList.toggle('hidden', !(r.due > 0)));
+    if (!keepStatus) status($('#payment-status'), '');
+    const mine = payments.filter(p => String(p.order_id) === String(r.order.id));
+    $('#payment-list').replaceChildren(...(mine.length ? mine.map(p => {
+      const li = document.createElement('li'); li.textContent = dayText(p.paid_on) + ' · ' + rd(p.amount) + ' · ' + p.method + (p.note ? ' · ' + p.note : '');
+      li.append(button('Borrar', async () => {
+        if (!confirm('¿Borrar el abono de ' + rd(p.amount) + ' del ' + dayText(p.paid_on) + '?')) return;
+        try { await api('/rest/v1/order_payments?id=eq.' + encodeURIComponent(p.id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); payments = payments.filter(x => x.id !== p.id); afterPayment(); }
+        catch (err) { alert(err.message); }
+      }));
+      return li;
+    }) : [(() => { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'Todavía no hay abonos.'; return li; })()]));
+    const dialog = $('#payment-dialog'); if (!dialog.open) dialog.showModal();
+  }
+  function afterPayment() {
+    renderFinanzas(); renderSales();
+    if (paymentRow) { const fresh = F.balances(orders, payments).rows.find(x => String(x.order.id) === String(paymentRow.order.id)); if (fresh) openPayment(fresh, true); }
+  }
+  async function savePayment(amount) {
+    const f = $('#payment-form'), st = $('#payment-status'), r = paymentRow;
+    if (!r) return;
+    const value = Number(String(amount ?? f.elements.amount.value).replace(/[^0-9.]/g, ''));
+    if (!(value > 0)) { status(st, 'Escribe el monto del abono.', 'error'); return; }
+    if (value > r.due + 0.5 && !confirm('El abono (' + rd(value) + ') es mayor que lo pendiente (' + rd(r.due) + '). ¿Guardarlo de todos modos?')) return;
+    const body = { order_id: r.order.id, amount: Math.round(value * 100) / 100, method: f.elements.method.value, paid_on: f.elements.paid_on.value || todayInput(), note: f.elements.note.value.trim() };
+    status(st, 'Guardando…');
+    try { const saved = await api('/rest/v1/order_payments', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) }); payments.push(...(Array.isArray(saved) ? saved : [])); afterPayment(); status(st, 'Abono guardado ✓', 'success'); }
+    catch (err) { status(st, missing(err) ? 'Para registrar abonos ' + MIGRATION_NOTE : err.message, 'error'); }
+  }
+  $('#payment-form').addEventListener('submit', e => { e.preventDefault(); savePayment(); });
+  $('#payment-full').addEventListener('click', () => { if (paymentRow) savePayment(paymentRow.due); });
+  $('#payment-close').addEventListener('click', () => $('#payment-dialog').close());
+  $('#receivables-search').addEventListener('input', renderReceivables);
+  $('#receivables-view').addEventListener('change', renderReceivables);
+  $('#receivables-refresh').addEventListener('click', async () => { await loadPayments(); renderFinanzas(); renderSales(); });
+  $('#receivables-settle-old').addEventListener('click', async () => {
+    const old = oldDelivered(F.balances(orders, payments).rows), st = $('#receivables-status');
+    if (!old.length) return;
+    if (!confirm('Se registrará como pagado el total de ' + old.length + ' pedido(s) entregados antes de hoy que no tienen abonos (' + rd(old.reduce((s, r) => s + r.due, 0)) + '). Úsalo solo si esos clientes ya te pagaron. ¿Continuar?')) return;
+    const body = old.map(r => ({ order_id: r.order.id, amount: r.due, method: 'otro', note: 'Pagado antes de usar cuentas por cobrar', paid_on: String(r.order.created_at).slice(0, 10) }));
+    try { const saved = await api('/rest/v1/order_payments', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(body) }); payments.push(...saved); status(st, old.length + ' pedido(s) marcados como pagados.', 'success'); renderFinanzas(); renderSales(); }
+    catch (err) { status(st, err.message, 'error'); }
+  });
+
+  // ---------------- «Avísame cuando llegue»
+  async function loadAlerts() {
+    const notice = $('#restock-notice');
+    try { alerts = await fetchAll('/rest/v1/restock_alerts?select=*&order=created_at.asc'); alertsReady = true; notice.classList.add('hidden'); }
+    catch (err) { alerts = []; alertsReady = false; notice.classList.remove('hidden'); notice.textContent = missing(err) ? 'Para ver los avisos ' + MIGRATION_NOTE : 'No se pudieron cargar los avisos: ' + err.message; }
+  }
+  const availabilityText = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'Por encargo' };
+  function renderRestock() {
+    if (!F || !$('#restock-body')) return;
+    const byId = new Map(products.map(p => [Number(p.id), p])), view = $('#restock-view').value;
+    const waiting = alerts.filter(a => a.status === 'pendiente'), ready = waiting.filter(a => byId.get(Number(a.product_id))?.availability === 'disponible');
+    const summary = $('#restock-summary');
+    summary.textContent = waiting.length ? waiting.length + ' persona(s) esperando ' + new Set(waiting.map(a => a.product_id)).size + ' perfume(s)' + (ready.length ? ' · ' + ready.length + ' ya se pueden avisar' : '') : 'Nadie está esperando un perfume ahora mismo.';
+    summary.classList.toggle('has-pending', ready.length > 0);
+    const list = view === 'sent' ? alerts.filter(a => a.status === 'avisado') : view === 'ready' ? ready : waiting;
+    $('#restock-body').replaceChildren(...(list.length ? list.map(a => {
+      const p = byId.get(Number(a.product_id)) || { id: a.product_id, name: 'Perfume #' + a.product_id, availability: '' }, tr = document.createElement('tr');
+      const state = document.createElement('td'); state.append(tag(availabilityText[p.availability] || 'Oculto', p.availability === 'disponible' ? 'ok' : 'warn'));
+      const actions = document.createElement('td'); actions.className = 'admin-actions';
+      if (a.status === 'pendiente') {
+        const wa = document.createElement('a'); wa.className = 'btn'; wa.target = '_blank'; wa.rel = 'noopener noreferrer'; wa.href = F.waLink(a.phone, F.restockText(a.customer_name, p)); wa.textContent = 'Avisar por WhatsApp';
+        wa.addEventListener('click', async () => {
+          try { await api('/rest/v1/restock_alerts?id=eq.' + encodeURIComponent(a.id), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: 'avisado', notified_at: new Date().toISOString() }) }); a.status = 'avisado'; a.notified_at = new Date().toISOString(); renderRestock(); renderPurchase(); }
+          catch (err) { alert(err.message); }
+        });
+        actions.append(wa);
+      } else actions.append(tag('Avisado ' + dayText(a.notified_at), 'ok'));
+      actions.append(button('Quitar', async () => {
+        if (!confirm('¿Quitar el aviso de ' + a.customer_name + '?')) return;
+        try { await api('/rest/v1/restock_alerts?id=eq.' + encodeURIComponent(a.id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); alerts = alerts.filter(x => x.id !== a.id); renderRestock(); renderPurchase(); }
+        catch (err) { alert(err.message); }
+      }));
+      tr.append(cell(p.name + (p.size ? ' · ' + p.size : '')), state, cell(a.customer_name), cell(String(a.phone).replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')), cell(dayText(a.created_at)), actions);
+      return tr;
+    }) : [emptyRow(6, view === 'ready' ? 'Ningún perfume esperado está disponible todavía.' : 'No hay avisos en esta vista.')]));
+  }
+  $('#restock-view').addEventListener('change', renderRestock);
+  $('#restock-refresh').addEventListener('click', async () => { await loadAlerts(); renderRestock(); renderPurchase(); });
+
+  // ---------------- Lista de compra para La Grada
+  const purchaseEdits = new Map();
+  let purchaseRows = [];
+  function renderPurchase() {
+    if (!F || !$('#purchase-body')) return;
+    const { rows, unmatched } = F.purchaseList(orders, products, alerts, { includeAvailable: $('#purchase-available').checked, includeWaiting: $('#purchase-waiting').checked });
+    purchaseRows = rows.map(r => { const key = r.product.id + '|' + r.size; return { ...r, key, buy: purchaseEdits.has(key) ? purchaseEdits.get(key) : (r.qty || (r.waiting ? 1 : 0)) }; });
+    const unitCost = r => { const c = costsOf(r.product.id); return c.length ? c[Math.min(F.sizeIndex(r.product, r.size), c.length - 1)] : null; };
+    const totals = () => {
+      const units = purchaseRows.reduce((s, r) => s + r.buy, 0), priced = purchaseRows.filter(r => r.buy > 0 && unitCost(r) !== null);
+      $('#purchase-kpis').replaceChildren(kpi('Unidades a comprar', String(units), purchaseRows.filter(r => r.buy > 0).length + ' perfume(s)'),
+        kpi('Costo estimado', priced.length ? rd(priced.reduce((s, r) => s + r.buy * unitCost(r), 0)) : '—', priced.length < purchaseRows.filter(r => r.buy > 0).length ? 'algunos sin costo' : 'según tus costos'));
+    };
+    $('#purchase-body').replaceChildren(...(purchaseRows.length ? purchaseRows.map(r => {
+      const tr = document.createElement('tr'), qtyCell = document.createElement('td'), input = document.createElement('input');
+      input.type = 'number'; input.min = '0'; input.max = '99'; input.step = '1'; input.value = r.buy; input.className = 'purchase-qty'; input.setAttribute('aria-label', 'Cantidad a comprar de ' + r.product.name);
+      const sub = cell('');
+      const refresh = () => { const c = unitCost(r); sub.textContent = c !== null && r.buy > 0 ? rd(c * r.buy) : '—'; };
+      input.addEventListener('input', () => { r.buy = Math.max(0, Math.min(99, Math.round(Number(input.value) || 0))); purchaseEdits.set(r.key, r.buy); refresh(); totals(); });
+      qtyCell.append(input); refresh();
+      const state = document.createElement('td'); state.append(tag(availabilityText[r.product.availability] || '—', r.product.availability === 'disponible' ? 'ok' : 'warn'));
+      tr.append(qtyCell, cell(r.product.name), cell(r.size || '—'), cell(r.qty ? r.qty + ' (pedido ' + r.orders.map(id => '#' + id).join(', ') + ')' : '—'), cell(r.waiting ? String(r.waiting) : '—'), state, cell(unitCost(r) !== null ? rd(unitCost(r)) : '—', 'num'), sub);
+      return tr;
+    }) : [emptyRow(8, 'No hay nada pendiente por comprar.')]));
+    totals();
+    const box = $('#purchase-unmatched'); box.textContent = unmatched.length ? 'Líneas de pedidos que no coinciden con un perfume de la tienda (revísalas a mano): ' + unmatched.map(u => '#' + u.order + ' ' + u.text).join(' · ') : '';
+  }
+  ['#purchase-available', '#purchase-waiting'].forEach(sel => $(sel).addEventListener('change', renderPurchase));
+  $('#purchase-refresh').addEventListener('click', async () => { await loadAll(); await loadAlerts(); renderFinanzas(); });
+  $('#purchase-copy').addEventListener('click', () => {
+    if (!purchaseRows.some(r => r.buy > 0)) { status($('#purchase-status'), 'No hay cantidades para comprar.', 'error'); return; }
+    copyText(F.purchaseText(purchaseRows), $('#purchase-status'));
+  });
+  $('#purchase-csv').addEventListener('click', () => {
+    const rows = [['cantidad', 'perfume', 'tamaño', 'en pedidos', 'personas esperando', 'pedidos']].concat(purchaseRows.filter(r => r.buy > 0).map(r => [r.buy, r.product.name, r.size, r.qty, r.waiting, r.orders.map(id => '#' + id).join(' ')]));
+    download('compra-la-grada-' + todayInput() + '.csv', F.toCsv(rows), 'text/csv;charset=utf-8');
+  });
+
+  // ---------------- Costos privados, fórmula y precio sugerido
+  async function loadCosts() {
+    const notice = $('#costs-notice');
+    try {
+      const rows = await fetchAll('/rest/v1/product_costs?select=*');
+      costRows = new Map(rows.map(r => [Number(r.product_id), r]));
+      const settings = await api('/rest/v1/store_settings?select=pricing&id=eq.true');
+      pricingParams = Array.isArray(settings) && settings[0] ? settings[0].pricing : null; costsReady = true; notice.classList.add('hidden');
+    } catch (err) { costRows = new Map(); pricingParams = null; costsReady = false; notice.classList.remove('hidden'); notice.textContent = missing(err) ? 'Para usar costos ' + MIGRATION_NOTE : 'No se pudieron cargar los costos: ' + err.message; }
+    fillPricingForm();
+  }
+  function fillPricingForm() {
+    const f = $('#pricing-form').elements, p = F && F.validParams(pricingParams);
+    if (!p) return;
+    f.logistica.value = p.logistica; f.ganancia_minima.value = p.ganancia_minima;
+    f.curva.value = p.curva.map(([c, m]) => c + ', ' + Math.round(m * 1000) / 10).join('\n');
+    for (const k of ['gancho', 'normal', 'exclusivo']) { f[k + '_factor'].value = p.estrategias[k].factor; f[k + '_descuento'].value = Math.round(p.estrategias[k].descuento * 1000) / 10; }
+  }
+  $('#pricing-form').addEventListener('submit', async e => {
+    e.preventDefault(); const f = e.currentTarget.elements, st = $('#pricing-status');
+    const curva = String(f.curva.value).split(/\r?\n/).map(l => l.split(/[,;\t]/).map(v => Number(v.replace(/[^0-9.]/g, '')))).filter(x => x.length >= 2 && x[0] > 0 && x[1] >= 0).map(([c, m]) => [c, m / 100]);
+    const params = { logistica: Number(f.logistica.value), ganancia_minima: Number(f.ganancia_minima.value), curva, estrategias: {} };
+    for (const k of ['gancho', 'normal', 'exclusivo']) params.estrategias[k] = { factor: Number(f[k + '_factor'].value), descuento: Number(f[k + '_descuento'].value) / 100 };
+    if (!F.validParams(params)) { status(st, 'Revisa la fórmula: faltan números o la curva está vacía.', 'error'); return; }
+    status(st, 'Guardando…');
+    try { await api('/rest/v1/store_settings?id=eq.true', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ pricing: params, updated_at: new Date().toISOString() }) }); pricingParams = params; status(st, 'Fórmula guardada.', 'success'); renderFinanzas(); }
+    catch (err) { status(st, missing(err) ? 'Para guardar la fórmula ' + MIGRATION_NOTE : err.message, 'error'); }
+  });
+  const COSTS_PAGE = 50; let costsVisible = COSTS_PAGE; const costsSelected = new Set();
+  // review: el precio de hoy revisado con la fórmula y las reglas de siempre (±RD$50, competencia, tope de RD$6,950).
+  // Los perfumes en oferta no se marcan para cambiar (se manejan en «Ofertas»); su ganancia se mide con el precio rebajado.
+  function costInfo(p) {
+    const row = costRows.get(Number(p.id)), costs = costsOf(p.id), strategy = row?.strategy || 'normal', competitor = row?.competitor_price ? Number(row.competitor_price) : null;
+    const review = costs.length ? F.reviewPrice(p, costs, strategy, pricingParams, competitor) : null, current = costs.length ? F.currentProfit(p, costs, pricingParams) : null;
+    const offer = p.original_price && costs.length ? F.currentProfit({ price: p.price }, costs, pricingParams) : null;
+    const params = F.validParams(pricingParams), below = Boolean(params && (offer || current) && (offer || current).some(c => c.profit < params.ganancia_minima));
+    return { costs, strategy, competitor, review, suggestion: review ? review.suggestion : null, current, offer, below, differs: Boolean(review && review.differs && !p.original_price) };
+  }
+  function renderCosts() {
+    if (!F || !$('#costs-body')) return;
+    const q = $('#costs-search').value.trim().toLocaleLowerCase('es'), view = $('#costs-view').value, params = F.validParams(pricingParams);
+    const all = products.map(p => ({ p, info: costInfo(p) }));
+    const withCost = all.filter(x => x.info.costs.length), below = withCost.filter(x => x.info.below), differs = withCost.filter(x => x.info.differs);
+    const margins = withCost.map(x => x.info.current).filter(Boolean).map(c => c[0].margin);
+    $('#costs-kpis').replaceChildren(
+      kpi('Perfumes con costo', withCost.length + ' de ' + products.length, costsReady === false ? 'falta la migración' : ''),
+      kpi('Ganancia promedio', margins.length ? Math.round(margins.reduce((s, m) => s + m, 0) / margins.length * 100) + '%' : '—', 'sobre costo + logística'),
+      kpi('Bajo la ganancia mínima', String(below.length), params ? 'menos de ' + rd(params.ganancia_minima) + ' por unidad' : 'guarda la fórmula', below.length ? 'warn' : ''),
+      kpi('Precio distinto al sugerido', String(differs.length), params ? '' : 'sin fórmula no hay sugeridos'));
+    const list = all.filter(({ p, info }) => (!q || (p.name + ' ' + (p.brand || '')).toLocaleLowerCase('es').includes(q)) &&
+      (view === 'all' || (view === 'diff' && info.differs) || (view === 'below' && info.below) || (view === 'nocost' && !info.costs.length)));
+    const shown = list.slice(0, costsVisible);
+    $('#costs-count').textContent = list.length ? 'Mostrando ' + shown.length + ' de ' + list.length + ' perfumes.' : 'No hay perfumes en esta vista.';
+    const more = $('#costs-more'); more.classList.toggle('hidden', list.length <= shown.length); more.textContent = 'Mostrar ' + Math.min(COSTS_PAGE, list.length - shown.length) + ' más';
+    $('#costs-body').replaceChildren(...shown.map(({ p, info }) => costRow(p, info)));
+    const selectable = shown.filter(x => canApply(x.p, x.info)), selectAll = $('#costs-select-all');
+    selectAll.disabled = !selectable.length; selectAll.checked = selectable.length > 0 && selectable.every(x => costsSelected.has(Number(x.p.id)));
+  }
+  const canApply = (p, info) => Boolean(info.review && info.differs && !p.original_price);
+  function costRow(p, info) {
+    const tr = document.createElement('tr'), pick = document.createElement('td'), check = document.createElement('input');
+    check.type = 'checkbox'; check.disabled = !canApply(p, info); check.checked = costsSelected.has(Number(p.id)) && !check.disabled; check.setAttribute('aria-label', 'Seleccionar ' + p.name);
+    check.addEventListener('change', () => { check.checked ? costsSelected.add(Number(p.id)) : costsSelected.delete(Number(p.id)); });
+    pick.append(check);
+    const costCell = document.createElement('td'), cost = document.createElement('input'); cost.className = 'cost-input'; cost.inputMode = 'decimal'; cost.value = info.costs.map(c => c.toLocaleString('en-US')).join(' / '); cost.setAttribute('aria-label', 'Costo de ' + p.name); costCell.append(cost);
+    const stCell = document.createElement('td'), strategy = document.createElement('select'); strategy.className = 'cost-select';
+    [['normal', 'Normal'], ['gancho', 'Gancho'], ['exclusivo', 'Exclusivo']].forEach(([v, t]) => strategy.append(new Option(t, v, false, info.strategy === v))); stCell.append(strategy);
+    const compCell = document.createElement('td'), comp = document.createElement('input'); comp.className = 'cost-input'; comp.inputMode = 'decimal'; comp.placeholder = 'opcional'; comp.value = info.competitor ? info.competitor.toLocaleString('en-US') : ''; comp.setAttribute('aria-label', 'Precio de la competencia de ' + p.name); compCell.append(comp);
+    const fmt = list => list.map(c => rd(c.profit) + ' (' + Math.round(c.margin * 100) + '%)').join(' / ');
+    // En oferta, también la ganancia con el precio rebajado que pagan hoy los clientes.
+    const profit = info.current ? fmt(info.current) + (info.offer ? ' · en oferta: ' + fmt(info.offer) : '') : '—';
+    const suggestedCell = document.createElement('td'); suggestedCell.className = 'num';
+    let sugProfit = '—';
+    if (info.review) {
+      const r = info.review, states = r.items.map(x => x.state), capped = r.items.some(x => x.capped);
+      if (p.original_price) suggestedCell.append(r.suggestion.text + ' ', tag('en oferta', ''));
+      else if (r.mismatch) suggestedCell.append(r.suggestion.text + ' ', tag('un costo por presentación', 'warn'));
+      else if (info.differs) {
+        suggestedCell.append(r.text + ' ', states.includes('bajo-piso') ? tag('pierdes ganancia', 'bad') : states.includes('alto') ? tag('más caro', 'warn') : states.includes('bajo') ? tag('puedes subir', 'warn') : '');
+        sugProfit = F.currentProfit({ price: r.text }, info.costs, pricingParams).map(x => rd(x.profit)).join(' / ');
+      } else suggestedCell.append(tag(states.includes('mercado') ? '✓ a nivel de la competencia' : '✓ al día', 'ok'));
+      if (capped && !p.original_price) suggestedCell.append(document.createElement('br'), Object.assign(document.createElement('small'), { className: 'muted', textContent: 'La fórmula da ' + r.suggestion.text + '; se queda en RD$6,950 para seguir «Disponible».' }));
+    } else suggestedCell.textContent = '—';
+    const cur = document.createElement('td'); cur.textContent = (p.original_price || p.price || '—') + (p.original_price ? ' (en oferta: ' + p.price + ')' : '');
+    const prof = document.createElement('td'); prof.append(info.below ? tag(profit, 'bad plain') : document.createTextNode(profit));
+    const save = document.createElement('td'); save.append(button('Guardar', async () => {
+      const costs = cost.value.split('/').map(v => Number(v.replace(/[^0-9.]/g, ''))).filter(v => v > 0);
+      if (!costs.length) { alert('Escribe el costo (por ejemplo 2,650 o 2,650 / 3,400).'); return; }
+      try { await upsertCosts([{ product_id: Number(p.id), costs, strategy: strategy.value, competitor_price: Number(comp.value.replace(/[^0-9.]/g, '')) || null }]); status($('#costs-status'), 'Costo de ' + p.name + ' guardado.', 'success'); renderFinanzas(); }
+      catch (err) { status($('#costs-status'), missing(err) ? 'Para guardar costos ' + MIGRATION_NOTE : err.message, 'error'); }
+    }));
+    tr.append(pick, cell(p.name + (p.size ? ' · ' + p.size : '')), costCell, stCell, compCell, cur, prof, suggestedCell, cell(sugProfit, 'num'), save);
+    return tr;
+  }
+  async function upsertCosts(rows) {
+    const now = new Date().toISOString();
+    for (let i = 0; i < rows.length; i += 100) {
+      const chunk = rows.slice(i, i + 100).map(r => ({ ...r, updated_at: now }));
+      const saved = await api('/rest/v1/product_costs?on_conflict=product_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(chunk) });
+      for (const r of saved || []) costRows.set(Number(r.product_id), r);
+    }
+  }
+  $('#costs-search').addEventListener('input', () => { costsVisible = COSTS_PAGE; renderCosts(); });
+  $('#costs-view').addEventListener('change', () => { costsVisible = COSTS_PAGE; renderCosts(); });
+  $('#costs-more').addEventListener('click', () => { costsVisible += COSTS_PAGE; renderCosts(); });
+  $('#costs-select-all').addEventListener('change', e => {
+    const q = $('#costs-search').value.trim().toLocaleLowerCase('es');
+    for (const p of products) { const info = costInfo(p); if (canApply(p, info) && (!q || (p.name + ' ' + (p.brand || '')).toLocaleLowerCase('es').includes(q))) e.target.checked ? costsSelected.add(Number(p.id)) : costsSelected.delete(Number(p.id)); }
+    renderCosts();
+  });
+  $('#costs-apply').addEventListener('click', async () => {
+    const st = $('#costs-status'), chosen = products.filter(p => costsSelected.has(Number(p.id))).map(p => ({ p, info: costInfo(p) })).filter(x => canApply(x.p, x.info));
+    if (!chosen.length) { status(st, 'Selecciona perfumes con un precio sugerido distinto (los que están en oferta no se cambian aquí).', 'error'); return; }
+    if (!confirm('¿Cambiar el precio de ' + chosen.length + ' perfume(s) al sugerido?\n\n' + chosen.slice(0, 12).map(x => x.p.name + ': ' + x.p.price + ' → ' + x.info.review.text).join('\n') + (chosen.length > 12 ? '\n…' : ''))) return;
+    let ok = 0, failed = 0, last = '';
+    for (const [i, { p, info }] of chosen.entries()) {
+      status(st, 'Cambiando ' + (i + 1) + ' de ' + chosen.length + '…');
+      try { await api('/rest/v1/products?id=eq.' + encodeURIComponent(p.id), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ price: info.review.text, updated_at: new Date().toISOString() }) }); ok++; costsSelected.delete(Number(p.id)); }
+      catch (err) { failed++; last = err.message; }
+    }
+    status(st, ok + ' precio(s) cambiados' + (failed ? ', ' + failed + ' con error (' + last + ')' : '') + '.', failed ? 'error' : 'success');
+    await loadAll(); renderFinanzas();
+  });
+  $('#costs-export').addEventListener('click', () => {
+    const strategy = new Map([...costRows].map(([id, r]) => [id, r.strategy])), competitor = new Map([...costRows].map(([id, r]) => [id, r.competitor_price ? Number(r.competitor_price) : '']));
+    const costs = new Map([...costRows].map(([id]) => [id, costsOf(id)]));
+    download('costos-elite-scents-' + todayInput() + '.csv', F.costsCsv(products, costs, strategy, competitor), 'text/csv;charset=utf-8');
+  });
+  let costsImport = [];
+  $('#costs-file').addEventListener('change', async e => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    const { rows, errors } = F.parseCostsCsv(await file.text(), products);
+    costsImport = rows;
+    $('#costs-import').classList.remove('hidden');
+    $('#costs-import-summary').textContent = rows.length + ' perfume(s) con costo listo para guardar' + (errors.length ? ' · ' + errors.length + ' fila(s) con problema:' : '.');
+    $('#costs-import-errors').replaceChildren(...errors.slice(0, 50).map(t => { const li = document.createElement('li'); li.textContent = t; return li; }));
+    $('#costs-import-save').disabled = !rows.length; status($('#costs-import-status'), '');
+  });
+  $('#costs-import-cancel').addEventListener('click', () => { costsImport = []; $('#costs-import').classList.add('hidden'); });
+  $('#costs-import-save').addEventListener('click', async () => {
+    const st = $('#costs-import-status');
+    if (!costsImport.length) return;
+    status(st, 'Guardando ' + costsImport.length + ' costo(s)…');
+    try {
+      await upsertCosts(costsImport.map(r => { const old = costRows.get(Number(r.product.id)); return { product_id: Number(r.product.id), costs: r.costs, strategy: r.strategy || old?.strategy || 'normal', competitor_price: r.competitor === undefined ? (old?.competitor_price ?? null) : r.competitor }; }));
+      status(st, costsImport.length + ' costo(s) guardados.', 'success'); costsImport = []; $('#costs-import').classList.add('hidden'); renderFinanzas();
+    } catch (err) { status(st, missing(err) ? 'Para guardar costos ' + MIGRATION_NOTE : err.message, 'error'); }
+  });
+
+  // ---------------- Ganancia por mes (resumen de ventas)
+  function renderProfit() {
+    if (!F || !$('#profit-body')) return;
+    const params = F.validParams(pricingParams);
+    if (!costRows.size || !params) { $('#profit-body').replaceChildren(emptyRow(7, costsReady === false ? 'Para calcular la ganancia ' + MIGRATION_NOTE : 'Carga tus costos y la fórmula (sección «Costos y precios») para ver la ganancia real.')); return; }
+    const costs = new Map([...costRows].map(([id]) => [id, costsOf(id)]));
+    const { months } = F.profitSummary(orders, products, costs, params, { months: 6 });
+    $('#profit-body').replaceChildren(...months.slice().reverse().map(m => {
+      const tr = document.createElement('tr'), [y, mo] = m.month.split('-').map(Number);
+      tr.append(cell(new Date(y, mo - 1, 1).toLocaleDateString('es-DO', { month: 'long', year: 'numeric' })), cell(String(m.orders)), cell(rd(m.sales), 'num'), cell(rd(m.cost), 'num'), cell(rd(m.profit), 'num'), cell(m.sales ? Math.round(m.profit / m.sales * 100) + '%' : '—'), cell(String(m.unknown)));
+      return tr;
+    }));
+  }
+  // Datos del período para el resumen de ventas: cobrado, por cobrar y ganancia estimada.
+  function financeKpis(range) {
+    if (!F) return [];
+    const out = [];
+    if (paymentsReady) {
+      out.push(kpi('Cobrado (abonos)', rd(F.collected(payments, range.start, range.end)), 'en el período'));
+      const t = F.balances(orders, payments).totals; out.push(kpi('Por cobrar hoy', rd(t.due), t.open + ' pedido(s)', t.due > 0 ? 'warn' : ''));
+    }
+    const params = F.validParams(pricingParams);
+    if (costRows.size && params) {
+      const byName = F.productIndex(products), costs = new Map([...costRows].map(([id]) => [id, costsOf(id)]));
+      const sold = orders.filter(o => F.SOLD.includes(String(o.status || 'nuevo')) && (!range.start || Date.parse(o.created_at) >= range.start.getTime()) && Date.parse(o.created_at) < range.end.getTime());
+      const results = sold.map(o => F.orderProfit(o, byName, costs, params)), known = results.filter(r => r.known);
+      out.push(kpi('Ganancia estimada', known.length ? rd(known.reduce((s, r) => s + r.profit, 0)) : '—', known.length + ' de ' + sold.length + ' pedido(s) con costo'));
+    }
+    return out;
+  }
+
+  // ---------------- Producto: «Inspirado en», costo privado y precio sugerido
+  function updateSuggestion() {
+    const box = $('#price-suggestion'); if (!box || !F) return;
+    box.replaceChildren();
+    const costs = String(form.elements.cost.value || '').split('/').map(v => Number(v.replace(/[^0-9.]/g, ''))).filter(v => v > 0);
+    if (!costs.length) { box.textContent = costsReady ? 'Escribe el costo para ver el precio sugerido con tu fórmula (solo lo ves tú).' : ''; return; }
+    if (!F.validParams(pricingParams)) { box.textContent = 'Guarda la fórmula en «Costos y precios» para ver el precio sugerido.'; return; }
+    const id = Number(form.elements.id.value), row = costRows.get(id), current = normalizePrice(form.elements.price.value);
+    const r = F.reviewPrice({ price: current, availability: form.elements.availability.value }, costs, form.elements.strategy.value, pricingParams, row?.competitor_price ? Number(row.competitor_price) : null);
+    if (!r) return;
+    const s = r.suggestion, profit = current ? F.currentProfit({ price: current }, costs, pricingParams) : null;
+    box.append('Precio sugerido: ' + s.text + ' (ganancia ' + s.items.map(i => rd(i.profit)).join(' / ') + ')' + (profit ? ' · Con ' + current + ' ganas ' + profit.map(p => rd(p.profit)).join(' / ') : '') + ' ');
+    if (r.items.some(x => x.capped)) box.append('· Para seguir «Disponible» (menos de RD$7,000): ' + r.text + ' ');
+    else if (r.items.some(x => x.state === 'mercado') && !r.differs) box.append('· Tu precio ya está a nivel de la competencia ');
+    if (r.mismatch) box.append('· Escribe un costo por presentación (ej.: 2,650 / 3,400) ');
+    else if (r.differs) box.append(button('Usar el sugerido', () => { form.elements.price.value = r.text; updateSuggestion(); }));
+  }
+  ['cost', 'strategy', 'price'].forEach(name => form.elements[name].addEventListener('input', updateSuggestion));
+  ['strategy', 'availability'].forEach(name => form.elements[name].addEventListener('change', updateSuggestion));
+  async function saveProductCost(productId) {
+    const costs = String(form.elements.cost.value || '').split('/').map(v => Number(v.replace(/[^0-9.]/g, ''))).filter(v => v > 0);
+    if (!costs.length || !costsReady || !productId) return '';
+    const old = costRows.get(Number(productId));
+    try { await upsertCosts([{ product_id: Number(productId), costs, strategy: form.elements.strategy.value, competitor_price: old?.competitor_price ?? null }]); return ' Costo guardado.'; }
+    catch (err) { return ' (El costo no se guardó: ' + err.message + ')'; }
+  }
+  $('#feed-copy').addEventListener('click', async () => {
+    const text = $('#feed-link').textContent, b = $('#feed-copy');
+    try { await navigator.clipboard.writeText(text); b.textContent = 'Copiado ✓'; setTimeout(() => { b.textContent = 'Copiar enlace'; }, 1500); } catch { prompt('Copia el enlace:', text); }
   });
 
   $('#sales-period').addEventListener('change', renderSales);

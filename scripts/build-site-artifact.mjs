@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { renderProductPage, productPath } from './lib/seo.mjs';
 import { merchantFeed } from './lib/feeds.mjs';
+import { renderPriceList } from './lib/lista-precios.mjs';
 
 const OUT = '_site';
 
@@ -27,6 +28,9 @@ const FILES = [
   'frame-guard.js',
   'aroma.js',
   'sales.js',
+  'finanzas.js',
+  'lista-precios.js',
+  'lista-precios.css',
   'survey.js',
   'encuesta.js',
   'pwa.js',
@@ -116,6 +120,9 @@ async function listAll(base, prefix = '') {
   await mkdir(OUT + '/feeds', { recursive: true });
   await writeFile(OUT + '/feeds/productos.xml', feed.xml);
   console.log('Archivo de productos para Google/Instagram: ' + feed.included + ' perfumes (omitidos: ' + feed.skipped.length + ').');
+  // Lista de precios imprimible (PDF), siempre al día con el catálogo publicado.
+  await writeFile(OUT + '/lista-de-precios.html', renderPriceList(products));
+  console.log('Lista de precios imprimible: /lista-de-precios.html (' + products.length + ' perfumes).');
 }
 
 const shipped = await listAll(OUT);

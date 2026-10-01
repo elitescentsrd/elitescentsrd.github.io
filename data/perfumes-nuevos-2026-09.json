@@ -1,0 +1,621 @@
+{
+ "descripcion": "Perfumes del catálogo de La Grada de septiembre de 2026 que no estaban en la tienda. Precio público calculado con la fórmula de ganancia (sin costos en este archivo). Los agrega supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql.",
+ "aplicar_con": "supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql",
+ "primer_id": 421,
+ "ultimo_id": 496,
+ "notas_pendientes": [
+  460,
+  461,
+  488
+ ],
+ "perfumes": {
+  "421": {
+   "name": "Afnan Supremacy Collector's Edition Pour Homme",
+   "brand": "Afnan",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0421-afnan-supremacy-collector-s-edition-pour-homme.jpg"
+  },
+  "422": {
+   "name": "Armaf Club de Nuit Elite",
+   "brand": "Armaf",
+   "gender": "hombre",
+   "size": "105 ML",
+   "price": "RD$4,450",
+   "foto": "img/productos/0422-armaf-club-de-nuit-elite.jpg"
+  },
+  "423": {
+   "name": "Armaf Dunescape Dubai",
+   "brand": "Armaf",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,950",
+   "foto": "img/productos/0423-armaf-dunescape-dubai.jpg"
+  },
+  "424": {
+   "name": "Armaf Eter Arabian Sky",
+   "brand": "Armaf",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0424-armaf-eter-arabian-sky.jpg"
+  },
+  "425": {
+   "name": "Bharara Mast Rome Pink pour Vanille",
+   "brand": "Bharara",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$3,350",
+   "foto": "img/productos/0425-bharara-mast-rome-pink-pour-vanille.jpg"
+  },
+  "426": {
+   "name": "Dumont Nitro Elixir Men",
+   "brand": "Dumont",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$4,750",
+   "foto": "img/productos/0426-dumont-nitro-elixir-men.jpg"
+  },
+  "427": {
+   "name": "Dumont Nitro Gold",
+   "brand": "Dumont",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,550",
+   "foto": "img/productos/0427-dumont-nitro-gold.jpg"
+  },
+  "428": {
+   "name": "Stallion 53 Green Sublime",
+   "brand": "Emper",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0428-stallion-53-green-sublime.jpg"
+  },
+  "429": {
+   "name": "Stallion 53 Imperial",
+   "brand": "Emper",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0429-stallion-53-imperial.jpg"
+  },
+  "430": {
+   "name": "Stallion 53 Ivory Dream",
+   "brand": "Emper",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0430-stallion-53-ivory-dream.jpg"
+  },
+  "431": {
+   "name": "Stallion 53 La Furia",
+   "brand": "Emper",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0431-stallion-53-la-furia.jpg"
+  },
+  "432": {
+   "name": "Stallion 53 Paradise",
+   "brand": "Emper",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0432-stallion-53-paradise.jpg"
+  },
+  "433": {
+   "name": "French Avenue Liquid Brun Limited Edition",
+   "brand": "French Avenue",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$5,450",
+   "foto": "img/productos/0433-french-avenue-liquid-brun-limited-edition.jpg"
+  },
+  "434": {
+   "name": "French Avenue Veneno Scarlet",
+   "brand": "French Avenue",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0434-french-avenue-veneno-scarlet.jpg"
+  },
+  "435": {
+   "name": "French Avenue Vulcan Feu",
+   "brand": "French Avenue",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,350",
+   "foto": "img/productos/0435-french-avenue-vulcan-feu.jpg"
+  },
+  "436": {
+   "name": "Lattafa Al Noble Ameer",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$2,750",
+   "foto": "img/productos/0436-lattafa-al-noble-ameer.jpg"
+  },
+  "437": {
+   "name": "Lattafa Al Noble Safeer",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$2,750",
+   "foto": "img/productos/0437-lattafa-al-noble-safeer.jpg"
+  },
+  "438": {
+   "name": "Lattafa Al Noble Wazeer",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$2,750",
+   "foto": "img/productos/0438-lattafa-al-noble-wazeer.jpg"
+  },
+  "439": {
+   "name": "Lattafa Ana Abiyedh Passion",
+   "brand": "Lattafa",
+   "gender": "mujer",
+   "size": "60 ML",
+   "price": "RD$3,050",
+   "foto": "img/productos/0439-lattafa-ana-abiyedh-passion.jpg"
+  },
+  "440": {
+   "name": "Lattafa Bade'e Al Oud Black Exposed",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,350",
+   "foto": "img/productos/0440-lattafa-bade-e-al-oud-black-exposed.jpg"
+  },
+  "441": {
+   "name": "Lattafa Jasoor",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,050",
+   "foto": "img/productos/0441-lattafa-jasoor.jpg"
+  },
+  "442": {
+   "name": "Lattafa Jouri",
+   "brand": "Lattafa",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$3,850",
+   "foto": "img/productos/0442-lattafa-jouri.jpg"
+  },
+  "443": {
+   "name": "Lattafa Khamrah Waha",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0443-lattafa-khamrah-waha.jpg"
+  },
+  "444": {
+   "name": "Lattafa Petra Viola",
+   "brand": "Lattafa",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0444-lattafa-petra-viola.jpg"
+  },
+  "445": {
+   "name": "Lattafa Pride Amethyst",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,350",
+   "foto": "img/productos/0445-lattafa-pride-amethyst.jpg"
+  },
+  "446": {
+   "name": "Lattafa Pride London The City of Contrast",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,750",
+   "foto": "img/productos/0446-lattafa-pride-london-the-city-of-contrast.jpg"
+  },
+  "447": {
+   "name": "Lattafa Pride Love in Paris",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,750",
+   "foto": "img/productos/0447-lattafa-pride-love-in-paris.jpg"
+  },
+  "448": {
+   "name": "Lattafa Pride New York The City of Dreams",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,750",
+   "foto": "img/productos/0448-lattafa-pride-new-york-the-city-of-dreams.jpg"
+  },
+  "449": {
+   "name": "Orientica Royal Amber",
+   "brand": "Orientica",
+   "gender": "unisex",
+   "size": "80 ML",
+   "price": "RD$5,350",
+   "foto": "img/productos/0449-orientica-royal-amber.jpg"
+  },
+  "450": {
+   "name": "Rasasi Hawas Sapphire",
+   "brand": "Rasasi",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,950",
+   "foto": "img/productos/0450-rasasi-hawas-sapphire.jpg"
+  },
+  "451": {
+   "name": "Rasasi Hawas Kobra for Him",
+   "brand": "Rasasi",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0451-rasasi-hawas-kobra-for-him.jpg"
+  },
+  "452": {
+   "name": "Rasasi Hawas Nautilus",
+   "brand": "Rasasi",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$4,350",
+   "foto": "img/productos/0452-rasasi-hawas-nautilus.jpg"
+  },
+  "453": {
+   "name": "Rasasi Hawas Verde",
+   "brand": "Rasasi",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0453-rasasi-hawas-verde.jpg"
+  },
+  "454": {
+   "name": "Rayhaan Azul",
+   "brand": "Rayhaan",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$3,550",
+   "foto": "img/productos/0454-rayhaan-azul.jpg"
+  },
+  "455": {
+   "name": "Rayhaan Pacific Aloha",
+   "brand": "Rayhaan",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,050",
+   "foto": "img/productos/0455-rayhaan-pacific-aloha.jpg"
+  },
+  "456": {
+   "name": "Rayhaan Tropical Vibe",
+   "brand": "Rayhaan",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,950",
+   "foto": "img/productos/0456-rayhaan-tropical-vibe.jpg"
+  },
+  "457": {
+   "name": "Riiffs Freeze",
+   "brand": "Riiffs",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,550",
+   "foto": "img/productos/0457-riiffs-freeze.jpg"
+  },
+  "458": {
+   "name": "Riiffs Freeze in Flames Extrait",
+   "brand": "Riiffs",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0458-riiffs-freeze-in-flames-extrait.jpg"
+  },
+  "459": {
+   "name": "Bharara Mast Rome Ivory pour Femme",
+   "brand": "Bharara",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$3,050",
+   "foto": "img/productos/0459-bharara-mast-rome-ivory-pour-femme.jpg"
+  },
+  "460": {
+   "name": "Bharara Mast Rome Lucky",
+   "brand": "Bharara",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,550",
+   "foto": "img/productos/0460-bharara-mast-rome-lucky.jpg"
+  },
+  "461": {
+   "name": "Zakat Z6",
+   "brand": "Zakat",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,050",
+   "foto": "img/productos/0461-zakat-z6.jpg"
+  },
+  "462": {
+   "name": "Calvin Klein CK One Shock EDT Men",
+   "brand": "Calvin Klein",
+   "gender": "hombre",
+   "size": "200 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0462-calvin-klein-ck-one-shock-edt-men.jpg"
+  },
+  "463": {
+   "name": "212 Men Heroes Forever Young EDT",
+   "brand": "Carolina Herrera",
+   "gender": "hombre",
+   "size": "90 ML",
+   "price": "RD$6,950",
+   "foto": "img/productos/0463-212-men-heroes-forever-young-edt.jpg"
+  },
+  "464": {
+   "name": "212 NYC EDT Men",
+   "brand": "Carolina Herrera",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$5,950",
+   "foto": "img/productos/0464-212-nyc-edt-men.jpg"
+  },
+  "465": {
+   "name": "Carolina Herrera Bad Boy Extreme Men",
+   "brand": "Carolina Herrera",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$7,150",
+   "foto": "img/productos/0465-carolina-herrera-bad-boy-extreme-men.jpg"
+  },
+  "466": {
+   "name": "Carolina Herrera Bad Boy Le Parfum Men",
+   "brand": "Carolina Herrera",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$6,850",
+   "foto": "img/productos/0466-carolina-herrera-bad-boy-le-parfum-men.jpg"
+  },
+  "467": {
+   "name": "Carolina Herrera Good Girl Blush Elixir Women",
+   "brand": "Carolina Herrera",
+   "gender": "mujer",
+   "size": "80 ML",
+   "price": "RD$10,250",
+   "foto": "img/productos/0467-carolina-herrera-good-girl-blush-elixir-women.jpg"
+  },
+  "468": {
+   "name": "Coach Green EDT Men",
+   "brand": "Coach",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$8,450",
+   "foto": "img/productos/0468-coach-green-edt-men.jpg"
+  },
+  "469": {
+   "name": "JPG Divine Elixir Women",
+   "brand": "Jean Paul Gaultier",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$9,250",
+   "foto": "img/productos/0469-jpg-divine-elixir-women.jpg"
+  },
+  "470": {
+   "name": "JPG Le Male Pride Edition EDT Men",
+   "brand": "Jean Paul Gaultier",
+   "gender": "hombre",
+   "size": "125 ML",
+   "price": "RD$8,050",
+   "foto": "img/productos/0470-jpg-le-male-pride-edition-edt-men.jpg"
+  },
+  "471": {
+   "name": "Lolita Lempicka Homme EDT",
+   "brand": "Lolita Lempicka",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$3,950",
+   "foto": "img/productos/0471-lolita-lempicka-homme-edt.jpg"
+  },
+  "472": {
+   "name": "360 For Men EDT",
+   "brand": "Perry Ellis",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$3,350",
+   "foto": "img/productos/0472-360-for-men-edt.jpg"
+  },
+  "473": {
+   "name": "Valentino Uomo Born In Roma EDT",
+   "brand": "Valentino",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$8,050",
+   "foto": "img/productos/0473-valentino-uomo-born-in-roma-edt.jpg"
+  },
+  "474": {
+   "name": "Versace Man Eau Fraiche EDT",
+   "brand": "Versace",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$5,150",
+   "foto": "img/productos/0474-versace-man-eau-fraiche-edt.jpg"
+  },
+  "475": {
+   "name": "Giardini di Toscana Bianco Latte",
+   "brand": "Giardini di Toscana",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$11,650",
+   "foto": "img/productos/0475-giardini-di-toscana-bianco-latte.jpg"
+  },
+  "476": {
+   "name": "Lorenzo Pazzaglia Summer Hammer",
+   "brand": "Lorenzo Pazzaglia",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$10,950",
+   "foto": "img/productos/0476-lorenzo-pazzaglia-summer-hammer.jpg"
+  },
+  "477": {
+   "name": "Lorenzo Pazzaglia Sun-Gria",
+   "brand": "Lorenzo Pazzaglia",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$11,050",
+   "foto": "img/productos/0477-lorenzo-pazzaglia-sun-gria.jpg"
+  },
+  "478": {
+   "name": "Mancera French Riviera",
+   "brand": "Mancera",
+   "gender": "unisex",
+   "size": "120 ML",
+   "price": "RD$8,950",
+   "foto": "img/productos/0478-mancera-french-riviera.jpg"
+  },
+  "479": {
+   "name": "Parfums de Marly Delina Women",
+   "brand": "Parfums de Marly",
+   "gender": "mujer",
+   "size": "75 ML",
+   "price": "RD$16,850",
+   "foto": "img/productos/0479-parfums-de-marly-delina-women.jpg"
+  },
+  "480": {
+   "name": "Parfums de Marly Layton",
+   "brand": "Parfums de Marly",
+   "gender": "unisex",
+   "size": "125 ML",
+   "price": "RD$15,050",
+   "foto": "img/productos/0480-parfums-de-marly-layton.jpg"
+  },
+  "481": {
+   "name": "Xerjoff Torino21",
+   "brand": "Xerjoff",
+   "gender": "unisex",
+   "size": "50 ML",
+   "price": "RD$14,250",
+   "foto": "img/productos/0481-xerjoff-torino21.jpg"
+  },
+  "482": {
+   "name": "Set Armaf Club de Nuit Untold 4PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "105 ML",
+   "price": "RD$5,150",
+   "foto": "img/productos/0482-set-armaf-club-de-nuit-untold-4pcs.jpg"
+  },
+  "483": {
+   "name": "Set Armaf Odyssey Aqua 4PCS",
+   "brand": "Sets",
+   "gender": "hombre",
+   "size": "Set 4 piezas",
+   "price": "RD$4,450",
+   "foto": "img/productos/0483-set-armaf-odyssey-aqua-4pcs.jpg"
+  },
+  "484": {
+   "name": "Set Dolce & Gabbana Light Blue Women 2PCS",
+   "brand": "Sets",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$6,250",
+   "foto": "img/productos/0484-set-dolce-y-gabbana-light-blue-women-2pcs.jpg"
+  },
+  "485": {
+   "name": "Set Stallion 53 4 In 1",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,550",
+   "foto": "img/productos/0485-set-stallion-53-4-in-1.jpg"
+  },
+  "486": {
+   "name": "Set Game of Spades Collection II 3PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "30 ML",
+   "price": "RD$6,150",
+   "foto": "img/productos/0486-set-game-of-spades-collection-ii-3pcs.jpg"
+  },
+  "487": {
+   "name": "Set Game of Spades Opal 4PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$5,350",
+   "foto": "img/productos/0487-set-game-of-spades-opal-4pcs.jpg"
+  },
+  "488": {
+   "name": "Set Game of Spades Parfum 9 Minis",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "9 x 10 ML",
+   "price": "RD$4,950",
+   "foto": "img/productos/0488-set-game-of-spades-parfum-9-minis.jpg"
+  },
+  "489": {
+   "name": "Set Game of Spades Rouge 4PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$5,350",
+   "foto": "img/productos/0489-set-game-of-spades-rouge-4pcs.jpg"
+  },
+  "490": {
+   "name": "Set Lattafa Asad Collection 4PCS",
+   "brand": "Sets",
+   "gender": "hombre",
+   "size": "4 x 25 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0490-set-lattafa-asad-collection-4pcs.jpg"
+  },
+  "491": {
+   "name": "Set Lattafa Haya 3PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,350",
+   "foto": "img/productos/0491-set-lattafa-haya-3pcs.jpg"
+  },
+  "492": {
+   "name": "Set Lattafa Musamam White Intense 3PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,450",
+   "foto": "img/productos/0492-set-lattafa-musamam-white-intense-3pcs.jpg"
+  },
+  "493": {
+   "name": "Set Rasasi Hawas Fire 3PCS",
+   "brand": "Sets",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$5,250",
+   "foto": "img/productos/0493-set-rasasi-hawas-fire-3pcs.jpg"
+  },
+  "494": {
+   "name": "Set Rasasi Hawas Ice Travel 2PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,450",
+   "foto": "img/productos/0494-set-rasasi-hawas-ice-travel-2pcs.jpg"
+  },
+  "495": {
+   "name": "Set Versace Eros 3PCS",
+   "brand": "Sets",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$5,850",
+   "foto": "img/productos/0495-set-versace-eros-3pcs.jpg"
+  },
+  "496": {
+   "name": "Set Versace Eros Flame 3PCS",
+   "brand": "Sets",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$5,950",
+   "foto": "img/productos/0496-set-versace-eros-flame-3pcs.jpg"
+  }
+ }
+}

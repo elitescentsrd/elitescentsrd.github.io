@@ -115,6 +115,29 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + s.status);
   }
 }
+// 4f. Funciones del 30-sep (migración 20260930120000_funciones_y_perfumes_nuevos.sql): «Avísame» y «Lo más vendido» son públicas
+//     pero no exponen datos; abonos, costos y avisos solo los leen administradores.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  const aviso = await call('POST', '/rest/v1/rpc/request_restock_alert', { p_product_id: -1, p_name: '', p_phone: '' });
+  if (aviso.status === 200 && aviso.json && aviso.json.ok === false) record('OK', 'request_restock_alert valida los datos (no anota nada inválido)');
+  else if (pending(aviso)) record('AVISO', 'request_restock_alert todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
+  else record('FALLO', 'Respuesta inesperada de request_restock_alert', 'HTTP ' + aviso.status + ' ' + aviso.text.slice(0, 100));
+  const top = await call('POST', '/rest/v1/rpc/best_sellers', {});
+  if (top.status === 200 && Array.isArray(top.json)) {
+    const extra = [...new Set(top.json.flatMap(row => Object.keys(row)))].filter(k => k !== 'product_id');
+    extra.length ? record('FALLO', 'best_sellers devuelve datos de más', extra.join(', ')) : record('OK', 'best_sellers pública solo con números de perfume', top.json.length + ' perfumes');
+  } else if (pending(top)) record('AVISO', 'best_sellers todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
+  else record('FALLO', 'Respuesta inesperada de best_sellers', 'HTTP ' + top.status + ' ' + top.text.slice(0, 100));
+  for (const table of ['restock_alerts', 'order_payments', 'product_costs']) {
+    const r = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
+  }
+  const w = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { strategy: 'normal' });
+  denied(w) || pending(w) ? record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status);
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

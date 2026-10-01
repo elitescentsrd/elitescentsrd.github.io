@@ -9,7 +9,7 @@
     "test:opaco": "node scripts/test-opaco-detector.mjs && node scripts/test-opaco-site.mjs",
     "test:opaco:e2e": "node scripts/test-opaco-e2e.mjs",
     "test:images": "node scripts/check-product-images.mjs",
-    "test:sql": "node scripts/test-coupons-sql.mjs",
+    "test:sql": "node scripts/test-coupons-sql.mjs && node scripts/test-funciones-sql.mjs",
     "test:security": "node scripts/check-supabase-security.mjs",
     "check:batch": "node scripts/check-photo-batch.mjs",
     "verify": "npm run build && npm test && npm run test:images && npm run test:security",
