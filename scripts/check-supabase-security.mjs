@@ -136,7 +136,7 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
   }
   const w = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { strategy: 'normal' });
-  denied(w) || pending(w) ? record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status);
+  denied(w) || pending(w) ? record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status + ' ' + (w.json?.code || '') + ' ' + String(w.json?.message || w.text || '').slice(0, 160));
 }
 // 4g. Estadísticas y publicación automática (migración 20261003120000_estadisticas_y_publicacion.sql): la tienda anota
 //     eventos anónimos, pero un visitante nunca lee la tabla ni el resumen del panel.
