@@ -138,6 +138,24 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
   const w = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { strategy: 'normal' });
   denied(w) || pending(w) ? record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status);
 }
+// 4g. Estadísticas y publicación automática (migración 20261003120000_estadisticas_y_publicacion.sql): la tienda anota
+//     eventos anónimos, pero un visitante nunca lee la tabla ni el resumen del panel.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  const MIG = 'aplicar supabase/migrations/20261003120000_estadisticas_y_publicacion.sql';
+  const t = await call('POST', '/rest/v1/rpc/track_event', { p_kind: 'prueba-invalida' });
+  if (t.status === 204 || t.status === 200) record('OK', 'track_event acepta la llamada y descarta un tipo inválido', 'HTTP ' + t.status);
+  else if (pending(t)) record('AVISO', 'track_event todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Respuesta inesperada de track_event', 'HTTP ' + t.status + ' ' + t.text.slice(0, 100));
+  const r = await call('GET', '/rest/v1/site_events?select=*&limit=1');
+  if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen site_events', 'HTTP ' + r.status);
+  else if (pending(r)) record('AVISO', 'La tabla site_events todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Un visitante puede leer site_events', 'HTTP ' + r.status);
+  const st = await call('POST', '/rest/v1/rpc/admin_site_stats', { p_days: 30 });
+  if (denied(st) || st.json?.code === '42501') record('OK', 'admin_site_stats denegado a visitantes', 'HTTP ' + st.status);
+  else if (pending(st)) record('AVISO', 'admin_site_stats todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Un visitante puede ver el resumen de estadísticas', 'HTTP ' + st.status);
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

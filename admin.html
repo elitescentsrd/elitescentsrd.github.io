@@ -53,7 +53,7 @@
     </section>
 
     <div id="admin-content" class="hidden">
-      <nav class="admin-nav" aria-label="Secciones del panel"><a href="#sales-card">Resumen</a><a href="#orders-card">Pedidos</a><a href="#receivables-card">Cobros</a><a href="#restock-card">Avísame</a><a href="#purchase-card">Compras</a><a href="#product-card">Producto</a><a href="#costs-card">Costos y precios</a><a href="#offers-card">Ofertas</a><a href="#coupons-card">Cupones</a><a href="#catalog-card">Catálogo PDF</a></nav>
+      <nav class="admin-nav" aria-label="Secciones del panel"><a href="#sales-card">Resumen</a><a href="#stats-card">Estadísticas</a><a href="#orders-card">Pedidos</a><a href="#receivables-card">Cobros</a><a href="#restock-card">Avísame</a><a href="#purchase-card">Compras</a><a href="#product-card">Producto</a><a href="#costs-card">Costos y precios</a><a href="#offers-card">Ofertas</a><a href="#coupons-card">Cupones</a><a href="#catalog-card">Catálogo PDF</a></nav>
       <section class="admin-card" id="sales-card">
         <div class="admin-head"><div><p class="eyebrow">Resumen</p><h2>Resumen de ventas</h2><p class="muted">Se calcula con los pedidos del panel. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados; los nuevos quedan "por confirmar" y los cancelados no suman.</p></div><label class="sales-period-label">Período<select id="sales-period"><option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="all">Todo el historial</option></select></label></div>
         <div class="sales-kpis" id="sales-kpis"></div>
@@ -66,6 +66,18 @@
         <div class="profit-block"><h3>Ganancia por mes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Mes</th><th>Pedidos con costo</th><th>Ventas</th><th>Costo</th><th>Ganancia</th><th>Margen</th><th>Sin costo</th></tr></thead><tbody id="profit-body"></tbody></table></div><p class="muted" id="profit-note">Se calcula con los costos privados de cada perfume (sección «Costos y precios») y la logística por unidad. Los pedidos con algún perfume sin costo aparecen en «Sin costo».</p></div>
       </section>
 
+      <section class="admin-card" id="stats-card">
+        <div class="admin-head"><div><p class="eyebrow">Estadísticas</p><h2>Visitas y búsquedas</h2><p class="muted">Cuenta de forma anónima a quienes aceptan «todas» en el aviso de cookies (sin Google ni terceros). Lo más útil: <strong>lo que buscan y no encuentran</strong>, para saber qué pedirle a La Grada.</p></div><label class="sales-period-label">Período<select id="stats-period"><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option></select></label></div>
+        <p id="stats-notice" class="muted hidden"></p>
+        <div class="sales-kpis" id="stats-kpis"></div>
+        <div id="stats-chart" class="sales-chart" role="img" aria-label="Gráfico de visitas por día"></div>
+        <div class="sales-columns">
+          <div><h3>Búsquedas sin resultado</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Buscaron</th><th>Veces</th></tr></thead><tbody id="stats-missing"></tbody></table></div><p class="muted">Perfumes que la gente quiere y no encontró en tu tienda.</p></div>
+          <div><h3>Lo que más buscan</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Búsqueda</th><th>Veces</th><th>Sin resultado</th></tr></thead><tbody id="stats-searches"></tbody></table></div></div>
+          <div><h3>Perfumes más vistos</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Vistas</th><th>WhatsApp</th><th>Carrito</th></tr></thead><tbody id="stats-products"></tbody></table></div></div>
+          <div><h3>De dónde llegan</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Origen</th><th>Visitas</th></tr></thead><tbody id="stats-sources"></tbody></table></div><p class="muted" id="stats-devices"></p></div>
+        </div>
+      </section>
       <section class="admin-card" id="security-card">
         <div class="admin-head"><div><p class="eyebrow">Seguridad</p><h2>Seguridad y respaldo</h2><p class="muted">Si entran muchos pedidos falsos, pausa los pedidos por la web: nadie podrá pedir desde la tienda hasta que los reanudes (WhatsApp sigue funcionando). Siempre activo: cada cuenta de cliente puede hacer como máximo 3 pedidos cada 10 minutos y 10 por día; los pedidos que registras tú en el panel no tienen límite.</p></div></div>
         <p id="security-notice" class="muted hidden">Para usar la pausa falta aplicar la migración "protección de pedidos" en Supabase (SQL Editor).</p>

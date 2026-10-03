@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # Publicación automática: Supabase avisa (repository_dispatch «catalogo») cuando se guarda un perfume en el panel.
+  repository_dispatch:
+    types: [catalogo]
   schedule:
     # Reconstruye la web cada 6 horas para que precios, ofertas y datos estructurados del HTML sigan al día con Supabase.
     - cron: '23 */6 * * *'
@@ -35,6 +38,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # Si el aviso llegó desde el panel, se espera un minuto para incluir los cambios que se sigan guardando seguidos
+      # (un aviso nuevo cancela esta ejecución y empieza otra, así siempre se publica lo último).
+      - name: Wait for more panel changes
+        if: github.event_name == 'repository_dispatch'
+        run: sleep 60
       - name: Generate static catalog and Product JSON-LD
         run: npm run build
       - name: Verify generated site
@@ -65,7 +73,7 @@ jobs:
   # Prueba las migraciones de Supabase (cupones, protección de pedidos, RLS) en PostgreSQL embebido.
   # Va en un trabajo aparte para que el paquete de pruebas nunca pueda tocar el sitio que se publica.
   sql:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && github.event_name != 'repository_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -85,7 +93,7 @@ jobs:
   # Opaco (herramienta de anonimización de PDF en /opaco/): recorrido completo en Chromium (acceso, análisis, OCR,
   # descarga del PDF censurado y comprobación de que no conserva los datos, créditos y pago simulado).
   opaco:
-    if: github.event_name != 'schedule'
+    if: github.event_name != 'schedule' && github.event_name != 'repository_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

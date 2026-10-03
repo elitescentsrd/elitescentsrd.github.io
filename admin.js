@@ -120,7 +120,7 @@
   function showAdmin() {
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
-    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));loadFinanzas();});
+    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));loadFinanzas();loadStats();});
     loadCustomers(); loadCoupons(); loadStoreSettings(); loadSurvey();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
@@ -519,6 +519,43 @@
   }
   $('#customers-search').addEventListener('input', renderCustomers);
   $('#customers-refresh').addEventListener('click', loadCustomers);
+
+
+  // --- Estadísticas de la tienda (visitas, búsquedas, perfumes vistos): resumen de la base de datos, solo administradores ---
+  async function loadStats() {
+    const notice = $('#stats-notice'); if (!notice) return;
+    try {
+      const data = await api('/rest/v1/rpc/admin_site_stats', { method: 'POST', body: JSON.stringify({ p_days: Number($('#stats-period').value) || 30 }) });
+      notice.classList.add('hidden'); renderStats(data || {});
+    } catch (err) {
+      notice.classList.remove('hidden');
+      notice.textContent = /could not find|does not exist|PGRST20[2-5]|schema cache/i.test(String(err.message)) ? 'Para ver estadísticas falta aplicar el script «Estadísticas y publicación automática» en Supabase (SQL Editor).' : 'No se pudieron cargar las estadísticas: ' + err.message;
+      renderStats({});
+    }
+  }
+  function statsRows(target, rows, cols, map, empty) { $(target).replaceChildren(...(rows && rows.length ? rows.map(r => { const tr = document.createElement('tr'); map(r).forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); }); return tr; }) : [emptyRow(cols, empty)])); }
+  function renderStats(d) {
+    const t = d.totales || {}, n = v => new Intl.NumberFormat('es-DO').format(Number(v) || 0);
+    $('#stats-kpis').replaceChildren(
+      kpi('Visitas', n(t.visitas), d.dias ? 'en ' + d.dias + ' días' : ''),
+      kpi('Perfumes vistos', n(t.perfumes), ''),
+      kpi('Búsquedas', n(t.busquedas), t.sin_resultado ? n(t.sin_resultado) + ' sin resultado' : '', t.sin_resultado ? 'warn' : ''),
+      kpi('Clics a WhatsApp', n(t.whatsapp), t.carrito ? n(t.carrito) + ' al carrito' : ''));
+    const days = (d.por_dia || []).map(x => ({ label: String(x.dia).slice(5), orders: Number(x.visitas) || 0 }));
+    const chart = $('#stats-chart'); chart.replaceChildren();
+    if (days.length) {
+      const NS = 'http://www.w3.org/2000/svg', W = 720, H = 120, svg = document.createElementNS(NS, 'svg'), max = Math.max(1, ...days.map(x => x.orders)), bw = W / days.length;
+      svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (H + 18)); svg.setAttribute('class', 'sales-svg'); svg.setAttribute('aria-hidden', 'true');
+      days.forEach((x, i) => { const h = Math.round(x.orders / max * H), r = document.createElementNS(NS, 'rect'); [['x', i * bw + 1], ['y', H - h], ['width', Math.max(1, bw - 2)], ['height', h], ['fill', '#8a682d']].forEach(([k, v]) => r.setAttribute(k, v)); const title = document.createElementNS(NS, 'title'); title.textContent = x.label + ': ' + x.orders + ' visitas'; r.append(title); svg.append(r); });
+      chart.append(svg);
+    } else chart.textContent = 'Todavía no hay visitas contadas en este período.';
+    statsRows('#stats-missing', d.sin_resultado, 2, r => [r.texto, n(r.veces)], 'Nadie se quedó sin encontrar lo que buscaba.');
+    statsRows('#stats-searches', d.busquedas, 3, r => [r.texto, n(r.veces), n(r.sin_resultado)], 'Sin búsquedas en este período.');
+    statsRows('#stats-products', d.perfumes, 4, r => [r.nombre, n(r.vistas), n(r.whatsapp), n(r.carrito)], 'Sin perfumes vistos en este período.');
+    statsRows('#stats-sources', d.origenes, 2, r => [r.origen, n(r.visitas)], 'Sin visitas en este período.');
+    const dev = d.dispositivos || []; $('#stats-devices').textContent = dev.length ? 'Desde: ' + dev.map(x => ({ movil: 'celular', computadora: 'computadora' }[x.dispositivo] || x.dispositivo) + ' ' + n(x.visitas)).join(' · ') : '';
+  }
+  $('#stats-period')?.addEventListener('change', loadStats);
 
   // --- Resumen de ventas (los cálculos viven en sales.js) ---
   let salesMetric = 'orders';

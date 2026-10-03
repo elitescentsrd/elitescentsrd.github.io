@@ -258,5 +258,97 @@ await db.exec(`delete from public.products where id = 1`);
 assert.equal((await one(db, 'select count(*)::int as n from public.product_costs where product_id = 1')).n, 0, 'Al borrar el perfume se borra su costo');
 await throws(() => db.exec(`update public.products set inspired_by = 'x' where id = 2`), /products_inspired_by_length/, '«Inspirado en» de al menos 2 letras');
 console.log('abonos, costos privados y fórmula: solo administradores OK');
+
+// ---------------------------------------------------------------- Estadísticas y publicación automática (3-oct)
+{
+  const estad = await readFile('supabase/migrations/20261003120000_estadisticas_y_publicacion.sql', 'utf8');
+  assert(/^-- ESTADÍSTICAS Y PUBLICACIÓN AUTOMÁTICA/.test(estad) && /-- FIN\s*$/.test(estad) && /select false as deshacer;/.test(estad), 'Script de estadísticas completo y en modo aplicar');
+  assert(!/github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,}/.test(estad), 'El script público no trae ninguna clave de GitHub');
+  // Supabase trae Vault y pg_net; aquí se imitan para comprobar el aviso a GitHub sin salir a internet.
+  await db.exec(`create schema if not exists vault; create table vault.secrets_stub (name text, secret text);
+    create view vault.decrypted_secrets as select name, secret as decrypted_secret from vault.secrets_stub;
+    create schema if not exists net; create table net.calls (id serial primary key, url text, headers jsonb, body jsonb);
+    create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds integer default 5000)
+      returns bigint language sql as $$ insert into net.calls (url, headers, body) values (url, headers, body) returning id $$;`);
+  await as(''); await db.exec('reset role');
+  let estado = (await db.exec(estad)).at(-1).rows;
+  assert.deepEqual(estado.map(r => r.estado), ['listas', 'lista: falta guardar la clave de GitHub (si ya la guardaste, está activa)'], 'Resumen al aplicar');
+  const llamadas = async () => (await one(db, 'select count(*)::int as n from net.calls')).n;
+  const evento = async (...args) => { await db.query('select public.track_event($1, $2, $3, $4, $5)', [...args, null, null, null, null, null].slice(0, 5)); };
+  const eventos = async (where = 'true') => (await one(db, 'select count(*)::int as n from public.site_events where ' + where)).n;
+
+  // Un visitante (anon) registra eventos, pero nunca lee la tabla.
+  await headers({ 'x-forwarded-for': '10.0.0.1' });
+  await db.exec('set role anon');
+  await evento('visita', null, null, 'Instagram.com', 'movil');
+  await evento('perfume', 2); await evento('perfume', 999999); await evento('whatsapp', 2); await evento('carrito', 2);
+  await evento('busqueda', null, '  Aventus   Creed '); await evento('sin_resultado', null, 'Baccarat 540');
+  await evento('busqueda', null, 'ana@correo.com'); await evento('busqueda', null, '8095551234'); await evento('sin_resultado', null, 'x');
+  await evento('hackeo'); await evento('visita', null, null, null, 'tableta');
+  await throws(() => db.query('select * from public.site_events'), /permission denied/i, 'Un visitante no lee las estadísticas');
+  await throws(() => db.query('select public.admin_site_stats(30)'), /permission denied/i, 'Ni el resumen');
+  await db.exec('reset role');
+  assert.equal(await eventos(), 7, 'Se guardan solo los eventos válidos (perfume inexistente, correo, teléfono, texto corto y tipo inventado no)');
+  assert.equal(await eventos(`kind = 'busqueda' and term = 'aventus creed'`), 1, 'La búsqueda se guarda en minúsculas y sin espacios de más');
+  assert.equal(await eventos(`term like '%@%' or term ~ '[0-9]{6,}'`), 0, 'Nunca correos ni números largos');
+  assert.equal(await eventos(`kind = 'visita' and source = 'instagram.com' and device = 'movil'`), 1, 'Origen y aparato de la visita');
+  assert.equal(await eventos(`kind = 'visita' and device is null`), 1, 'Un aparato desconocido no se guarda');
+  assert.equal(await eventos('ip_hash is not null'), 7, 'Cada evento lleva la huella de conexión (para los límites)');
+  // Límite: 120 eventos cada 10 minutos por conexión.
+  await headers({ 'x-forwarded-for': '10.0.0.2' });
+  for (let i = 0; i < 125; i++) await evento('visita');
+  assert.equal(await eventos(`ip_hash = (select ip_hash from public.site_events order by id desc limit 1)`), 120, 'Una conexión no registra más de 120 eventos en 10 minutos');
+  await headers(null);
+  // Limpieza: huella a los 2 días y eventos a los 13 meses.
+  await db.exec(`update public.site_events set created_at = now() - interval '3 days' where id in (select id from public.site_events order by id limit 5);
+    insert into public.site_events (kind, created_at) values ('visita', now() - interval '401 days')`);
+  for (let i = 0; i < 400 && (await eventos(`created_at < now() - interval '400 days'`)); i++) await evento('visita');
+  assert.equal(await eventos(`created_at < now() - interval '400 days'`), 0, 'Se borran los eventos de más de 13 meses');
+  assert.equal(await eventos(`ip_hash is not null and created_at < now() - interval '2 days'`), 0, 'Se borra la huella de más de 2 días');
+
+  // Resumen: solo administradores.
+  await as(U1); await db.exec('set role authenticated');
+  await throws(() => db.query('select public.admin_site_stats(30)'), /Solo para administradores/, 'Un cliente no ve el resumen');
+  await db.exec('reset role'); await as(ADMIN); await db.exec('set role authenticated');
+  const stats = (await one(db, 'select public.admin_site_stats(30) as s')).s;
+  await db.exec('reset role'); await as('');
+  assert(stats.totales.visitas >= 121 && stats.totales.perfumes === 1 && stats.totales.whatsapp === 1 && stats.totales.carrito === 1 && stats.totales.sin_resultado === 1, 'Totales del resumen');
+  assert.deepEqual(stats.sin_resultado, [{ texto: 'baccarat 540', veces: 1 }], 'Búsquedas sin resultado');
+  assert(stats.perfumes[0].id === 2 && stats.perfumes[0].vistas === 1 && stats.perfumes[0].whatsapp === 1, 'Perfumes más vistos');
+  assert(stats.origenes.some(o => o.origen === 'instagram.com') && stats.dispositivos.some(d => d.dispositivo === 'movil'), 'Orígenes y aparatos');
+
+  // Publicación automática: sin clave no hace nada; con clave avisa a GitHub como máximo cada 30 segundos.
+  await db.exec(`update public.products set price = price where id = 2`);
+  assert.equal(await llamadas(), 0, 'Sin la clave de GitHub no se avisa');
+  await db.exec(`insert into vault.secrets_stub values ('github_publish_token', 'tok-prueba')`);
+  await db.exec(`update public.products set price = price where id = 2`);
+  const call = await one(db, 'select * from net.calls order by id desc limit 1');
+  assert(call && call.url === 'https://api.github.com/repos/elitescentsrd/elitescentsrd.github.io/dispatches' && call.headers.Authorization === 'Bearer tok-prueba' && call.body.event_type === 'catalogo', 'Aviso a GitHub con la clave y el evento «catalogo»');
+  await db.exec(`update public.products set price = price where id in (2, 3)`); await db.exec(`insert into public.products (name, price) values ('Otro', 'RD$3,000')`);
+  assert.equal(await llamadas(), 1, 'Varios cambios seguidos: un solo aviso');
+  await db.exec(`update private.publish_state set last_request = now() - interval '31 seconds'`);
+  await db.exec(`delete from public.products where name = 'Otro'`);
+  assert.equal(await llamadas(), 2, 'Pasados 30 segundos, otro aviso');
+  await db.exec(`create or replace function net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{}', timeout_milliseconds integer default 5000) returns bigint language plpgsql as $$ begin raise exception 'sin internet'; end $$;
+    update private.publish_state set last_request = null`);
+  await db.exec(`update public.products set price = 'RD$9,999' where id = 2`);
+  assert.equal((await one(db, 'select price from public.products where id = 2')).price, 'RD$9,999', 'Un error al avisar nunca impide guardar el perfume');
+
+  // Repetir y deshacer.
+  estado = (await db.exec(estad)).at(-1).rows;
+  assert.equal(estado[0].estado, 'listas', 'Repetirlo no cambia nada');
+  estado = (await db.exec(estad.replace('select false as deshacer;', 'select true as deshacer;'))).at(-1).rows;
+  assert.deepEqual(estado.map(r => r.estado), ['quitadas', 'quitada'], 'Deshacer quita estadísticas y publicación');
+  assert.equal((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'products_request_publish'`)).n, 0);
+  assert.equal((await one(db, `select to_regprocedure('public.track_event(text,bigint,text,text,text)') as f`)).f, null);
+  estado = (await db.exec(estad)).at(-1).rows;
+  assert.equal(estado[0].estado, 'listas', 'Se puede volver a aplicar');
+  // Pegado incompleto: no cambia nada.
+  const limpio = await nuevaBase(); await limpio.exec(migration);
+  await throws(() => limpio.exec(estad.slice(0, Math.floor(estad.length * 0.5))), /./, 'Un pegado incompleto da error');
+  assert.equal((await one(limpio, `select to_regclass('public.site_events') as t`)).t, null, 'y no deja nada a medias');
+  await limpio.close();
+  console.log('estadísticas (límites, privacidad, solo administradores) y publicación automática OK');
+}
 await db.close();
 console.log('TODAS LAS PRUEBAS DE LA MIGRACIÓN DE FUNCIONES Y PERFUMES NUEVOS PASARON');

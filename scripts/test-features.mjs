@@ -521,6 +521,40 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   for (const [name, page] of [['portada', indexHtml], ...Object.entries(html), ['página de perfume', productPage], ['lista completa', directory]])
     assert(/<a class="wa-float" href="https:\/\/wa\.me\/18094333348\?text=[^"]+" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp"/.test(page), 'Botón de WhatsApp en ' + name);
   assert((await read('cookies.js')).includes("classList.add('cookie-open')"), 'El botón no tapa el aviso de cookies');
-  console.log('Lista de 20 puntos: aviso legal, privacidad, títulos, favicon, 404, antispam y WhatsApp correctos.');
+  // 19. Analítica propia (analytics.js): solo con «Aceptar todas»; nunca nombre, teléfono ni correo.
+  const analyticsJs = await read('analytics.js');
+  const runAnalytics = (choice, productId) => {
+    const sent = [], listeners = [];
+    const ctx = { window: {}, navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14) Mobile' }, sessionStorage: { _v: {}, getItem(k) { return this._v[k] || null; }, setItem(k, v) { this._v[k] = v; } },
+      document: { readyState: 'complete', body: { dataset: productId ? { productId: String(productId) } : {} }, addEventListener: (t, f) => listeners.push([t, f]), getElementById: () => null },
+      fetch: (url, opts) => { sent.push({ url, body: JSON.parse(opts.body), keepalive: opts.keepalive }); return Promise.resolve({}); } };
+    ctx.window = ctx; ctx.window.ELITE_SUPABASE = { url: 'https://ozowziumksrudrotulll.supabase.co', publishableKey: 'sb_publishable_x' };
+    ctx.window.matchMedia = () => ({ matches: true });
+    ctx.window.EliteConsent = { choice: () => choice, firstTouch: () => ({ fuente: 'l.instagram.com', utm: { source: '' } }) };
+    vm.runInNewContext(analyticsJs, ctx, { filename: 'analytics.js' });
+    return { sent, stats: ctx.window.EliteStats };
+  };
+  for (const choice of [null, 'necessary']) {
+    const r = runAnalytics(choice, 7); r.stats.track('busqueda', { term: 'aventus' });
+    assert.equal(r.sent.length, 0, 'Sin «Aceptar todas» no se cuenta nada (' + choice + ')');
+  }
+  {
+    const r = runAnalytics('all', 7); r.stats.track('sin_resultado', { term: 'baccarat 540' }); r.stats.track('inventado');
+    assert.deepEqual(r.sent.map(x => x.body.p_kind), ['visita', 'perfume', 'sin_resultado'], 'Con permiso: visita, perfume visto y búsqueda (un tipo inventado no se envía)');
+    assert(r.sent.every(x => x.url === 'https://ozowziumksrudrotulll.supabase.co/rest/v1/rpc/track_event' && x.keepalive), 'Se envía a track_event');
+    assert.deepEqual([r.sent[0].body.p_source, r.sent[0].body.p_device, r.sent[1].body.p_product_id], ['instagram', 'movil', 7], 'Origen, aparato y perfume');
+    assert(r.sent.every(x => Object.keys(x.body).every(k => ['p_kind', 'p_product_id', 'p_term', 'p_source', 'p_device'].includes(k))), 'Solo los datos previstos (sin nombre, teléfono ni correo)');
+    const again = runAnalytics('all'); assert.equal(again.sent.filter(x => x.body.p_kind === 'visita').length, 1, 'Una visita por sesión');
+  }
+  assert(tiendaJs.includes("window.EliteStats?.track('perfume',{product_id:p.id})") && tiendaJs.includes("window.EliteStats?.track('carrito',{product_id:p.id})") && tiendaJs.includes("matches().length?'busqueda':'sin_resultado'"), 'La tienda cuenta fichas, carrito y búsquedas');
+  assert(template.includes('<script defer src="/analytics.js"></script>') && productPage.includes('<script defer src="/supabase-config.js"></script><script defer src="/analytics.js"></script>') && productPage.includes('<body data-product-id="' + sample.id + '">') && directory.includes('/analytics.js'), 'Estadísticas en la portada, la lista y cada página de perfume');
+  assert(buildSite.includes("'analytics.js'"), 'analytics.js se publica');
+  assert(html['privacidad.html'].includes('id="estadisticas"') && /se borra a los 2 días/.test(html['privacidad.html']) && (await read('cookies.js')).includes('contaremos de forma anónima'), 'La privacidad y el aviso de cookies explican las estadísticas');
+  assert(adminHtml.includes('id="stats-card"') && adminHtml.includes('href="#stats-card"') && adminJs.includes("'/rest/v1/rpc/admin_site_stats'") && adminHtml.includes('id="stats-missing"'), 'El panel muestra estadísticas y búsquedas sin resultado');
+  // 3. Publicación automática: GitHub acepta el aviso de Supabase y espera a juntar cambios.
+  const pagesYml = await read('.github/workflows/pages.yml');
+  assert(/repository_dispatch:\s*\n\s*types: \[catalogo\]/.test(pagesYml) && /if: github.event_name == 'repository_dispatch'\n\s*run: sleep 60/.test(pagesYml), 'Publicación automática al guardar en el panel');
+  assert(pagesYml.includes('npm run test:links'), 'Enlaces rotos revisados en cada publicación');
+  console.log('Lista de 20 puntos: aviso legal, privacidad, títulos, favicon, 404, antispam, WhatsApp, estadísticas y publicación automática correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');

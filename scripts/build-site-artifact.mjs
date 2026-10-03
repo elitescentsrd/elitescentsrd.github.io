@@ -28,6 +28,7 @@ const FILES = [
   'tienda.css',
   'tienda.js',
   'cookies.js',
+  'analytics.js',
   'frame-guard.js',
   'aroma.js',
   'sales.js',
