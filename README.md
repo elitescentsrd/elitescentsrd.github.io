@@ -24,7 +24,11 @@ Un flujo de GitHub Actions repite estos pasos. En `main` publica `_site/` en Git
 
 ## Panel
 
-`admin.html` muestra una sección a la vez desde el menú lateral (en el celular, desde el botón de arriba): `#inicio` (con «Hoy»), `#pedidos`, `#cobros`, `#avisame`, `#perfumes`, `#inventario`, `#compras`, `#costos`, `#ofertas`, `#cupones`, `#clientes`, `#estadisticas`, `#catalogo` y `#seguridad`. Los enlaces viejos (`#orders-card`…) abren su sección.
+`admin.html` muestra una pantalla a la vez desde el menú lateral (en el celular, desde el botón de arriba): `#inicio` (solo «Hoy»: lo pendiente y accesos rápidos), `#ventas`, `#pedidos`, `#cobros`, `#avisame`, `#perfumes`, `#inventario`, `#compras`, `#costos`, `#ofertas`, `#cupones`, `#clientes`, `#encuesta`, `#estadisticas`, `#catalogo` y `#seguridad`. Lo que comparte sección va en pestañas: `#pedidos/lista` y `#pedidos/nuevo`; `#perfumes/buscar`, `#perfumes/editar` y `#perfumes/fotos`. Los enlaces viejos (`#orders-card`…) abren su sección.
+
+## Diseño y movimiento
+
+Colores del logo (negro, dorado y champán) y movimiento con las reglas de Emil Kowalski, que están en `.claude/skills/` para que Claude Code las aplique siempre: curvas `--ease-out` / `--ease-in-out` / `--ease-drawer`, menos de 300 ms en lo que se usa a cada rato, presionar = escala .97, hover solo con `@media(hover:hover) and (pointer:fine)`, ventanas que entran con escala .96, campos de 16 px en el celular y «reducir movimiento» con fundidos cortos. `npm test` revisa estas reglas en `tienda.css` y `admin.css`.
 
 ## Base de datos desde GitHub
 

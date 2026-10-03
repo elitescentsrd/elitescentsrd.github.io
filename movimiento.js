@@ -25,7 +25,8 @@
     let last = Number(cartCount.textContent) || 0;
     new MutationObserver(() => {
       const now = Number(cartCount.textContent) || 0;
-      if (now > last) { cartCount.classList.remove('bump'); void cartCount.offsetWidth; cartCount.classList.add('bump'); }
+      // Salto corto con la Web Animations API: se puede repetir sin forzar cálculos de la página.
+      if (now > last) cartCount.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
       last = now;
     }).observe(cartCount, { childList: true, characterData: true, subtree: true });
   }
