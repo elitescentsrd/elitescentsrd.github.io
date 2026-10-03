@@ -135,11 +135,10 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
     else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
   }
-  // Diagnóstico temporal: escrituras de visitante en tablas privadas (filtro sin coincidencias: no cambian nada).
-  for (const [table, filter, body] of [['product_costs', 'product_id=eq.-1', { competitor_price: 1 }], ['product_costs', 'product_id=eq.-1', { product_id: -1 }],
-    ['order_payments', 'id=eq.-1', { note: 'x' }], ['restock_alerts', 'id=eq.-1', { status: 'avisado' }], ['product_stock', 'product_id=eq.-1', { qty: 1 }], ['site_events', 'id=eq.-1', { term: 'xx' }]]) {
-    const d = await call('PATCH', '/rest/v1/' + table + '?' + filter, body);
-    record('INFO', 'diagnóstico PATCH ' + table + ' ' + Object.keys(body)[0], 'HTTP ' + d.status + ' ' + (d.json?.code || '') + ' ' + String(d.json?.message || '').slice(0, 120));
+  // Diagnóstico temporal: qué columnas tiene product_costs (PGRST204 = no existe; 401 = existe). Filtro sin coincidencias.
+  for (const col of ['id', 'product_id', 'costs', 'cost', 'costo', 'unit_cost', 'price', 'precio', 'strategy', 'competitor_price', 'supplier', 'updated_at', 'created_at', 'notes', 'name', 'currency', 'quantity', 'margin']) {
+    const d = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { [col]: null });
+    record('INFO', 'columna product_costs.' + col, d.json?.code === 'PGRST204' ? 'NO existe' : d.status === 401 ? 'existe' : 'HTTP ' + d.status + ' ' + (d.json?.code || '') + ' ' + String(d.json?.message || '').slice(0, 100));
   }
   const w = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { strategy: 'normal' });
   denied(w) || pending(w) ? record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status + ' ' + (w.json?.code || '') + ' ' + String(w.json?.message || w.text || '').slice(0, 160));
