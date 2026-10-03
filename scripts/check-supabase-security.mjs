@@ -115,6 +115,67 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + s.status);
   }
 }
+// 4f. Funciones del 30-sep (migración 20260930120000_funciones_y_perfumes_nuevos.sql): «Avísame» y «Lo más vendido» son públicas
+//     pero no exponen datos; abonos, costos y avisos solo los leen administradores.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  const aviso = await call('POST', '/rest/v1/rpc/request_restock_alert', { p_product_id: -1, p_name: '', p_phone: '' });
+  if (aviso.status === 200 && aviso.json && aviso.json.ok === false) record('OK', 'request_restock_alert valida los datos (no anota nada inválido)');
+  else if (pending(aviso)) record('AVISO', 'request_restock_alert todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
+  else record('FALLO', 'Respuesta inesperada de request_restock_alert', 'HTTP ' + aviso.status + ' ' + aviso.text.slice(0, 100));
+  const top = await call('POST', '/rest/v1/rpc/best_sellers', {});
+  if (top.status === 200 && Array.isArray(top.json)) {
+    const extra = [...new Set(top.json.flatMap(row => Object.keys(row)))].filter(k => k !== 'product_id');
+    extra.length ? record('FALLO', 'best_sellers devuelve datos de más', extra.join(', ')) : record('OK', 'best_sellers pública solo con números de perfume', top.json.length + ' perfumes');
+  } else if (pending(top)) record('AVISO', 'best_sellers todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
+  else record('FALLO', 'Respuesta inesperada de best_sellers', 'HTTP ' + top.status + ' ' + top.text.slice(0, 100));
+  for (const table of ['restock_alerts', 'order_payments', 'product_costs']) {
+    const r = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
+  }
+  // Si la tabla de costos es una vieja sin las columnas del panel, la API rechaza la petición antes de tocar la base de
+  // datos (PGRST204): un visitante igual no escribe nada, pero el panel tampoco puede guardar costos hasta repararla.
+  const w = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { strategy: 'normal' });
+  if (denied(w) || pending(w)) record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status);
+  else if (w.json?.code === 'PGRST204') record('AVISO', 'La tabla de costos no tiene las columnas del panel (un visitante igual no puede escribir)', 'aplicar supabase/migrations/20261003200000_reparar_tabla_de_costos.sql');
+  else record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status + ' ' + (w.json?.code || '') + ' ' + String(w.json?.message || w.text || '').slice(0, 160));
+}
+// 4g. Estadísticas y publicación automática (migración 20261003120000_estadisticas_y_publicacion.sql): la tienda anota
+//     eventos anónimos, pero un visitante nunca lee la tabla ni el resumen del panel.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  const MIG = 'aplicar supabase/migrations/20261003120000_estadisticas_y_publicacion.sql';
+  const t = await call('POST', '/rest/v1/rpc/track_event', { p_kind: 'prueba-invalida' });
+  if (t.status === 204 || t.status === 200) record('OK', 'track_event acepta la llamada y descarta un tipo inválido', 'HTTP ' + t.status);
+  else if (pending(t)) record('AVISO', 'track_event todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Respuesta inesperada de track_event', 'HTTP ' + t.status + ' ' + t.text.slice(0, 100));
+  const r = await call('GET', '/rest/v1/site_events?select=*&limit=1');
+  if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen site_events', 'HTTP ' + r.status);
+  else if (pending(r)) record('AVISO', 'La tabla site_events todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Un visitante puede leer site_events', 'HTTP ' + r.status);
+  const st = await call('POST', '/rest/v1/rpc/admin_site_stats', { p_days: 30 });
+  if (denied(st) || st.json?.code === '42501') record('OK', 'admin_site_stats denegado a visitantes', 'HTTP ' + st.status);
+  else if (pending(st)) record('AVISO', 'admin_site_stats todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Un visitante puede ver el resumen de estadísticas', 'HTTP ' + st.status);
+}
+// 4h. Líneas de pedido y cantidad en casa (migración 20261003180000_lineas_de_pedido_y_existencias.sql): un visitante
+//     solo ve «¡Quedan…!» (products.stock_left, de 0 a 3); nunca las líneas de los pedidos ni la cantidad exacta.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST205';
+  const MIG = 'aplicar supabase/migrations/20261003180000_lineas_de_pedido_y_existencias.sql';
+  for (const table of ['order_items', 'product_stock']) {
+    const r = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', MIG);
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
+  }
+  const s = await call('GET', '/rest/v1/products?select=stock_left&stock_left=gt.3&limit=1');
+  if ((s.status === 200 || s.status === 206) && Array.isArray(s.json) && s.json.length === 0) record('OK', '«¡Quedan…!» nunca publica más de 3', 'HTTP ' + s.status);
+  else if (s.status === 400) record('AVISO', 'products.stock_left todavía no existe en Supabase', MIG);
+  else record('FALLO', 'products.stock_left publica una cantidad mayor que 3', 'HTTP ' + s.status);
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

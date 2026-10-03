@@ -60,13 +60,16 @@
     return result;
   }
 
-  function topProducts(orders, limit = 10) {
-    const map = new Map();
+  // Con las líneas guardadas por la base de datos (options.lines, de order_items) se agrupa por número de perfume y se
+  // muestra su nombre de hoy: un perfume renombrado no se parte en dos.
+  function topProducts(orders, limit = 10, options = {}) {
+    const map = new Map(), byId = new Map((options.products || []).map(p => [Number(p.id), p])), byName = new Map((options.products || []).map(p => [norm(p.name), p]));
     for (const order of orders) {
       if (statusOf(order) === 'cancelado') continue;
-      const seen = new Set();
-      for (const { name, qty } of parseItems(order.items)) {
-        const key = norm(name);
+      const seen = new Set(), saved = options.lines && options.lines.get(String(order.id));
+      const list = saved ? saved.map(l => { const p = l.product_id !== null && l.product_id !== undefined ? byId.get(Number(l.product_id)) : null; return { name: p ? p.name : l.name, qty: l.qty, id: p ? Number(p.id) : null }; }) : parseItems(order.items).map(x => { const p = byName.get(norm(x.name)); return { name: p ? p.name : x.name, qty: x.qty, id: p ? Number(p.id) : null }; });
+      for (const { name, qty, id } of list) {
+        const key = id ? '#' + id : norm(name);
         const entry = map.get(key) || { name, units: 0, orders: 0 };
         entry.units += qty;
         if (!seen.has(key)) { entry.orders += 1; seen.add(key); }
@@ -126,7 +129,7 @@
     const range = periodRange(period, now);
     const current = orders.filter(o => inRange(o, range.start, range.end));
     const previous = range.prevStart ? orders.filter(o => inRange(o, range.prevStart, range.prevEnd)) : null;
-    return { period, range, totals: totals(current), previous: previous ? totals(previous) : null, days: byDay(current, range, now), top: topProducts(current), origins: origins(customers) };
+    return { period, range, totals: totals(current), previous: previous ? totals(previous) : null, days: byDay(current, range, now), top: topProducts(current, 10, { lines: options.lines, products: options.products }), origins: origins(customers) };
   }
 
   // Variación porcentual respecto al período anterior; null si no hay con qué comparar.

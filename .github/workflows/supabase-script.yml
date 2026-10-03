@@ -1,0 +1,65 @@
+name: Aplicar script en Supabase
+
+# Corre un script de supabase/migrations/ en la base de datos sin copiar y pegar en el SQL Editor.
+#   Actions → «Aplicar script en Supabase» → Run workflow → escribe el nombre del archivo y elige:
+#     ensayar: lo corre completo y al final lo deshace (ROLLBACK). Muestra la tabla de resultados sin cambiar nada.
+#     aplicar: lo corre y lo guarda (COMMIT). Todo en una sola operación: si algo falla, no cambia nada.
+# Necesita el secreto SUPABASE_DB_URL (Settings → Secrets and variables → Actions): la cadena de conexión «Session
+# pooler» de Supabase (Connect → Session pooler), con tu contraseña de la base de datos. Nunca la escribas en un chat.
+on:
+  workflow_dispatch:
+    inputs:
+      archivo:
+        description: 'Archivo de supabase/migrations (por ejemplo 20261003120000_estadisticas_y_publicacion.sql)'
+        required: true
+        type: string
+      modo:
+        description: 'ensayar = no cambia nada; aplicar = guarda los cambios'
+        required: true
+        type: choice
+        options: [ensayar, aplicar]
+        default: ensayar
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-script
+  cancel-in-progress: false
+
+jobs:
+  script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Revisar el archivo
+        env:
+          ARCHIVO: ${{ inputs.archivo }}
+        run: |
+          if ! printf '%s' "$ARCHIVO" | grep -Eq '^[0-9]{14}_[a-z0-9_]+\.sql$'; then echo "Nombre no válido: escribe solo el nombre del archivo (por ejemplo 20261003120000_estadisticas_y_publicacion.sql)."; exit 1; fi
+          FILE="supabase/migrations/$ARCHIVO"
+          test -f "$FILE" || { echo "No existe $FILE en esta rama."; exit 1; }
+          if grep -Eqi '^[[:space:]]*(begin|commit|rollback)[[:space:]]*;' "$FILE"; then echo "El script trae su propio BEGIN/COMMIT/ROLLBACK; este flujo ya lo corre en una sola operación."; exit 1; fi
+          tail -n 5 "$FILE" | grep -q -- '-- FIN' || echo "Aviso: el archivo no termina con «-- FIN» (los scripts de la tienda sí)."
+          echo "Archivo: $FILE ($(wc -l < "$FILE") líneas)"
+      - name: Ensayar o aplicar
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          ARCHIVO: ${{ inputs.archivo }}
+          MODO: ${{ inputs.modo }}
+        run: |
+          if [ -z "$DB_URL" ]; then echo "Falta el secreto SUPABASE_DB_URL (Settings → Secrets and variables → Actions → New repository secret)."; exit 1; fi
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          if [ "$MODO" = aplicar ]; then FIN='COMMIT;'; else FIN='ROLLBACK;'; fi
+          {
+            echo '\set ON_ERROR_STOP on'
+            echo 'BEGIN;'
+            cat "supabase/migrations/$ARCHIVO"
+            echo
+            echo "$FIN"
+          } > "$RUNNER_TEMP/script.sql"
+          psql "$DB_URL" -X --no-psqlrc -P pager=off -f "$RUNNER_TEMP/script.sql"
+          if [ "$MODO" = aplicar ]; then echo "Listo: cambios guardados en Supabase."; else echo "Ensayo terminado: no se cambió nada (ROLLBACK). Si la tabla de arriba se ve bien, vuelve a correrlo con «aplicar»."; fi

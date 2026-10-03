@@ -12,10 +12,11 @@ const read = path => readFile(path, 'utf8');
 const [indexHtml, template, tiendaJs, adminHtml, adminJs, checkoutHtml, customerJs, buildSite, swSource] = await Promise.all([
   read('index.html'), read('src/index.template.html'), read('tienda.js'), read('admin.html'), read('admin.js'), read('checkout.html'), read('customer.js'), read('scripts/build-site-artifact.mjs'), read('sw.js'),
 ]);
-const products = JSON.parse(indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]);
-// 420 perfumes; algunos pueden estar ocultos mientras se confirman con La Grada (data/precios-2026-09.json).
+const products = JSON.parse(await read('perfumes.json'));
+// 420 perfumes + los nuevos de La Grada (cuando se aplica su script); algunos pueden estar ocultos (data/precios-2026-09.json).
 const ocultables = JSON.parse(await read('data/precios-2026-09.json')).ocultos.length;
-assert(products.length >= 420 - ocultables && products.length <= 420, 'Productos visibles fuera de rango: ' + products.length);
+const nuevosTotal = Object.keys(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).perfumes).length;
+assert(products.length >= 420 - ocultables && products.length <= 420 + nuevosTotal, 'Productos visibles fuera de rango: ' + products.length);
 const runUmd = async file => { const ctx = { module: { exports: {} } }; vm.runInNewContext(await read(file), ctx, { filename: file }); return ctx.module.exports; };
 const plain = value => JSON.parse(JSON.stringify(value)); // los objetos creados dentro de vm tienen otro prototipo
 const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].map(m => m[1]))];
@@ -135,7 +136,9 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const expected = { 'Pimienta rosa': 'especiado', 'Toronja rosada': 'fresco', 'Water Peony': 'floral', 'Manzana verde': 'frutal', 'Flor de azahar': 'floral', 'Ámbar gris': 'amaderado', 'Haba tonka': 'dulce', 'Notas marinas': 'fresco', 'Musgo de roble': 'amaderado', 'Cuero': 'especiado', 'Coconut Water': 'frutal', 'Té verde': 'fresco', 'Vainilla': 'dulce', 'Bergamota': 'fresco', 'Oud': 'amaderado', 'Jazmín': 'floral', 'Canela': 'especiado', 'Piña': 'frutal', 'Almizcle': null };
   for (const [note, family] of Object.entries(expected)) assert.equal(A.familyOf(note), family, 'Familia de "' + note + '"');
   const withFamily = products.filter(p => A.familiesOf(p).length);
-  assert.equal(withFamily.length, products.length, 'Todos los perfumes deben tener al menos una familia de aroma');
+  // Los perfumes nuevos sin notas verificadas todavía (data/perfumes-nuevos-2026-09.json → notas_pendientes) no tienen familia.
+  const pendientes = new Set(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).notas_pendientes.map(Number));
+  assert.equal(withFamily.length, products.filter(p => !pendientes.has(Number(p.id))).length, 'Todos los perfumes con notas deben tener al menos una familia de aroma');
   const perFamily = {}; for (const p of products) for (const f of A.familiesOf(p)) perFamily[f] = (perFamily[f] || 0) + 1;
   for (const family of Object.keys(A.FAMILIES)) assert((perFamily[family] || 0) >= 100, 'La familia ' + family + ' debe tener perfumes suficientes (' + (perFamily[family] || 0) + ')');
   const scenario = (answers, check) => { const { items, total } = A.recommend(products, answers, 6); assert(items.length > 0 && total >= items.length); check(items); return items; };
@@ -176,7 +179,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
     for (const tag of ['g:id', 'title', 'description', 'link', 'g:image_link', 'g:availability', 'g:price', 'g:brand', 'g:condition']) assert(item.includes('<' + tag + '>'), 'Falta ' + tag);
     assert.match(item.match(/<g:price>([^<]*)<\/g:price>/)[1], /^\d+\.\d{2} DOP$/);
     assert.match(item.match(/<g:availability>([^<]*)<\/g:availability>/)[1], /^(in_stock|out_of_stock|backorder)$/);
-    assert(item.match(/<link>([^<]*)<\/link>/)[1].startsWith('https://elitescentsrd.github.io/perfumes/'));
+    assert(item.match(/<link>([^<]*)<\/link>/)[1].startsWith(SITE_URL + '/perfumes/'));
     assert(item.match(/<g:image_link>([^<]*)<\/g:image_link>/)[1].startsWith('https://'), 'La foto debe ser una URL completa');
     assert(item.match(/<title>([^<]*)<\/title>/)[1].length <= 150);
   }
@@ -281,7 +284,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const handle = INSTAGRAM.replace('https://www.instagram.com/', '').replace(/\/$/, '');
   const phone = WHATSAPP.replace(/^1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
   assert.equal(handle, 'elite.scentsrd', 'El usuario oficial de Instagram');
-  for (const text of [INSTAGRAM, '@' + handle, 'https://wa.me/' + WHATSAPP, phone, SITE_URL + '/', 'elitescentsrd.github.io']) assert(page.includes(text), 'La página de canales oficiales debe incluir ' + text);
+  for (const text of [INSTAGRAM, '@' + handle, 'https://wa.me/' + WHATSAPP, phone, SITE_URL + '/', new URL(SITE_URL).host]) assert(page.includes(text), 'La página de canales oficiales debe incluir ' + text);
   // Los datos de contacto de la página son los mismos que usa el resto del sitio (evita errores de tipeo).
   assert(template.includes(INSTAGRAM) && template.includes('https://wa.me/' + WHATSAPP) && template.includes('tel:+' + WHATSAPP));
   const links = [...page.matchAll(/<a [^>]*href="(https?:\/\/[^"]+)"[^>]*>/g)].map(m => m[0]);
@@ -364,5 +367,298 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(/v_c\.user_id is not null and v_c\.user_id is distinct from p_uid/.test(sql), 'Un cupón personal solo lo usa su dueño');
   assert(/gen_random_uuid\(\)/.test(sql) && /pg_advisory_xact_lock/.test(sql), 'Código al azar y sin duplicados por envíos simultáneos');
   console.log('Encuesta: preguntas, limpieza, resultados, Excel, página, carrito, panel y migración correctos.');
+}
+// ---------------------------------------------------------------- Cobros, precios sugeridos, ganancia y compras (finanzas.js)
+{
+  const F = await runUmd('finanzas.js');
+  const eq = (actual, expected, message) => assert.deepEqual(plain(actual), expected, message); // los objetos de vm tienen otro prototipo
+  // Parámetros de EJEMPLO (los reales están solo en la base de datos, nunca en GitHub).
+  const params = { logistica: 100, ganancia_minima: 500, curva: [[1000, 0.5], [3000, 0.3]], estrategias: { gancho: { factor: 0.8, descuento: 0.1 }, normal: { factor: 1, descuento: 0.05 }, exclusivo: { factor: 1.2, descuento: 0 } } };
+  assert.equal(F.validParams({}), null, 'Sin fórmula no hay sugeridos');
+  assert.equal(F.suggestPrice(0, 'normal', params), null);
+  assert.equal(F.suggestPrice(1900, 'normal', params).price, 2850, 'costo 1,900: margen interpolado 40% → 2,800 → termina en 50');
+  assert.equal(F.suggestPrice(1900, 'normal', params, 2600).price, 2550, 'la competencia baja el precio, pero nunca del piso de ganancia');
+  assert.equal(F.suggestPrice(400, 'gancho', params).price, 1050, 'costo bajo: manda la ganancia mínima');
+  assert.equal(F.suggestPrice(9900, 'exclusivo', params).price, 13650, 'por encima de la curva se usa el último margen');
+  for (const c of [300, 1234, 2750, 5000, 14900]) for (const st of ['gancho', 'normal', 'exclusivo']) for (const comp of [null, 1000, 99999]) {
+    const r = F.suggestPrice(c, st, params, comp);
+    assert(r.price % 100 === 50 && r.price >= c + params.logistica + params.ganancia_minima, 'Siempre termina en 50 y deja la ganancia mínima: ' + c + ' ' + st + ' ' + comp);
+  }
+  assert.equal(F.suggestText([1900, 2400], 'normal', params, 2600).text, 'RD$2,550 / RD$3,350', 'Un sugerido por presentación');
+  eq(plain(F.currentProfit({ price: 'RD$3,000' }, [1900], params)).map(x => x.profit), [1000]);
+  // Revisión del precio de hoy: ±RD$50 no cuenta, «a nivel de la competencia», piso y tope de RD$6,950.
+  const review = (price, costs, extra = {}) => F.reviewPrice({ price, availability: 'disponible', ...extra }, costs, extra.strategy || 'normal', params, extra.competitor);
+  assert.equal(review('RD$2,900', [1900]).differs, false, 'RD$50 sobre el sugerido (2,850) se mantiene');
+  eq([review('RD$3,000', [1900]).differs, review('RD$3,000', [1900]).text, review('RD$3,000', [1900]).items[0].state], [true, 'RD$2,850', 'alto']);
+  eq([review('RD$2,700', [1900]).text, review('RD$2,700', [1900]).items[0].state], ['RD$2,850', 'bajo'], 'Por debajo del sugerido: puedes subir');
+  eq([review('RD$2,450', [1900]).text, review('RD$2,450', [1900]).items[0].state], ['RD$2,850', 'bajo-piso'], 'Bajo el piso de ganancia');
+  const market = review('RD$3,000', [1900], { competitor: 3100 });
+  eq([market.differs, market.items[0].state, market.text], [false, 'mercado', 'RD$3,000'], 'Entre el sugerido y la competencia: ya está a nivel de la competencia');
+  assert.equal(review('RD$3,200', [1900], { competitor: 3100 }).text, 'RD$2,850', 'Más caro que la competencia: se sugiere bajar');
+  const cap = review('RD$6,950', [5500]);
+  eq([cap.suggestion.text, cap.items[0].capped, cap.differs, cap.text], ['RD$7,250', true, false, 'RD$6,950'], 'Disponible bajo RD$7,000: tope de RD$6,950 para no pasar a «Solo por encargo»');
+  assert.equal(review('RD$6,500', [5500]).text, 'RD$6,950', 'Sube solo hasta el tope');
+  eq([review('RD$7,500', [5500], { availability: 'encargo' }).text, review('RD$6,500', [5500], { availability: 'encargo' }).items[0].capped], ['RD$7,250', false], 'Por encargo: sin tope');
+  assert.equal(review('RD$6,950', [5500], { availability: 'agotado' }).differs, false, 'Agotado bajo RD$7,000: también con tope (al volver queda «Disponible»)');
+  eq([review('RD$6,950', [6500]).items[0].capped, review('RD$6,950', [6500]).text], [false, 'RD$8,550'], 'Sin tope si RD$6,950 deja menos de la ganancia mínima');
+  const two = review('RD$2,900 / RD$3,000', [1900, 2400]);
+  eq([two.differs, two.text, two.items.map(x => x.state)], [true, 'RD$2,900 / RD$3,350', ['igual', 'bajo']], 'Solo cambia la presentación que lo necesita');
+  eq([review('RD$2,900 / RD$3,600', [1900]).mismatch, review('RD$2,900 / RD$3,600', [1900]).differs, review('RD$2,900 / RD$3,600', [1900]).text], [true, false, 'RD$2,900 / RD$3,600'], 'Un costo por presentación o no se cambia');
+  eq([review('', [1900]).differs, review('', [1900]).text], [true, 'RD$2,850'], 'Perfume nuevo: el sugerido');
+  assert.equal(F.reviewPrice({ price: 'RD$2,900' }, [1900], 'normal', {}, null), null, 'Sin fórmula no hay revisión');
+
+  const orders = [
+    { id: 1, status: 'entregado', amount: 'RD$3,600', customer_name: 'Gabriel Pérez', phone: '809-555-1234', items: '1x Armaf Odyssey Aqua (100 ML)', created_at: '2026-09-20T10:00:00Z' },
+    { id: 2, status: 'confirmado', amount: 'RD$5,000', customer_name: 'Ana', phone: '8295550000', items: '1x Lattafa Asad', created_at: '2026-09-21T10:00:00Z' },
+    { id: 3, status: 'nuevo', amount: 'RD$2,000', customer_name: 'Luis', phone: '8490000000', created_at: '2026-09-22T10:00:00Z' },
+    { id: 4, status: 'cancelado', amount: 'RD$9,000', customer_name: 'Pedro', phone: '8091111111', created_at: '2026-09-22T10:00:00Z' },
+    { id: 5, status: 'enviado', amount: 'RD$2,500', customer_name: 'Rosa', phone: '8092222222', created_at: '2026-09-23T10:00:00Z' },
+  ];
+  const payments = [{ order_id: 1, amount: 1000, paid_on: '2026-09-21' }, { order_id: 5, amount: 2500, paid_on: '2026-09-25' }, { order_id: 1, amount: '500.50', paid_on: '2026-09-28' }];
+  const b = F.balances(orders, payments);
+  eq(b.rows.map(r => [r.order.id, r.due, r.state]), [[2, 5000, 'pendiente'], [1, 2099.5, 'abonado'], [5, 0, 'pagado']], 'Saldos: solo pedidos vendidos, ordenados por lo pendiente');
+  eq(plain(b.totals), { due: 7099.5, paid: 4000.5, open: 2, customers: 2 });
+  assert.equal(b.rows[1].last, '2026-09-28', 'Fecha del último abono');
+  const reminder = F.reminderText(b.rows[1]);
+  assert(reminder.startsWith('Hola Gabriel,') && reminder.includes('#1') && reminder.includes('Pendiente: RD$2,100') && reminder.includes('Abonado: RD$1,501'), 'Recordatorio amable con el balance');
+  assert.equal(F.waLink('809-555-1234', 'x'), 'https://wa.me/18095551234?text=x', 'WhatsApp con el 1 del país');
+  assert.equal(F.collected(payments, new Date('2026-09-22'), new Date('2026-09-30')), 3000.5, 'Cobrado en el período');
+  assert(F.restockText('Ana María', { id: 7, name: 'Lattafa Asad', size: '100 ML', price: 'RD$2,950' }).startsWith('Hola Ana, te escribe Elite Scents RD: ya tenemos Lattafa Asad (100 ML) a RD$2,950.'), 'Mensaje de «ya llegó»');
+
+  eq(plain(F.parseLines('2x Lattafa Asad (100 ML)\n1x Club de Nuit; 3 × Perfume Raro (50 ML)')), [{ name: 'Lattafa Asad', qty: 2, size: '100 ML' }, { name: 'Club de Nuit', qty: 1, size: '' }, { name: 'Perfume Raro', qty: 3, size: '50 ML' }]);
+  const catalog = [{ id: 10, name: 'Lattafa Asad', size: '100 ML', availability: 'encargo' }, { id: 11, name: 'Club de Nuit', size: '105 ML', availability: 'disponible' }, { id: 12, name: 'Duo', size: '50 ML / 100 ML', availability: 'agotado' }, { id: 13, name: 'Agotado Esperado', size: '100 ML', availability: 'agotado' }];
+  const pendientes = [{ id: 7, status: 'nuevo', items: '2x Lattafa Asad (100 ML)\n1x Club de Nuit' }, { id: 8, status: 'confirmado', items: '1x Duo (100 ML)\n1x lattafa asad (100 ML)\n1x Algo Que No Existe' }, { id: 9, status: 'entregado', items: '5x Lattafa Asad' }];
+  const avisos = [{ product_id: 13, status: 'pendiente' }, { product_id: 13, status: 'pendiente' }, { product_id: 10, status: 'pendiente' }, { product_id: 13, status: 'avisado' }];
+  let compra = F.purchaseList(pendientes, catalog, avisos, {});
+  eq(compra.rows.map(r => [r.product.id, r.size, r.qty, r.waiting, r.orders]), [[10, '100 ML', 3, 1, [7, 8]], [12, '100 ML', 1, 0, [8]], [13, '100 ML', 0, 2, []]], 'Compra: suma pedidos pendientes, la presentación correcta y los agotados con gente esperando');
+  eq(plain(compra.unmatched), [{ order: 8, text: '1x Algo Que No Existe' }], 'Las líneas que no coinciden se muestran aparte');
+  compra = F.purchaseList(pendientes, catalog, avisos, { includeAvailable: true, includeWaiting: false });
+  eq(compra.rows.map(r => r.product.id), [10, 11, 12], 'Con disponibles y sin los que solo tienen avisos');
+  const texto = F.purchaseText(compra.rows.map(r => ({ ...r, buy: r.qty })));
+  assert(texto.startsWith('Hola La Grada') && texto.includes('3x Lattafa Asad (100 ML)') && texto.includes('1x Duo (100 ML)'), 'Mensaje para el suplidor');
+
+  const csv = 'id;perfume;costo;estrategia;competencia\n10;Lattafa Asad;"1,750";Gancho;2900\n;Club de Nuit;2 850 / 3 400;;\n99;No existe;100;;\n12;Duo;;;\n13;Agotado Esperado;abc;;';
+  const imp = F.parseCostsCsv(csv, catalog);
+  eq(imp.rows.map(r => [r.product.id, r.costs, r.strategy, r.competitor]), [[10, [1750], 'gancho', 2900], [11, [2850, 3400], null, null]], 'Lee costos por número o por nombre, con punto y coma o coma');
+  eq(imp.errors, ['Fila 4: no se encontró «No existe».', 'Fila 6: costo no válido para Agotado Esperado.']);
+  eq(F.parseCostsCsv('nombre,precio\nX,1', catalog).rows, [], 'Sin columna de costo no lee nada');
+  const exported = F.costsCsv(catalog, new Map([[10, [1750]]]), new Map([[10, 'gancho']]), new Map([[10, 2900]]));
+  assert(exported.startsWith('﻿id,perfume,tamaño,precio,costo,estrategia,competencia'), 'CSV para Excel con acentos (BOM)');
+  eq(F.parseCostsCsv(exported, catalog).rows.map(r => [r.product.id, r.costs, r.strategy, r.competitor]), [[10, [1750], 'gancho', 2900]], 'Lo que se descarga se vuelve a subir igual');
+
+  const ventas = [
+    { id: 20, status: 'entregado', created_at: '2026-09-15T12:00:00', amount: 'RD$6,000', items: '2x Lattafa Asad (100 ML)' },
+    { id: 21, status: 'confirmado', created_at: '2026-09-16T12:00:00', amount: 'RD$2,500', items: '1x Duo (100 ML)' },
+    { id: 22, status: 'confirmado', created_at: '2026-09-17T12:00:00', amount: 'RD$3,000', items: '1x Club de Nuit' },
+    { id: 23, status: 'nuevo', created_at: '2026-09-18T12:00:00', amount: 'RD$9,000', items: '1x Lattafa Asad' },
+  ];
+  const ganancia = F.profitSummary(ventas, catalog, new Map([[10, [1750]], [12, [1000, 1800]]]), params, { months: 2, now: new Date(2026, 8, 30) });
+  eq(plain(ganancia.months), [{ month: '2026-08', sales: 0, cost: 0, profit: 0, orders: 0, unknown: 0 }, { month: '2026-09', sales: 8500, cost: 5600, profit: 2900, orders: 2, unknown: 1 }], 'Ganancia real por mes (costo + logística por unidad; sin costo aparte)');
+  assert.equal(ganancia.perOrder.get('21').cost, 1900, 'Usa el costo de la presentación pedida');
+
+  // Líneas guardadas por la base de datos (order_items): el perfume va por número, así un nombre cambiado no se pierde.
+  const renombrado = catalog.map(p => p.id === 10 ? { ...p, name: 'Lattafa Asad (nuevo nombre)' } : p);
+  const filas = [{ order_id: 20, position: 1, product_id: 10, name: 'Lattafa Asad', size: '100 ML', size_index: 0, qty: 2, stock_taken: 0 },
+    { order_id: 21, position: 1, product_id: 12, name: 'Duo', size: '100 ML', size_index: 1, qty: 1, stock_taken: 0 },
+    { order_id: 22, position: 1, product_id: 11, name: 'Club de Nuit', size: null, size_index: 0, qty: 1, stock_taken: 0 }];
+  const lineas = F.groupLines(filas);
+  eq(plain(lineas.get('20')), [{ name: 'Lattafa Asad', qty: 2, size: '100 ML', product_id: 10, size_index: 0, stock_taken: 0 }], 'Agrupa las líneas por pedido');
+  const sinLineas = F.profitSummary(ventas, renombrado, new Map([[10, [1750]], [12, [1000, 1800]]]), params, { months: 1, now: new Date(2026, 8, 30) });
+  const conLineas = F.profitSummary(ventas, renombrado, new Map([[10, [1750]], [12, [1000, 1800]]]), params, { months: 1, now: new Date(2026, 8, 30), lines: lineas });
+  assert.equal(sinLineas.perOrder.get('20').known, false, 'Leyendo el texto, un perfume renombrado se pierde');
+  eq(plain(conLineas.perOrder.get('20')), { sale: 6000, cost: 3700, profit: 2300, known: true }, 'Con las líneas guardadas, no');
+  assert.equal(conLineas.perOrder.get('21').cost, 1900, 'y el tamaño también sale de la línea');
+  // Cantidad en casa en la lista de compra: lo ya descontado por pedidos confirmados y lo que hay en casa no se compra.
+  const casa = [{ id: 30, status: 'confirmado', items: '' }, { id: 31, status: 'nuevo', items: '' }, { id: 32, status: 'nuevo', items: '' }];
+  const lineasCasa = F.groupLines([{ order_id: 30, position: 1, product_id: 11, name: 'Club de Nuit', size_index: 0, qty: 2, stock_taken: 2 },
+    { order_id: 31, position: 1, product_id: 11, name: 'Club de Nuit', size_index: 0, qty: 3, stock_taken: 0 },
+    { order_id: 31, position: 2, product_id: 12, name: 'Duo', size: '50 ML', size_index: 0, qty: 1, stock_taken: 0 },
+    { order_id: 32, position: 1, product_id: null, name: 'Escrito a mano', size: null, size_index: null, qty: 1, stock_taken: 0 }]);
+  compra = F.purchaseList(casa, catalog, [], { lines: lineasCasa, stock: new Map([[11, [1]], [12, [5, 0]]]) });
+  eq(compra.rows.map(r => [r.product.id, r.size, r.qty, r.home, r.need]), [[11, '105 ML', 5, 1, 2]], 'Pide 5 − 2 ya apartados − 1 en casa = 2; el Duo de 50 ML alcanza con lo de casa');
+  eq(plain(compra.unmatched), [{ order: 32, text: '1x Escrito a mano' }], 'Las líneas sin perfume se muestran aparte');
+  const SV = await runUmd('sales.js'), todas = F.groupLines([...filas, { order_id: 23, position: 1, product_id: 10, name: 'Lattafa Asad', size: null, size_index: 0, qty: 1, stock_taken: 0 }]);
+  eq(plain(SV.topProducts(ventas, 10, { lines: todas, products: renombrado })).map(t => [t.name, t.units, t.orders]), [['Lattafa Asad (nuevo nombre)', 3, 2], ['Club de Nuit', 1, 1], ['Duo', 1, 1]], '«Más pedidos» con el nombre de hoy y sin partir en dos un perfume renombrado');
+  eq(plain(SV.topProducts(ventas, 10)).map(t => [t.name, t.units]), [['Lattafa Asad', 3], ['Club de Nuit', 1], ['Duo', 1]], 'Sin líneas guardadas, como antes');
+
+  // Panel: cada elemento que usa admin.js existe; finanzas.js carga antes y se publica.
+  for (const id of idsUsed(adminJs, /\$\('#([A-Za-z][\w-]*)'\)/g)) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en admin.html');
+  assert(adminHtml.indexOf('/finanzas.js') > -1 && adminHtml.indexOf('/finanzas.js') < adminHtml.indexOf('/admin.js'), 'finanzas.js carga antes que admin.js');
+  for (const file of ['finanzas.js', 'lista-precios.js', 'lista-precios.css']) assert(buildSite.includes("'" + file + "'"), file + ' debe publicarse');
+  for (const table of ['order_payments', 'restock_alerts', 'product_costs']) assert(adminJs.includes("'/rest/v1/" + table + '?select=*'), 'El respaldo y el panel leen ' + table);
+  assert(!/style="/.test(adminHtml), 'El panel sigue sin estilos en línea');
+  assert(!/\b(0\.55|0\.22|0\.14|1\.15)\b/.test(await read('finanzas.js')) && !/logistica:\s*\d/.test(adminJs), 'La fórmula real no está en el código público');
+
+  // Tienda: «Inspirado en…», «Avísame», secciones de la portada y la lista de precios.
+  for (const id of ['specialFilter', 'dialogInspired', 'notifyBox', 'notifyForm', 'notifyStatus', 'destacados']) assert(tiendaJs.includes("$('#" + id + "')") && template.includes('id="' + id + '"'), 'Falta #' + id + ' en la plantilla o en tienda.js');
+  assert(/<form method="post" id="notifyForm"/.test(template) && tiendaJs.includes("rpc/request_restock_alert"), 'El formulario «Avísame» usa la función de la base de datos');
+  assert(['vendidos', 'ofertas', 'nuevos'].every(k => template.includes('data-shelf="' + k + '"') && template.includes('data-shelf-all="' + k + '"')), 'Tres secciones en la portada con «Ver todos»');
+  assert(template.includes('<option value="ofertas">En oferta</option>') && tiendaJs.includes('function specialMatches('), 'Filtro «Mostrar» (oferta, nuevos, más vendidos)');
+  assert(tiendaJs.includes('p.inspired_by,...allNotes(p)'), 'El buscador encuentra por el perfume de referencia');
+  assert(template.includes('¿Qué significa «Inspirado en…»?') && template.includes('pertenecen a sus dueños'), 'Aclaración de «Inspirado en»');
+  const home = JSON.parse(indexHtml.match(/<script type="application\/json" id="homeSections">([\s\S]*?)<\/script>/)[1]);
+  const visibles = new Set(products.map(p => Number(p.id)));
+  assert(Array.isArray(home.vendidos) && Array.isArray(home.nuevos) && [...home.vendidos, ...home.nuevos].every(id => visibles.has(id)), 'Las secciones de la portada solo usan perfumes visibles');
+  assert(home.vendidos.length === 0 || home.vendidos.length >= 4, '«Lo más vendido» aparece con al menos 4 perfumes');
+  assert(!/created_at/.test(await read('perfumes.json')) && !/created_at/.test(indexHtml), 'La fecha de creación no se publica');
+  const sample = { ...products[0], inspired_by: 'Creed Aventus', availability: 'agotado' };
+  const page = renderProductPage(sample, []);
+  assert(page.includes('<dt>Inspirado en</dt><dd>Creed Aventus</dd>') && page.includes('no es el perfume original') && page.includes('href="/#avisame-' + sample.id + '"'), 'La página del perfume muestra la referencia y «Avísame»');
+  assert(!JSON.stringify([...page.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => m[1])).includes('Aventus'), 'La referencia no va en los datos estructurados');
+  assert(!merchantFeed([{ ...sample, availability: 'disponible', image_url: '/img/productos/0001-x.jpg' }]).xml.includes('Aventus'), 'Ni en el archivo para Google/Instagram');
+  const { renderPriceList } = await import('./lib/lista-precios.mjs');
+  const lista = renderPriceList([...products.slice(0, 5), sample], new Date('2026-09-30T15:00:00Z'));
+  assert.equal((lista.match(/<li class="item"/g) || []).length, 6, 'Un renglón por perfume');
+  assert(lista.includes('noindex') && lista.includes('Content-Security-Policy') && lista.includes('Inspirado en Creed Aventus') && lista.includes('30 de septiembre de 2026'), 'Lista imprimible con fecha, CSP y sin indexar');
+  assert(!/<script(?![^>]*\bsrc=)[^>]*>[^<]/.test(lista), 'Sin JavaScript en línea');
+  new Script(await read('lista-precios.js'), { filename: 'lista-precios.js' }); new Script(await read('finanzas.js'), { filename: 'finanzas.js' });
+  console.log('Cobros, precio sugerido, ganancia, compras, «Avísame», «Inspirado en», portada y lista de precios correctos.');
+}
+// ---------------------------------------------------------------- Lista de 20 puntos para una web profesional
+{
+  const { existsSync } = await import('node:fs');
+  const publicPages = ['privacidad.html', 'pedidos-envios.html', 'canales-oficiales.html', 'aviso-legal.html', 'encuesta.html', '404.html', 'checkout.html'];
+  const html = Object.fromEntries(await Promise.all(publicPages.map(async f => [f, await read(f)])));
+  const sample = products[0], productPage = renderProductPage(sample, []), { renderDirectory } = await import('./lib/seo.mjs'), directory = renderDirectory(products);
+  // 1-3. Aviso legal, privacidad y cookies enlazados desde todas las páginas con pie.
+  assert(/Ley 358-05/.test(html['aviso-legal.html']) && /Ley 172-13/.test(html['aviso-legal.html']) && /Inspirado en/.test(html['aviso-legal.html']), 'Aviso legal con derechos del consumidor, datos e «Inspirado en»');
+  for (const [name, page] of [...Object.entries(html).filter(([f]) => f !== 'aviso-legal.html'), ['portada', indexHtml], ['página de perfume', productPage], ['lista completa', directory]])
+    if (/<footer/.test(page)) assert(page.includes('href="/aviso-legal.html"') && page.includes('href="/privacidad.html"'), 'El pie de ' + name + ' enlaza aviso legal y privacidad');
+  assert(html['checkout.html'].includes('aceptas el <a href="/aviso-legal.html">aviso legal</a> y la <a href="/privacidad.html">política de privacidad</a>'), 'El registro informa del aviso legal y la privacidad');
+  assert(buildSite.includes("'aviso-legal.html'") && buildSite.includes("'favicon.ico'"), 'Aviso legal y favicon se publican');
+  // 5. Títulos y descripciones: únicos, con la marca y de 70 a 160 letras en las páginas que Google muestra.
+  const meta = page => ({ title: (page.match(/<title>([^<]*)<\/title>/) || [])[1] || '', description: ((page.match(/<meta name="description" content="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'") });
+  for (const [name, page] of [['portada', indexHtml], ['privacidad', html['privacidad.html']], ['envíos', html['pedidos-envios.html']], ['canales', html['canales-oficiales.html']], ['aviso legal', html['aviso-legal.html']], ['lista completa', directory], ...products.slice(0, 40).map(p => [p.name, renderProductPage(p, [])])]) {
+    const m = meta(page);
+    assert(m.title.includes('Elite Scents RD') && m.title.length <= 80, 'Título con la marca en ' + name + ': ' + m.title);
+    assert(m.description.length >= 70 && m.description.length <= 160, 'Descripción de 70 a 160 letras en ' + name + ' (' + m.description.length + ')');
+  }
+  // 9. Favicon: .ico de 48 px y PNG de 192 px (múltiplos de 48, como pide Google).
+  assert(existsSync('favicon.ico') && indexHtml.includes('<link rel="icon" href="/favicon.ico" sizes="48x48">') && indexHtml.includes('<link rel="icon" href="/img/app/icon-192.png" sizes="192x192" type="image/png">'), 'Favicon para Google y navegadores');
+  for (const [name, page] of [...Object.entries(html), ['página de perfume', productPage], ['lista completa', directory]]) assert(page.includes('href="/favicon.ico"'), 'Favicon en ' + name);
+  // 15. Página 404 útil: no se indexa, buscador y enlaces a la lista completa y a WhatsApp.
+  assert(/<meta name="robots" content="noindex">/.test(html['404.html']) && html['404.html'].includes('<form class="error-search" action="/" method="get"') && html['404.html'].includes('href="/perfumes/"') && html['404.html'].includes('wa.me/18094333348'), '404 con buscador y enlaces útiles');
+  assert(tiendaJs.includes("new URLSearchParams(location.search).get('q')"), 'La tienda abre la búsqueda que llega desde la 404 (/?q=)');
+  // 17. Formularios con campo trampa contra robots (además de los límites en la base de datos).
+  assert(template.includes('class="hp-field"') && tiendaJs.includes("form.elements.website?.value"), '«Avísame» con campo trampa');
+  assert(html['checkout.html'].includes('class="hp-field"') && customerJs.includes("fd.get('website')"), 'Registro con campo trampa');
+  // 18. Botón flotante de WhatsApp con el número oficial y texto para lectores de pantalla.
+  for (const [name, page] of [['portada', indexHtml], ...Object.entries(html), ['página de perfume', productPage], ['lista completa', directory]])
+    assert(/<a class="wa-float" href="https:\/\/wa\.me\/18094333348\?text=[^"]+" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp"/.test(page), 'Botón de WhatsApp en ' + name);
+  assert((await read('cookies.js')).includes("classList.add('cookie-open')"), 'El botón no tapa el aviso de cookies');
+  // 20. Una sola llamada a la acción: en la portada, un botón principal («Explorar colección»); WhatsApp va en el botón flotante.
+  const hero = template.slice(template.indexOf('<div class="hero-actions">'), template.indexOf('<div class="hero-note">'));
+  assert.equal((hero.match(/class="button /g) || []).length, 1, 'Un solo botón principal en la portada');
+  assert(!template.includes('class="nav-cta"') && (template.match(/class="wa-float"/g) || []).length === 1, 'WhatsApp no se repite en la cabecera');
+  // 19. Analítica propia (analytics.js): solo con «Aceptar todas»; nunca nombre, teléfono ni correo.
+  const analyticsJs = await read('analytics.js');
+  const runAnalytics = (choice, productId) => {
+    const sent = [], listeners = [];
+    const ctx = { window: {}, navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14) Mobile' }, sessionStorage: { _v: {}, getItem(k) { return this._v[k] || null; }, setItem(k, v) { this._v[k] = v; } },
+      document: { readyState: 'complete', body: { dataset: productId ? { productId: String(productId) } : {} }, addEventListener: (t, f) => listeners.push([t, f]), getElementById: () => null },
+      fetch: (url, opts) => { sent.push({ url, body: JSON.parse(opts.body), keepalive: opts.keepalive }); return Promise.resolve({}); } };
+    ctx.window = ctx; ctx.window.ELITE_SUPABASE = { url: 'https://ozowziumksrudrotulll.supabase.co', publishableKey: 'sb_publishable_x' };
+    ctx.window.matchMedia = () => ({ matches: true });
+    ctx.window.EliteConsent = { choice: () => choice, firstTouch: () => ({ fuente: 'l.instagram.com', utm: { source: '' } }) };
+    vm.runInNewContext(analyticsJs, ctx, { filename: 'analytics.js' });
+    return { sent, stats: ctx.window.EliteStats };
+  };
+  for (const choice of [null, 'necessary']) {
+    const r = runAnalytics(choice, 7); r.stats.track('busqueda', { term: 'aventus' });
+    assert.equal(r.sent.length, 0, 'Sin «Aceptar todas» no se cuenta nada (' + choice + ')');
+  }
+  {
+    const r = runAnalytics('all', 7); r.stats.track('sin_resultado', { term: 'baccarat 540' }); r.stats.track('inventado');
+    assert.deepEqual(r.sent.map(x => x.body.p_kind), ['visita', 'perfume', 'sin_resultado'], 'Con permiso: visita, perfume visto y búsqueda (un tipo inventado no se envía)');
+    assert(r.sent.every(x => x.url === 'https://ozowziumksrudrotulll.supabase.co/rest/v1/rpc/track_event' && x.keepalive), 'Se envía a track_event');
+    assert.deepEqual([r.sent[0].body.p_source, r.sent[0].body.p_device, r.sent[1].body.p_product_id], ['instagram', 'movil', 7], 'Origen, aparato y perfume');
+    assert(r.sent.every(x => Object.keys(x.body).every(k => ['p_kind', 'p_product_id', 'p_term', 'p_source', 'p_device'].includes(k))), 'Solo los datos previstos (sin nombre, teléfono ni correo)');
+    const again = runAnalytics('all'); assert.equal(again.sent.filter(x => x.body.p_kind === 'visita').length, 1, 'Una visita por sesión');
+  }
+  assert(tiendaJs.includes("window.EliteStats?.track('perfume',{product_id:p.id})") && tiendaJs.includes("window.EliteStats?.track('carrito',{product_id:p.id})") && tiendaJs.includes("matches().length?'busqueda':'sin_resultado'"), 'La tienda cuenta fichas, carrito y búsquedas');
+  assert(template.includes('<script defer src="/analytics.js"></script>') && productPage.includes('<script defer src="/supabase-config.js"></script><script defer src="/analytics.js"></script>') && productPage.includes('<body data-product-id="' + sample.id + '">') && directory.includes('/analytics.js'), 'Estadísticas en la portada, la lista y cada página de perfume');
+  assert(buildSite.includes("'analytics.js'"), 'analytics.js se publica');
+  assert(html['privacidad.html'].includes('id="estadisticas"') && /se borra a los 2 días/.test(html['privacidad.html']) && (await read('cookies.js')).includes('contaremos de forma anónima'), 'La privacidad y el aviso de cookies explican las estadísticas');
+  assert(adminHtml.includes('id="stats-card"') && adminHtml.includes('href="#stats-card"') && adminJs.includes("'/rest/v1/rpc/admin_site_stats'") && adminHtml.includes('id="stats-missing"'), 'El panel muestra estadísticas y búsquedas sin resultado');
+  // 3. Publicación automática: GitHub acepta el aviso de Supabase y espera a juntar cambios.
+  const pagesYml = await read('.github/workflows/pages.yml');
+  assert(/repository_dispatch:\s*\n\s*types: \[catalogo\]/.test(pagesYml) && /if: github.event_name == 'repository_dispatch'\n\s*run: sleep 60/.test(pagesYml), 'Publicación automática al guardar en el panel');
+  assert(pagesYml.includes('npm run test:links'), 'Enlaces rotos revisados en cada publicación');
+  console.log('Lista de 20 puntos: aviso legal, privacidad, títulos, favicon, 404, antispam, WhatsApp, estadísticas y publicación automática correctos.');
+}
+// ---------------------------------------------------------------- Scripts de la base de datos y respaldo desde GitHub
+{
+  const scriptYml = (await read('.github/workflows/supabase-script.yml')).replace(/\r\n/g, '\n'), backupYml = (await read('.github/workflows/respaldo.yml')).replace(/\r\n/g, '\n');
+  // 4. Aplicar un script: solo cuando el dueño lo pide, solo de supabase/migrations, todo o nada y con ensayo que no cambia nada.
+  assert(/\non:\n  workflow_dispatch:/.test(scriptYml) && !/\n  (push|pull_request|schedule):/.test(scriptYml), 'Los scripts solo corren cuando el dueño lo pide');
+  assert(scriptYml.includes("grep -Eq '^[0-9]{14}_[a-z0-9_]+\\.sql$'") && scriptYml.includes('FILE="supabase/migrations/$ARCHIVO"'), 'Solo archivos de supabase/migrations con nombre válido');
+  assert(scriptYml.includes("(begin|commit|rollback)[[:space:]]*;") && scriptYml.includes("echo '\\set ON_ERROR_STOP on'") && scriptYml.includes("echo 'BEGIN;'"), 'Una sola operación que se detiene en el primer error');
+  assert(scriptYml.includes("if [ \"$MODO\" = aplicar ]; then FIN='COMMIT;'; else FIN='ROLLBACK;'; fi") && /options: \[ensayar, aplicar\]\n\s*default: ensayar/.test(scriptYml), 'Ensayar (por defecto) deshace todo; aplicar guarda');
+  assert(scriptYml.includes('DB_URL: ${{ secrets.SUPABASE_DB_URL }}') && scriptYml.includes('--no-psqlrc'), 'La conexión va en un secreto de GitHub');
+  for (const file of (await import('node:fs')).readdirSync('supabase/migrations').filter(f => f.endsWith('.sql') && f >= '20260928'))
+    assert(/^[0-9]{14}_[a-z0-9_]+\.sql$/.test(file) && !/^\s*(begin|commit|rollback)\s*;/im.test(await read('supabase/migrations/' + file)), file + ' se puede correr desde GitHub');
+  // 8. Respaldo: semanal, cifrado (también los nombres), comprobado y sin dejar nada legible en el repositorio público.
+  assert(/schedule:\n\s*- cron: '17 9 \* \* 1'/.test(backupYml) && backupYml.includes('workflow_dispatch:'), 'Respaldo cada lunes y cuando el dueño quiera');
+  for (const table of ['products', 'orders', 'order_payments', 'customer_profiles', 'coupons', 'product_costs', 'store_settings', 'site_events', 'order_items', 'product_stock']) assert(new RegExp('for T in [a-z_ ]*\\b' + table + '\\b').test(backupYml), 'El respaldo incluye ' + table);
+  assert(backupYml.includes("printf '\\xEF\\xBB\\xBF'") && backupYml.includes('PGTZ=America/Santo_Domingo'), 'CSV para Excel 2013 con la hora de República Dominicana');
+  assert(backupYml.includes('7z a -t7z -mhe=on -mx=9 -p"$CLAVE"') && backupYml.includes('[ "${#CLAVE}" -lt 16 ]') && backupYml.includes('7z t -p"contraseña-equivocada"'), 'Cifrado con contraseña larga y comprobado');
+  assert(backupYml.includes('|| { echo "No se pudo conectar a Supabase') && backupYml.includes("grep -q '^  products: [1-9]'"), 'Nunca guarda un respaldo vacío');
+  assert(backupYml.includes('rm -rf "$DIR"') && /path: \$\{\{ env\.ARCHIVO \}\}\n\s*retention-days: 90/.test(backupYml) && !/git (add|commit|push)/.test(backupYml), 'Solo se guarda el archivo cifrado, 90 días, nunca en el repositorio');
+  console.log('Aplicar scripts desde GitHub (ensayar / aplicar) y respaldo semanal cifrado correctos.');
+}
+// ---------------------------------------------------------------- Dominio propio: una sola dirección y cambio en un paso
+{
+  const { changeDomain, validHost, currentHost, trackedTextFiles, DEFAULT_HOST } = await import('./cambiar-dominio.mjs');
+  const host = new URL(SITE_URL).host;
+  assert.equal(currentHost(), host, 'El script lee la dirección actual de seo.mjs');
+  for (const ok of ['www.elitescentsrd.com', 'elitescentsrd.com', 'tienda.elitescentsrd.com.do', DEFAULT_HOST]) assert(validHost(ok), ok + ' es un dominio válido');
+  for (const bad of ['', 'http://elitescentsrd.com', 'elitescentsrd.com/', 'localhost', 'elite scents.com', '-elite.com', 'elite-.com', 'elite..com', 'otro.github.io', 'elite.c'])
+    assert(!validHost(bad), '«' + bad + '» no es un dominio válido');
+  // Todas las direcciones del sitio salen de la misma: canónicas, og:url, robots.txt, cuenta de clientes, panel y Opaco.
+  const files = trackedTextFiles(), texts = Object.fromEntries(await Promise.all(files.map(async f => [f, await read(f)])));
+  for (const [file, text] of Object.entries(texts)) {
+    if (file.endsWith('.html')) for (const m of text.matchAll(/<link rel="canonical" href="([^"]+)"/g)) assert(m[1].startsWith(SITE_URL + '/'), file + ': canónica con la dirección de la tienda (' + m[1] + ')');
+    if (file.endsWith('.html')) for (const m of text.matchAll(/<meta property="og:url" content="([^"]+)"/g)) assert(m[1].startsWith(SITE_URL + '/'), file + ': og:url con la dirección de la tienda');
+    if (host !== DEFAULT_HOST) assert(!text.includes('https://' + DEFAULT_HOST), file + ': quedó la dirección anterior');
+  }
+  assert(texts['robots.txt'].includes('Sitemap: ' + SITE_URL + '/sitemap.xml') && customerJs.includes("const SITE_URL='" + SITE_URL + "'") && adminJs.includes("const SURVEY_URL = '" + SITE_URL + "/encuesta.html'") &&
+    texts['finanzas.js'].includes("'" + SITE_URL + "/#producto-'") && texts['scripts/opaco-paginas.mjs'].includes("export const SITE = '" + SITE_URL + "/opaco'"), 'robots.txt, clientes, panel y Opaco usan la misma dirección');
+  // Ensayo en memoria con un dominio de prueba: no queda la dirección actual y al volver todo queda idéntico.
+  const trial = host === 'www.ejemplo-de-prueba.com' ? 'www.otro-ejemplo.com' : 'www.ejemplo-de-prueba.com', left = new RegExp('https://' + host.replace(/\./g, '\\.') + '(?![a-z0-9-]|\\.[a-z0-9])');
+  let touched = 0;
+  for (const [file, text] of Object.entries(texts)) {
+    const moved = changeDomain(text, host, trial, file);
+    if (moved !== text) touched++;
+    assert(!left.test(moved), file + ': no queda la dirección actual después del cambio');
+    assert.equal(changeDomain(moved, trial, host, file), text, file + ': al volver queda igual que antes');
+  }
+  assert(touched >= 20, 'El cambio llega a todas las páginas (' + touched + ' archivos)');
+  const canales = changeDomain(texts['canales-oficiales.html'], host, trial, 'canales-oficiales.html');
+  assert(canales.includes('<span>' + trial + '</span>') && canales.includes('href="https://' + trial + '/"') && canales.includes('es solo <strong>' + trial + '</strong>') &&
+    canales.includes('La dirección anterior, <strong>' + DEFAULT_HOST + '</strong>, también es nuestra'), 'Canales oficiales: dirección nueva y aviso de que la anterior también es nuestra');
+  assert(!changeDomain(canales, trial, DEFAULT_HOST, 'canales-oficiales.html').includes('dominio-anterior'), 'Al volver a github.io se quita ese aviso');
+  const publishSql = await read('supabase/migrations/20261003120000_estadisticas_y_publicacion.sql');
+  assert(publishSql.includes('https://api.github.com/repos/elitescentsrd/elitescentsrd.github.io/dispatches') && changeDomain(publishSql, DEFAULT_HOST, trial) === publishSql, 'La dirección del repositorio en GitHub no cambia con el dominio');
+  console.log('Dominio propio: una sola dirección en ' + files.length + ' archivos y cambio de dominio en un paso (' + touched + ' archivos) correctos.');
+}
+// ---------------------------------------------------------------- Cantidad en casa: «¡Quedan…!» en la tienda y el panel
+{
+  const { stockText: seoStock } = await import('./lib/seo.mjs');
+  const fromSource = (source, pattern) => vm.runInNewContext('(' + source.match(pattern)[1] + ')');
+  const tiendaStock = fromSource(tiendaJs, /const stockText=(p=>\{[^}]*\})/), buildStock = fromSource(await read('scripts/build-catalog.mjs'), /const stockText = (p => \{[^}]*\})/);
+  const casos = [[{ availability: 'disponible', stock_left: 2 }, '¡Quedan 2!'], [{ availability: 'disponible', stock_left: 1 }, '¡Queda 1!'], [{ availability: 'disponible', stock_left: 3 }, '¡Quedan 3!'],
+    [{ availability: 'disponible', stock_left: 0 }, ''], [{ availability: 'disponible', stock_left: 4 }, ''], [{ availability: 'disponible', stock_left: null }, ''], [{ availability: 'disponible' }, ''],
+    [{ availability: 'agotado', stock_left: 2 }, ''], [{ availability: 'encargo', stock_left: 1 }, ''], [{ availability: 'disponible', stock_left: '2"><b>' }, '']];
+  for (const [p, want] of casos) for (const [name, fn] of [['tienda', tiendaStock], ['portada', buildStock], ['página del perfume', seoStock]]) assert.equal(fn(p), want, name + ': ' + JSON.stringify(p));
+  const sample = { ...products.find(p => p.availability === 'disponible'), stock_left: 2 };
+  assert(renderProductPage(sample, []).includes('<strong class="stock-low-text">¡Quedan 2!</strong>') && !renderProductPage({ ...sample, stock_left: null }, []).includes('¡Queda'), 'La página del perfume dice «¡Quedan 2!» solo con pocas unidades');
+  assert(tiendaJs.includes("+(catalogInfo().stock===true?',stock_left':'')") && tiendaJs.includes('p.availability,p.stock_left].join'), 'La tienda pide stock_left solo si la base de datos ya la tiene, y vuelve a dibujar si cambia');
+  assert((await read('tienda.css')).includes('.stock.stock-low{'), 'Estilo de «¡Quedan…!»');
+  // Panel: inventario, cantidad en el formulario, elegir perfume en un pedido a mano y respaldo.
+  for (const id of ['stock-card', 'stock-body', 'stock-label', 'order-pick', 'order-products', 'order-pick-add']) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en el panel');
+  assert(adminHtml.includes('href="#stock-card"') && adminJs.includes("'/rest/v1/product_stock?on_conflict=product_id,size_index'") && adminJs.includes("resolution=merge-duplicates"), 'Inventario en el menú; guarda con upsert');
+  assert(adminJs.includes("'/rest/v1/order_items?select=order_id,position,product_id,name,size,size_index,qty,stock_taken") && adminJs.includes('lines: orderLines'), 'Ganancia, compras y «más pedidos» con las líneas guardadas');
+  assert(adminJs.includes("['cantidad_en_casa', '/rest/v1/product_stock?select=*") && adminJs.includes("['lineas_de_pedido', '/rest/v1/order_items?select=*") && adminJs.includes('if (!missing(err)) backup.sin_acceso.push'), 'El respaldo del panel incluye cantidades y líneas (y no se queja si aún no existen)');
+  console.log('Cantidad en casa: «¡Quedan…!» en tienda, portada y página del perfume, inventario y pedido a mano correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');

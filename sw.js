@@ -53,6 +53,15 @@ async function networkFirst(request, name) {
   }
 }
 
+// El catálogo publicado lleva su versión en la dirección (/perfumes.json?v=…): esa versión nunca cambia, así que se usa la copia.
+async function cacheFirst(request, name) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  remember(name, request, response);
+  return response;
+}
+
 async function staleWhileRevalidate(request, name) {
   const cached = await caches.match(request);
   const refresh = fetch(request).then(response => { remember(name, request, response); return response; }).catch(() => null);
@@ -71,6 +80,7 @@ self.addEventListener('fetch', event => {
     return;
   }
   if (request.mode === 'navigate') { event.respondWith(networkFirst(request, PAGES)); return; }
+  if (url.pathname === '/perfumes.json' && url.searchParams.has('v')) { event.respondWith(cacheFirst(request, STATIC).catch(() => Response.error())); return; }
   if (/\.(?:css|js|json|webmanifest)$/i.test(url.pathname)) { event.respondWith(networkFirst(request, STATIC)); return; }
   if (/\.(?:webp|png|jpe?g|gif|svg|ico|woff2?)$/i.test(url.pathname)) event.respondWith(staleWhileRevalidate(request, IMAGES));
 });

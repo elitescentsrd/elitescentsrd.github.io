@@ -9,14 +9,16 @@
     "test:opaco": "node scripts/test-opaco-detector.mjs && node scripts/test-opaco-site.mjs",
     "test:opaco:e2e": "node scripts/test-opaco-e2e.mjs",
     "test:images": "node scripts/check-product-images.mjs",
-    "test:sql": "node scripts/test-coupons-sql.mjs",
+    "test:sql": "node scripts/test-coupons-sql.mjs && node scripts/test-funciones-sql.mjs && node scripts/test-pedidos-sql.mjs && node scripts/test-reparar-costos-sql.mjs",
     "test:security": "node scripts/check-supabase-security.mjs",
     "check:batch": "node scripts/check-photo-batch.mjs",
     "verify": "npm run build && npm test && npm run test:images && npm run test:security",
     "check:generated": "npm run build && git diff --exit-code -- index.html",
     "site": "node scripts/build-site-artifact.mjs",
-    "serve": "npm run build && npm run site && node scripts/serve.mjs"
+    "serve": "npm run build && npm run site && node scripts/serve.mjs",
+    "test:links": "node scripts/test-links.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
-

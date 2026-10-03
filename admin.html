@@ -53,6 +53,7 @@
     </section>
 
     <div id="admin-content" class="hidden">
+      <nav class="admin-nav" aria-label="Secciones del panel"><a href="#sales-card">Resumen</a><a href="#stats-card">Estadísticas</a><a href="#orders-card">Pedidos</a><a href="#receivables-card">Cobros</a><a href="#restock-card">Avísame</a><a href="#purchase-card">Compras</a><a href="#stock-card">Inventario</a><a href="#product-card">Producto</a><a href="#costs-card">Costos y precios</a><a href="#offers-card">Ofertas</a><a href="#coupons-card">Cupones</a><a href="#catalog-card">Catálogo PDF</a></nav>
       <section class="admin-card" id="sales-card">
         <div class="admin-head"><div><p class="eyebrow">Resumen</p><h2>Resumen de ventas</h2><p class="muted">Se calcula con los pedidos del panel. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados; los nuevos quedan "por confirmar" y los cancelados no suman.</p></div><label class="sales-period-label">Período<select id="sales-period"><option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="all">Todo el historial</option></select></label></div>
         <div class="sales-kpis" id="sales-kpis"></div>
@@ -62,8 +63,21 @@
           <div><h3>Perfumes más pedidos</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Unidades</th><th>Pedidos</th></tr></thead><tbody id="sales-top"></tbody></table></div><p class="muted">Se lee del texto de cada pedido; los cancelados no cuentan.</p></div>
           <div><h3>De dónde llegan tus clientes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Origen</th><th>Cuentas</th><th>Compraron</th><th>Pedidos</th></tr></thead><tbody id="sales-origins"></tbody></table></div><p class="muted">Según cómo llegó cada persona al crear su cuenta (todas las cuentas, sin importar el período).</p></div>
         </div>
+        <div class="profit-block"><h3>Ganancia por mes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Mes</th><th>Pedidos con costo</th><th>Ventas</th><th>Costo</th><th>Ganancia</th><th>Margen</th><th>Sin costo</th></tr></thead><tbody id="profit-body"></tbody></table></div><p class="muted" id="profit-note">Se calcula con los costos privados de cada perfume (sección «Costos y precios») y la logística por unidad. Los pedidos con algún perfume sin costo aparecen en «Sin costo».</p></div>
       </section>
 
+      <section class="admin-card" id="stats-card">
+        <div class="admin-head"><div><p class="eyebrow">Estadísticas</p><h2>Visitas y búsquedas</h2><p class="muted">Cuenta de forma anónima a quienes aceptan «todas» en el aviso de cookies (sin Google ni terceros). Lo más útil: <strong>lo que buscan y no encuentran</strong>, para saber qué pedirle a La Grada.</p></div><label class="sales-period-label">Período<select id="stats-period"><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="365">Último año</option></select></label></div>
+        <p id="stats-notice" class="muted hidden"></p>
+        <div class="sales-kpis" id="stats-kpis"></div>
+        <div id="stats-chart" class="sales-chart" role="img" aria-label="Gráfico de visitas por día"></div>
+        <div class="sales-columns">
+          <div><h3>Búsquedas sin resultado</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Buscaron</th><th>Veces</th></tr></thead><tbody id="stats-missing"></tbody></table></div><p class="muted">Perfumes que la gente quiere y no encontró en tu tienda.</p></div>
+          <div><h3>Lo que más buscan</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Búsqueda</th><th>Veces</th><th>Sin resultado</th></tr></thead><tbody id="stats-searches"></tbody></table></div></div>
+          <div><h3>Perfumes más vistos</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Vistas</th><th>WhatsApp</th><th>Carrito</th></tr></thead><tbody id="stats-products"></tbody></table></div></div>
+          <div><h3>De dónde llegan</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Origen</th><th>Visitas</th></tr></thead><tbody id="stats-sources"></tbody></table></div><p class="muted" id="stats-devices"></p></div>
+        </div>
+      </section>
       <section class="admin-card" id="security-card">
         <div class="admin-head"><div><p class="eyebrow">Seguridad</p><h2>Seguridad y respaldo</h2><p class="muted">Si entran muchos pedidos falsos, pausa los pedidos por la web: nadie podrá pedir desde la tienda hasta que los reanudes (WhatsApp sigue funcionando). Siempre activo: cada cuenta de cliente puede hacer como máximo 3 pedidos cada 10 minutos y 10 por día; los pedidos que registras tú en el panel no tienen límite.</p></div></div>
         <p id="security-notice" class="muted hidden">Para usar la pausa falta aplicar la migración "protección de pedidos" en Supabase (SQL Editor).</p>
@@ -75,7 +89,7 @@
         </div>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card" id="product-card">
         <div class="admin-head"><div><p class="eyebrow">Producto</p><h2 id="form-title">Agregar perfume</h2></div><button id="cancel-edit" class="btn btn-secondary hidden" type="button">Cancelar edición</button></div>
         <form method="post" id="product-form" class="admin-form">
           <input name="id" type="hidden">
@@ -93,13 +107,19 @@
           <label class="span-2">Subir imagen principal<input name="image_file" type="file" accept="image/jpeg,image/png,image/webp"></label>
           <label class="span-2">Galería por URL (una por línea, máximo 3)<textarea name="gallery_urls" placeholder="https://..."></textarea></label>
           <label class="span-2">Subir galería (máximo 3)<input name="gallery_files" type="file" multiple accept="image/jpeg,image/png,image/webp"></label>
+          <label class="span-2" id="inspired-label">Inspirado en (opcional)<input name="inspired_by" maxlength="120" placeholder="Creed Aventus"></label>
+          <label id="cost-label">Costo del suplidor (privado)<input name="cost" inputmode="decimal" placeholder="2,650 o 2,650 / 3,400"></label>
+          <label id="stock-label">Cantidad en casa (privado)<input name="stock" inputmode="numeric" maxlength="40" placeholder="Vacío = no llevar la cuenta" aria-describedby="stock-help"></label>
+          <label id="strategy-label">Estrategia de precio<select name="strategy"><option value="normal">Normal</option><option value="gancho">Gancho (muy buscado)</option><option value="exclusivo">Exclusivo (nicho)</option></select></label>
+          <p class="span-4 muted" id="price-suggestion" aria-live="polite"></p>
           <label class="span-4">Descripción<textarea name="description" maxlength="1200" placeholder="Descripción breve del aroma y la ocasión recomendada"></textarea></label>
           <label id="offer-price-label">Precio de oferta (RD$, opcional)<input name="offer_price" inputmode="decimal" placeholder="4,000"></label>
           <label id="offer-event-label">Evento de la oferta<input name="offer_label" maxlength="60" placeholder="Día de las Madres"></label>
           <label id="offer-end-label">La oferta termina<input name="offer_ends" type="datetime-local"></label>
           <label><input name="active" type="checkbox" checked> Producto visible</label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar producto</button><span id="product-status" aria-live="polite"></span></div>
-          <p class="span-4 muted">Los perfumes con precio de RD$7,000 o más se guardan automáticamente como “Solo por encargo”.</p>
+          <p class="span-4 muted">Los perfumes con precio de RD$7,000 o más se guardan automáticamente como “Solo por encargo”, salvo que los marques como “Agotado”.</p>
+          <p class="span-4 muted" id="stock-help">Cantidad en casa (opcional): se descuenta sola al confirmar un pedido; en 0 el perfume pasa a “Agotado” y, cuando vuelves a tener, a “Disponible”. Con 3 o menos la tienda muestra “¡Quedan 2!”. Varios tamaños: una cantidad por tamaño, por ejemplo “2 / 1”.</p>
         </form>
       </section>
 
@@ -146,6 +166,37 @@
         </form>
       </section>
 
+      <section class="admin-card" id="costs-card">
+        <div class="admin-head"><div><p class="eyebrow">Privado</p><h2>Costos y precios</h2><p class="muted">Tus costos solo los ve el administrador (nunca salen en la tienda ni en GitHub). El panel sugiere el precio con tu fórmula de ganancia y el precio de la competencia; tú revisas y aplicas. Para actualizar muchos costos: descarga la lista, cámbiala en Excel y vuelve a subirla.</p></div><div class="admin-actions"><button id="costs-export" class="btn btn-secondary" type="button">Descargar costos (Excel)</button><label class="btn btn-secondary file-btn">Subir lista de costos<input id="costs-file" type="file" accept=".csv,text/csv"></label></div></div>
+        <p id="costs-notice" class="muted hidden">Para usar costos falta aplicar la migración "funciones y perfumes nuevos" en Supabase (SQL Editor).</p>
+        <div class="sales-kpis" id="costs-kpis"></div>
+        <div id="costs-import" class="costs-import hidden"><p id="costs-import-summary"></p><ul id="costs-import-errors" class="costs-errors"></ul><div class="admin-actions"><button id="costs-import-save" class="btn" type="button">Guardar estos costos</button><button id="costs-import-cancel" class="btn btn-secondary" type="button">Cancelar</button><span id="costs-import-status" aria-live="polite"></span></div></div>
+        <details class="pricing-details"><summary>Fórmula de precios (logística, ganancia mínima, margen y estrategias)</summary>
+          <form method="post" id="pricing-form" class="admin-form">
+            <label>Logística por unidad (RD$)<input name="logistica" type="number" min="0" step="1" required></label>
+            <label>Ganancia mínima por unidad (RD$)<input name="ganancia_minima" type="number" min="0" step="1" required></label>
+            <label class="span-2">Margen según el costo (una línea por punto: costo total, margen %)<textarea name="curva" rows="4" placeholder="Ejemplo:&#10;1000, 50&#10;3000, 35&#10;8000, 20"></textarea></label>
+            <label>Gancho: factor de margen<input name="gancho_factor" type="number" min="0" max="3" step="0.01" required></label>
+            <label>Gancho: % bajo la competencia<input name="gancho_descuento" type="number" min="0" max="50" step="0.5" required></label>
+            <label>Normal: factor de margen<input name="normal_factor" type="number" min="0" max="3" step="0.01" required></label>
+            <label>Normal: % bajo la competencia<input name="normal_descuento" type="number" min="0" max="50" step="0.5" required></label>
+            <label>Exclusivo: factor de margen<input name="exclusivo_factor" type="number" min="0" max="3" step="0.01" required></label>
+            <label>Exclusivo: % bajo la competencia<input name="exclusivo_descuento" type="number" min="0" max="50" step="0.5" required></label>
+            <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar fórmula</button><span id="pricing-status" aria-live="polite"></span></div>
+            <p class="span-4 muted">Precio sugerido = el mayor entre (costo + logística + ganancia mínima) y el menor entre (costo + logística) × (1 + margen × factor) y la competencia menos su %. Siempre termina en 50. Solo se marca para cambiar si la diferencia pasa de RD$50, si está más caro que la competencia o si deja menos de tu ganancia mínima; un precio entre el sugerido y el de la competencia ya está «a nivel de la competencia». Si un perfume cuesta menos de RD$7,000 y no es «Solo por encargo», se sugiere como máximo RD$6,950 para que no cambie a «Solo por encargo».</p>
+          </form>
+        </details>
+        <div class="offer-filters costs-filters">
+          <label class="offer-filter-search">Buscar<input id="costs-search" type="search" placeholder="Nombre o marca" autocomplete="off"></label>
+          <label>Mostrar<select id="costs-view"><option value="diff">Precio distinto al sugerido</option><option value="below">Por debajo de la ganancia mínima</option><option value="nocost">Sin costo</option><option value="all">Todos</option></select></label>
+        </div>
+        <p class="muted" id="costs-count" aria-live="polite"></p>
+        <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th><input id="costs-select-all" type="checkbox" aria-label="Seleccionar todos los visibles"></th><th>Perfume</th><th>Costo</th><th>Estrategia</th><th>Competencia</th><th>Precio actual</th><th>Ganancia actual</th><th>Sugerido</th><th>Ganancia sugerida</th><th></th></tr></thead><tbody id="costs-body"></tbody></table></div>
+        <div class="admin-actions"><button type="button" class="btn btn-secondary hidden" id="costs-more">Mostrar más</button></div>
+        <div class="admin-actions"><button id="costs-apply" class="btn" type="button">Aplicar el precio sugerido a los seleccionados</button><span id="costs-status" aria-live="polite"></span></div>
+        <p class="muted">Los perfumes en oferta no se cambian aquí (termina la oferta primero). El precio nuevo sale en la tienda en la próxima publicación (cada 6 horas o al guardar cambios en GitHub).</p>
+      </section>
+
       <section class="admin-card" id="coupons-card">
         <div class="admin-head"><div><p class="eyebrow">Cupones</p><h2>Cupones de descuento</h2><p class="muted">Crea códigos para eventos o primeras compras. El cliente lo escribe en su carrito y la base de datos calcula el descuento sobre el total real, así nadie puede falsificarlo. Por defecto un cupón no se combina con perfumes que ya están en oferta.</p></div><div class="admin-actions"><button id="coupons-clean" class="btn btn-secondary" type="button">Limpiar vencidos y desactivados</button><button id="coupons-refresh" class="btn btn-secondary" type="button">Actualizar</button></div></div>
         <p id="coupons-notice" class="muted hidden">Para usar cupones falta aplicar la migración "cupones" en Supabase (SQL Editor).</p>
@@ -186,6 +237,20 @@
         <div class="admin-actions"><button id="survey-csv" class="btn btn-secondary" type="button">Descargar respuestas (Excel)</button><span id="survey-csv-status" aria-live="polite"></span></div>
       </section>
 
+      <section class="admin-card" id="catalog-card">
+        <div class="admin-head"><div><p class="eyebrow">Catálogo</p><h2>Catálogo para imprimir y para WhatsApp / Instagram</h2><p class="muted">La lista de precios se genera sola con cada publicación de la tienda, así que siempre está al día: ábrela y pulsa «Guardar como PDF» para enviarla por WhatsApp o imprimirla.</p></div></div>
+        <div class="admin-actions"><a class="btn" href="/lista-de-precios.html" target="_blank" rel="noopener noreferrer">Abrir la lista de precios (PDF) ↗</a><a class="btn btn-secondary" href="/lista-de-precios.html?solo=disponibles" target="_blank" rel="noopener noreferrer">Solo disponibles ↗</a></div>
+        <h3>Catálogo de WhatsApp Business e Instagram (Meta)</h3>
+        <div class="admin-actions survey-link-row"><code id="feed-link">https://elitescentsrd.github.io/feeds/productos.xml</code><button id="feed-copy" class="btn btn-secondary" type="button">Copiar enlace</button></div>
+        <ol class="admin-steps">
+          <li>Entra a business.facebook.com → Commerce Manager (Administrador de ventas) → «Agregar catálogo» → tipo «Comercio electrónico».</li>
+          <li>Elige «Carga de lista de datos» (fuente de datos) → «Usar una URL» y pega el enlace de arriba. Programa la actualización «Diaria».</li>
+          <li>Moneda: DOP (peso dominicano). Meta revisa los productos; en 1 o 2 días aparecen aprobados.</li>
+          <li>WhatsApp Business: Configuración → Herramientas para la empresa → Catálogo → conecta ese catálogo de Meta. En Instagram: Configuración → Negocio → Compras.</li>
+        </ol>
+        <p class="muted">El archivo incluye los perfumes con foto propia y un solo precio (Meta no acepta dos presentaciones con precios distintos en un mismo producto). Se actualiza solo: si cambias un precio o la disponibilidad en el panel, Meta lo toma en su siguiente lectura.</p>
+      </section>
+
       <section class="admin-card" id="customers-card">
         <div class="admin-head"><div><p class="eyebrow">Cuentas Clientes</p><h2>Cuentas de clientes</h2><p class="muted">Clientes que crearon una cuenta en la tienda y desde dónde llegaron. Las contraseñas están cifradas por Supabase y nadie puede verlas ni recuperarlas; solo se pueden restablecer.</p></div><button id="customers-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
         <p id="customers-notice" class="muted hidden">Para ver las cuentas falta aplicar la migración "cuentas_clientes" en Supabase (SQL Editor).</p>
@@ -201,19 +266,72 @@
           <label>Teléfono<input name="phone" type="tel" maxlength="40" required></label>
           <label>Importe acordado<input name="amount" maxlength="70"></label>
           <label>Estado<select name="status"><option value="nuevo">Nuevo</option><option value="confirmado">Confirmado</option><option value="entregado">Entregado</option><option value="cancelado">Cancelado</option></select></label>
-          <label class="span-2">Productos<textarea name="items" maxlength="2000" required></textarea></label>
+          <label class="span-2">Agregar perfume<input id="order-pick" list="order-products" autocomplete="off" placeholder="Escribe el nombre y elígelo de la lista"></label>
+          <label>Cantidad<input id="order-pick-qty" type="number" min="1" max="99" value="1"></label>
+          <div class="admin-actions order-pick-actions"><button id="order-pick-add" class="btn btn-secondary" type="button">Agregar al pedido</button></div>
+          <datalist id="order-products"></datalist>
+          <label class="span-2">Productos (uno por línea)<textarea name="items" maxlength="2000" required placeholder="2x Lattafa Asad (100 ML)"></textarea></label>
           <label class="span-2">Notas internas<textarea name="notes" maxlength="2000"></textarea></label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar pedido</button><span id="order-status" aria-live="polite"></span></div>
         </form>
       </section>
-      <section class="admin-card">
+      <section class="admin-card" id="orders-card">
         <div class="admin-head"><div><p class="eyebrow">Solicitudes</p><h2>Pedidos</h2><p class="muted">El panel revisa cada 20 segundos si entran pedidos nuevos y suena un aviso. Déjalo abierto en una pestaña para enterarte al momento.</p><p id="pending-count" class="pending-count" aria-live="polite"></p></div><button id="enable-order-notifications" class="btn btn-secondary" type="button">Activar notificaciones</button></div>
         <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Contacto</th><th>Productos</th><th>Total</th><th>Estado / entrega</th><th>Acciones</th></tr></thead><tbody id="orders-body"></tbody></table></div>
+      </section>
+
+      <section class="admin-card" id="receivables-card">
+        <div class="admin-head"><div><p class="eyebrow">Cobros</p><h2>Cuentas por cobrar y abonos</h2><p class="muted">Pedidos vendidos (confirmados, en preparación, enviados o entregados) con lo que falta por pagar. Registra cada abono y envía un recordatorio amable por WhatsApp con un clic.</p></div><button id="receivables-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <p id="receivables-notice" class="muted hidden">Para registrar abonos falta aplicar la migración "funciones y perfumes nuevos" en Supabase (SQL Editor).</p>
+        <div class="sales-kpis" id="receivables-kpis"></div>
+        <div class="offer-filters"><label class="offer-filter-search">Buscar<input id="receivables-search" type="search" placeholder="Cliente, teléfono o número de pedido" autocomplete="off"></label><label>Mostrar<select id="receivables-view"><option value="open">Con saldo pendiente</option><option value="paid">Pagados</option><option value="all">Todos</option></select></label></div>
+        <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Pedido</th><th>Cliente</th><th>Fecha</th><th>Total</th><th>Abonado</th><th>Pendiente</th><th>Último abono</th><th>Acciones</th></tr></thead><tbody id="receivables-body"></tbody></table></div>
+        <div class="admin-actions"><button id="receivables-settle-old" class="btn btn-secondary hidden" type="button">Marcar como pagados los pedidos entregados antes de hoy</button><span id="receivables-status" aria-live="polite"></span></div>
+      </section>
+
+      <dialog id="payment-dialog" class="admin-dialog" aria-labelledby="payment-title">
+        <form method="post" id="payment-form" class="admin-form">
+          <h2 class="span-4" id="payment-title">Registrar abono</h2>
+          <p class="span-4 muted" id="payment-summary"></p>
+          <label>Monto (RD$)<input name="amount" inputmode="decimal" required></label>
+          <label>Método<select name="method"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="tarjeta">Tarjeta</option><option value="otro">Otro</option></select></label>
+          <label>Fecha<input name="paid_on" type="date" required></label>
+          <label>Nota (opcional)<input name="note" maxlength="200"></label>
+          <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar abono</button><button class="btn btn-secondary" type="button" id="payment-full">Pagó todo lo pendiente</button><button class="btn btn-secondary" type="button" id="payment-close">Cerrar</button><span id="payment-status" aria-live="polite"></span></div>
+          <div class="span-4"><h3>Abonos de este pedido</h3><ul id="payment-list" class="payment-list"></ul></div>
+        </form>
+      </dialog>
+
+      <section class="admin-card" id="restock-card">
+        <div class="admin-head"><div><p class="eyebrow">Clientes esperando</p><h2>Avísame cuando llegue</h2><p class="muted">Personas que pidieron aviso de un perfume agotado o por encargo. Cuando llegue, pulsa «Avisar por WhatsApp»: se abre el chat con el mensaje listo y el aviso queda marcado como enviado.</p><p id="restock-summary" class="pending-count" aria-live="polite"></p></div><button id="restock-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <p id="restock-notice" class="muted hidden">Para ver los avisos falta aplicar la migración "funciones y perfumes nuevos" en Supabase (SQL Editor).</p>
+        <div class="offer-filters"><label>Mostrar<select id="restock-view"><option value="ready">Ya disponibles (¡avisar!)</option><option value="pending">Todos los pendientes</option><option value="sent">Ya avisados</option></select></label></div>
+        <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Perfume</th><th>Estado del perfume</th><th>Cliente</th><th>WhatsApp</th><th>Pidió aviso</th><th>Acciones</th></tr></thead><tbody id="restock-body"></tbody></table></div>
+      </section>
+
+      <section class="admin-card" id="purchase-card">
+        <div class="admin-head"><div><p class="eyebrow">Compras</p><h2>Lista de compra para La Grada</h2><p class="muted">Suma lo que falta entregar en los pedidos nuevos, confirmados y en preparación, y los perfumes agotados que tienen personas esperando. Ajusta las cantidades y copia el mensaje para WhatsApp.</p></div><button id="purchase-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+        <div class="admin-actions"><label class="check-line"><input id="purchase-available" type="checkbox" checked> Incluir los perfumes «Disponible» de los pedidos (desmárcalo si ya los tienes en casa)</label><label class="check-line"><input id="purchase-waiting" type="checkbox" checked> Incluir agotados con personas esperando</label></div>
+        <div class="sales-kpis" id="purchase-kpis"></div>
+        <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Comprar</th><th>Perfume</th><th>Tamaño</th><th>En pedidos</th><th>Personas esperando</th><th>Estado</th><th>Costo</th><th>Subtotal</th></tr></thead><tbody id="purchase-body"></tbody></table></div>
+        <div id="purchase-unmatched" class="muted"></div>
+        <div class="admin-actions"><button id="purchase-copy" class="btn" type="button">Copiar mensaje para WhatsApp</button><button id="purchase-csv" class="btn btn-secondary" type="button">Descargar (Excel)</button><span id="purchase-status" aria-live="polite"></span></div>
+      </section>
+
+      <section class="admin-card" id="stock-card">
+        <div class="admin-head"><div><p class="eyebrow">Inventario</p><h2>Cantidad en casa</h2><p class="muted">Opcional, perfume por perfume. Al confirmar un pedido se descuenta sola (y se devuelve si lo cancelas, lo vuelves a «nuevo» o lo borras). Al llegar a 0 el perfume pasa a «Agotado» y, cuando vuelves a tener, a «Disponible»; los «Solo por encargo» no cambian. Con 3 o menos, la tienda muestra «¡Quedan 2!». Vacío = no llevar la cuenta (como hoy). Varios tamaños: una cantidad por tamaño, por ejemplo «2 / 1».</p></div></div>
+        <p id="stock-notice" class="muted hidden"></p>
+        <div class="sales-kpis" id="stock-kpis"></div>
+        <div class="offer-filters"><label class="offer-filter-search">Buscar<input id="stock-search" type="search" placeholder="Perfume o marca" autocomplete="off"></label><label>Mostrar<select id="stock-view"><option value="all">Todos</option><option value="tracked">Los que llevo</option><option value="low">Pocas unidades (3 o menos)</option><option value="zero">En 0</option><option value="untracked">Sin cantidad</option></select></label></div>
+        <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Tamaño</th><th>En casa</th><th>En la tienda</th><th>Acciones</th></tr></thead><tbody id="stock-body"></tbody></table></div>
+        <p id="stock-count" class="muted"></p>
+        <div class="admin-actions"><button id="stock-more" class="btn btn-secondary hidden" type="button">Mostrar más</button><button id="stock-csv" class="btn btn-secondary" type="button">Descargar inventario (Excel)</button><span id="stock-status" aria-live="polite"></span></div>
       </section>
     </div>
   </main>
   <script src="/supabase-config.js"></script>
   <script src="/sales.js"></script>
+  <script src="/finanzas.js"></script>
   <script src="/survey.js"></script>
   <script src="/admin.js"></script>
   <script src="/pwa.js"></script>

@@ -2,7 +2,8 @@
 //
 // Necesario (siempre activo, no requiere consentimiento): carrito, favoritos, tema claro/oscuro, sesión de la cuenta
 // y la propia elección de cookies. Opcional (solo si el visitante acepta): recordar de dónde llegó (sitio de origen y
-// campaña utm_*) hasta 30 días, para saber qué canales funcionan. Nada se envía a terceros ni se usa para publicidad.
+// campaña utm_*) hasta 30 días y contar de forma anónima visitas, perfumes vistos y búsquedas (analytics.js), para
+// saber qué canales y perfumes funcionan. Nada se envía a terceros ni se usa para publicidad.
 (() => {
   'use strict';
   const KEY = 'elite-cookie-consent-v1', FIRST_TOUCH = 'elite-first-touch-v1', TTL_MS = 30 * 24 * 3600 * 1000;
@@ -28,7 +29,7 @@
   }
 
   let banner = null;
-  function closeBanner() { banner?.remove(); banner = null; }
+  function closeBanner() { banner?.remove(); banner = null; document.documentElement.classList.remove('cookie-open'); }
   function choose(choice) { writeChoice(choice); captureFirstTouch(); closeBanner(); }
 
   function openBanner() {
@@ -37,7 +38,7 @@
     banner.className = 'cookie-banner'; banner.setAttribute('role', 'dialog'); banner.setAttribute('aria-labelledby', 'cookie-title'); banner.setAttribute('aria-describedby', 'cookie-text');
     const title = document.createElement('strong'); title.id = 'cookie-title'; title.textContent = 'Cookies y almacenamiento local';
     const text = document.createElement('p'); text.id = 'cookie-text';
-    text.append('Usamos almacenamiento local imprescindible (carrito, favoritos, tema y tu sesión). Si aceptas, también recordaremos de qué sitio llegaste (por ejemplo, Instagram) durante 30 días para saber qué canales funcionan. No usamos cookies de publicidad ni compartimos estos datos con terceros. ');
+    text.append('Usamos almacenamiento local imprescindible (carrito, favoritos, tema y tu sesión). Si aceptas, también contaremos de forma anónima las visitas, los perfumes que se ven y lo que se busca, y recordaremos de qué sitio llegaste (por ejemplo, Instagram) durante 30 días. No usamos cookies de publicidad ni compartimos estos datos con terceros. ');
     const more = document.createElement('a'); more.href = '/privacidad.html#cookies'; more.textContent = 'Más información'; text.append(more, '.');
     const actions = document.createElement('div'); actions.className = 'cookie-actions';
     const all = document.createElement('button'); all.type = 'button'; all.className = 'button gold'; all.textContent = 'Aceptar todas'; all.addEventListener('click', () => choose('all'));
@@ -45,6 +46,7 @@
     actions.append(all, necessary);
     banner.append(title, text, actions);
     document.body.append(banner);
+    document.documentElement.classList.add('cookie-open');
   }
 
   // Enlace permanente para cambiar la elección en cualquier momento.

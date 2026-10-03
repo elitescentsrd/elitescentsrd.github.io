@@ -1,0 +1,69 @@
+name: Respaldo semanal de la tienda
+
+# Cada lunes (y cuando lo pidas en Actions → «Respaldo semanal de la tienda» → Run workflow) descarga las tablas de la
+# tienda en archivos CSV que abre Excel 2013 (perfumes, pedidos y sus líneas, abonos, clientes, cupones, avisos, costos, cantidad en casa, encuesta y
+# estadísticas) y los guarda en un .7z cifrado con AES-256 (también los nombres de archivo). Queda 90 días como
+# artefacto de la ejecución: descárgalo y ábrelo con 7-Zip y tu contraseña.
+# Necesita dos secretos (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL     la cadena de conexión «Session pooler» de Supabase (la misma del flujo «Aplicar script»).
+#   BACKUP_PASSWORD     una contraseña larga (16 letras o más) que guardas aparte. Sin ella no se puede abrir el respaldo.
+# El repositorio es público: el archivo está cifrado, por eso la contraseña es obligatoria y nunca se escribe aquí.
+on:
+  schedule:
+    - cron: '17 9 * * 1' # lunes 5:17 a. m. hora de República Dominicana
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: respaldo
+  cancel-in-progress: false
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Exportar, cifrar y comprobar
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          CLAVE: ${{ secrets.BACKUP_PASSWORD }}
+        run: |
+          if [ -z "$DB_URL" ] || [ -z "$CLAVE" ]; then echo "Faltan los secretos SUPABASE_DB_URL y/o BACKUP_PASSWORD (Settings → Secrets and variables → Actions)."; exit 1; fi
+          if [ "${#CLAVE}" -lt 16 ]; then echo "BACKUP_PASSWORD es muy corta: usa 16 letras o más."; exit 1; fi
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          command -v 7z >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full >/dev/null; }
+          umask 077
+          export PGTZ=America/Santo_Domingo PGCONNECT_TIMEOUT=20 # fechas en hora de República Dominicana
+          # Si no conecta, se detiene aquí (nunca guarda un respaldo vacío).
+          TABLAS=$(psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select string_agg(tablename, ' ') from pg_catalog.pg_tables where schemaname = 'public'") || { echo "No se pudo conectar a Supabase: revisa el secreto SUPABASE_DB_URL."; exit 1; }
+          DIR="$RUNNER_TEMP/respaldo"; mkdir -p "$DIR"
+          FECHA=$(TZ=America/Santo_Domingo date +%F)
+          RESUMEN="$DIR/LEEME.txt"
+          echo "Respaldo de Elite Scents RD del $FECHA (hora de República Dominicana)." > "$RESUMEN"
+          echo "Cada archivo .csv es una tabla; ábrelo con Excel. Filas por tabla:" >> "$RESUMEN"
+          for T in products orders order_payments customer_profiles coupons coupon_redemptions restock_alerts product_costs store_settings survey_responses site_events product_stock order_items; do
+            case " $TABLAS " in *" $T "*) ;; *) echo "  $T: no existe (todavía)" >> "$RESUMEN"; continue ;; esac
+            FILAS=$(psql "$DB_URL" -X -v ON_ERROR_STOP=1 -c "\copy (select * from public.$T order by 1) to '$DIR/$T.csv' with (format csv, header true, encoding 'UTF8')" | sed -n 's/^COPY \([0-9]*\)$/\1/p')
+            # Excel 2013 reconoce los acentos solo si el archivo empieza con la marca UTF-8 (BOM).
+            printf '\xEF\xBB\xBF' | cat - "$DIR/$T.csv" > "$DIR/$T.tmp" && mv "$DIR/$T.tmp" "$DIR/$T.csv"
+            echo "  $T: $FILAS filas" >> "$RESUMEN"
+          done
+          grep -q '^  products: [1-9]' "$RESUMEN" || { cat "$RESUMEN"; echo "La tabla de perfumes salió vacía: algo anda mal, no se guarda este respaldo."; exit 1; }
+          cat "$RESUMEN"
+          ARCHIVO="$RUNNER_TEMP/respaldo-elite-scents-$FECHA.7z"
+          7z a -t7z -mhe=on -mx=9 -p"$CLAVE" "$ARCHIVO" "$DIR"/* > /dev/null
+          # Comprobación: el respaldo se abre con la contraseña y no sin ella.
+          7z t -p"$CLAVE" "$ARCHIVO" > /dev/null
+          if 7z t -p"contraseña-equivocada" "$ARCHIVO" > /dev/null 2>&1; then echo "El respaldo se abre sin la contraseña correcta: se cancela."; exit 1; fi
+          rm -rf "$DIR"
+          echo "ARCHIVO=$ARCHIVO" >> "$GITHUB_ENV"
+          echo "Respaldo cifrado listo: $(du -h "$ARCHIVO" | cut -f1)."
+      - name: Guardar el respaldo (90 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-elite-scents-${{ github.run_number }}
+          path: ${{ env.ARCHIVO }}
+          retention-days: 90
+          if-no-files-found: error
