@@ -164,6 +164,15 @@ for (const kind of ['vendidos', 'ofertas', 'nuevos']) {
   if (show) { html = html.replace('data-shelf="' + kind + '" hidden>', 'data-shelf="' + kind + '">'); shelvesShown++; }
 }
 if (shelvesShown) html = html.replace('id="destacados" aria-label="Destacados de la tienda" hidden>', 'id="destacados" aria-label="Destacados de la tienda">');
+// Cinta de marcas de la portada: las marcas con más perfumes (al tocar una, el catálogo se filtra por esa marca). Va dos
+// veces seguidas para que el movimiento no tenga corte; la copia no la leen los lectores de pantalla ni recibe el foco.
+const brandCount = new Map();
+for (const p of products) if (p.brand && !/^sets?$/i.test(p.brand.trim())) brandCount.set(p.brand, (brandCount.get(p.brand) || 0) + 1); // «Sets» (estuches) no es una marca
+const topBrands = [...brandCount].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es')).slice(0, 16).map(([brand]) => brand);
+const brandItem = (brand, copy) => '<li><button type="button" data-brand="' + esc(brand) + '"' + (copy ? ' tabindex="-1"' : '') + '>' + esc(brand) + '</button></li>';
+if (!html.includes('<!-- BRAND_MARQUEE -->') || !html.includes('<!-- BRAND_MARQUEE_COPY -->')) throw new Error('Falta la cinta de marcas en la plantilla.');
+html = html.replace('<!-- BRAND_MARQUEE -->', topBrands.map(brand => brandItem(brand)).join('')).replace('<!-- BRAND_MARQUEE_COPY -->', topBrands.map(brand => brandItem(brand, true)).join(''));
+if (topBrands.length < 4) html = html.replace('<section class="brand-strip" id="marcas"', '<section class="brand-strip" id="marcas" hidden');
 
 const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="grid" aria-busy="false">\n' + products.slice(0, FIRST_CARDS).map(p => card(p)).join('\n') + '\n</div>\n' +
   '<script type="application/json" id="catalogInfo">' + JSON.stringify({ src: catalogSrc, total: products.length, ...(stockTracked ? { stock: true } : {}) }) + '<\/script>\n' +

@@ -27,6 +27,7 @@ const FILES = [
   '404.html',
   'tienda.css',
   'tienda.js',
+  'movimiento.js',
   'cookies.js',
   'analytics.js',
   'frame-guard.js',

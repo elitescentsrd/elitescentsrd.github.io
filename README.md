@@ -18,6 +18,14 @@ npm run verify      # build + test + test:images
 
 Un flujo de GitHub Actions repite estos pasos. En `main` publica `_site/` en GitHub Pages; en ramas y pull requests solo construye y adjunta `_site/` como artefacto descargable para revisión.
 
+## Portada con movimiento
+
+`movimiento.js` anima la portada (sin él la tienda funciona igual): perfumes destacados que rotan sobre la foto (lo más vendido, ofertas y nuevos con foto propia), la cinta de marcas (las 16 con más perfumes; tocar una filtra el catálogo; la arma el build), lo que aparece al bajar, las flechas de las secciones y el salto del carrito. Lo que se mueve solo tiene botón de pausa, y con «reducir movimiento» en el aparato todo queda quieto. Solo se animan `transform` y `opacity` (nada empuja la página) y el script no lee medidas que obliguen a recalcularla.
+
+## Panel
+
+`admin.html` muestra una sección a la vez desde el menú lateral (en el celular, desde el botón de arriba): `#inicio` (con «Hoy»), `#pedidos`, `#cobros`, `#avisame`, `#perfumes`, `#inventario`, `#compras`, `#costos`, `#ofertas`, `#cupones`, `#clientes`, `#estadisticas`, `#catalogo` y `#seguridad`. Los enlaces viejos (`#orders-card`…) abren su sección.
+
 ## Base de datos desde GitHub
 
 - **Actions → «Aplicar script en Supabase»**: corre un archivo de `supabase/migrations/` en una sola operación. «ensayar» lo deshace al final (no cambia nada); «aplicar» lo guarda.

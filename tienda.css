@@ -191,3 +191,111 @@ html.guarded:not(.guard-ok) body,html.framed body{display:none!important}
 @media(prefers-color-scheme:dark){:root:not([data-theme]) .testimonials{background:var(--surface-soft)}:root:not([data-theme]) .testimonial-empty{background:var(--surface)}:root:not([data-theme]) .testimonial-empty p{color:var(--ink)}}
 /* «¡Quedan 2!»: pocas unidades (solo si el dueño lleva la cantidad en casa). */
 .stock.stock-low{border-color:#e6c48a;background:#fff4dc;color:#7a4a00}.stock-low-text{color:var(--status-warn)}
+/* ===== Portada con movimiento (movimiento.js). Solo transform y opacidad: nada empuja la página ni retrasa la foto principal.
+   Con «reducir movimiento» en el aparato, todo queda quieto. ===== */
+.header{transition:box-shadow .3s ease}.header.scrolled{box-shadow:0 14px 34px -22px rgba(0,0,0,.55)}
+.hero{position:relative;isolation:isolate;overflow:hidden}
+.hero::before{content:"";position:absolute;z-index:-1;left:-14%;top:-34%;width:72%;aspect-ratio:1;border-radius:50%;background:radial-gradient(closest-side,rgba(189,155,93,.2),transparent);pointer-events:none}
+.hero-visual{position:relative}
+/* Perfumes destacados que rotan sobre la foto */
+.hero-spotlight{position:absolute;left:clamp(14px,3vw,28px);bottom:clamp(14px,3vw,28px);z-index:2;display:grid;gap:10px;width:min(420px,calc(100% - 28px));padding:12px 12px 10px;border:1px solid rgba(215,183,117,.38);border-radius:18px;background:rgba(18,17,14,.9);color:#f4efe4;box-shadow:0 24px 60px -20px rgba(0,0,0,.6)}
+.hero-spotlight[hidden]{display:none}
+.spot-slides{position:relative;height:88px}
+.spot-slide{position:absolute;inset:0;display:grid;grid-template-columns:84px minmax(0,1fr) 38px;align-items:center;gap:14px;width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;opacity:0;transform:translateX(18px);transition:opacity .55s ease,transform .55s cubic-bezier(.2,.7,.2,1);pointer-events:none}
+.spot-slide.active{opacity:1;transform:none;pointer-events:auto}
+.spot-slide img{width:84px;height:84px;border-radius:12px;object-fit:cover;background:#fff}
+.spot-text{display:grid;gap:3px;min-width:0}
+.spot-text small{font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#e2c27f}
+.spot-text strong{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font:400 18px/1.2 Georgia,'Times New Roman',serif;color:#fff}
+.spot-price{font-size:13px;font-weight:700;color:#f4efe4}.spot-price s{margin-left:6px;font-weight:400;color:#c4bcad}
+.spot-go{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#bd9b5d;color:#15130f;font-weight:700;transition:transform .2s ease,background .2s ease}
+.spot-slide:hover .spot-go,.spot-slide:focus-visible .spot-go{transform:translateX(3px);background:#d7b775}
+.spot-slide:focus-visible{outline:3px solid #c6a35e;outline-offset:4px;border-radius:12px}
+.spot-controls{display:none;align-items:center;gap:10px}.hero-spotlight.ready .spot-controls{display:flex}
+.spot-progress{flex:1;height:2px;overflow:hidden;border-radius:2px;background:rgba(244,239,228,.16)}
+.spot-progress span{display:block;height:100%;background:#d7b775;transform:scaleX(0);transform-origin:left}
+.hero-spotlight.ticking .spot-progress span{animation:spot-fill var(--spot-ms,5s) linear forwards}
+.spot-dots{display:flex;gap:2px}
+.spot-dots button{display:grid;place-items:center;width:24px;height:24px;padding:0;border:0;background:none}
+.spot-dots button::before{content:"";width:7px;height:7px;border-radius:4px;background:rgba(244,239,228,.5);transition:width .3s ease,background .3s ease}
+.spot-dots button[aria-current="true"]::before{width:18px;background:#d7b775}
+/* Botones de pausa (dos barras) / seguir (triángulo) de la cinta y de los destacados */
+.marquee-toggle,.spot-pause{display:grid;place-items:center;flex:0 0 auto;padding:0;border-radius:50%;background:transparent;color:#ece5d6}
+.marquee-toggle{width:36px;height:36px;border:1px solid rgba(189,155,93,.55)}.marquee-toggle[hidden]{display:none}
+.spot-pause{width:28px;height:28px;border:1px solid rgba(244,239,228,.4)}
+.marquee-toggle::before,.spot-pause::before{content:"";width:10px;height:12px;background:linear-gradient(90deg,currentColor 0 34%,transparent 34% 66%,currentColor 66%)}
+.spot-pause::before{width:8px;height:10px}
+.marquee-toggle[aria-pressed="true"]::before,.spot-pause[aria-pressed="true"]::before{width:0;height:0;margin-left:3px;background:none;border-style:solid;border-width:6px 0 6px 10px;border-color:transparent transparent transparent currentColor}
+.marquee-toggle:hover,.spot-pause:hover{color:#e2c27f;border-color:#e2c27f}
+/* Cinta de marcas (cada marca filtra el catálogo) */
+.brand-strip{display:flex;align-items:center;gap:14px;padding:0 0 0 max(6vw,20px);background:#1b1915;color:#ece5d6;border-top:1px solid rgba(189,155,93,.28);border-bottom:1px solid rgba(189,155,93,.28)}
+.brand-strip[hidden]{display:none}
+.strip-label{flex:0 0 auto;margin:0;font-size:10px;font-weight:700;letter-spacing:.26em;text-transform:uppercase;color:#c9a866}
+.marquee{position:relative;flex:1;min-width:0;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+.marquee-track{display:flex;width:max-content;animation:marquee 46s linear infinite}
+.marquee-list{display:flex;margin:0;padding:0;list-style:none}
+.marquee-list li{display:flex;align-items:center}
+.marquee-list li::after{content:"✦";font-size:11px;color:#bd9b5d}
+.marquee-list button{padding:16px 26px;border:0;background:none;color:inherit;font:italic 400 21px/1 Georgia,'Times New Roman',serif;white-space:nowrap;transition:color .2s ease}
+.marquee-list button:hover,.marquee-list button:focus-visible{color:#e2c27f}
+.marquee-list button:focus-visible{outline-offset:-4px}
+.marquee:hover .marquee-track,.marquee:focus-within .marquee-track,.brand-strip.paused .marquee-track{animation-play-state:paused}
+/* Con el teclado, la cinta vuelve a su sitio para que la marca con el foco siempre se vea */
+.marquee:has(:focus-visible) .marquee-track{animation:none}
+/* Flechas de las secciones destacadas */
+.shelf-tools{display:flex;align-items:center;gap:16px}
+.shelf-nav{display:flex;gap:8px}.shelf-nav[hidden]{display:none}
+.shelf-arrow{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--ink);font-size:16px;transition:background .2s ease,color .2s ease,border-color .2s ease}
+.shelf-arrow:hover:not(:disabled){background:var(--dark);border-color:var(--dark);color:#fff}
+.shelf-arrow:disabled{opacity:.35;cursor:default}
+.shelf-row{padding:10px 4px 26px;margin:-10px -4px -16px}
+/* Aparecer al bajar. Las tarjetas ya tienen un «transform» neutro: así esconderlas o moverlas no obliga a recalcular la
+   página (pasar de «sin transform» a «con transform» sí lo obliga). */
+.perfume{transform:translateY(0)}
+.reveal{opacity:0;transform:translateY(26px)}
+.reveal.in{opacity:1;transform:none;transition:opacity .75s ease var(--d,0ms),transform .75s cubic-bezier(.2,.7,.2,1) var(--d,0ms)}
+/* Tarjetas: se elevan y la foto se acerca con un brillo al pasar el ratón */
+.photo{overflow:hidden}
+#cartCount.bump{animation:cart-bump .55s cubic-bezier(.3,1.6,.5,1)}
+.wa-float::after{content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none}
+@media(hover:hover) and (prefers-reduced-motion:no-preference){
+  .perfume{transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s ease,border-color .35s ease}
+  .perfume:hover{transform:translateY(-6px);box-shadow:0 26px 46px -24px rgba(20,19,15,.55);border-color:#cdb27a}
+  .photo.custom img{transition:transform .7s cubic-bezier(.2,.7,.2,1)}
+  .perfume:hover .photo.custom img{transform:scale(1.06)}
+  .photo.custom::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.38) 48%,transparent 66%);transform:translateX(-130%)}
+  .perfume:hover .photo.custom::after{transform:translateX(130%);transition:transform 1s ease}
+}
+@media(prefers-reduced-motion:no-preference){
+  .hero::before{animation:aurora 18s ease-in-out infinite alternate}
+  .hero h1{animation:rise 1s cubic-bezier(.2,.7,.2,1) both}
+  .hero-copy{animation:fade-up .9s .15s cubic-bezier(.2,.7,.2,1) both}
+  .hero-actions{animation:fade-up .9s .28s cubic-bezier(.2,.7,.2,1) both}
+  .hero-note{animation:fade-up .9s .4s cubic-bezier(.2,.7,.2,1) both}
+  .hero-visual>img{animation:settle 1.8s cubic-bezier(.2,.7,.2,1) both}
+  .hero-spotlight{animation:fade-up .8s .45s cubic-bezier(.2,.7,.2,1) both}
+  .product-dialog[open],.finder-dialog[open]{animation:dialog-in .38s cubic-bezier(.2,.7,.2,1)}
+  .product-dialog[open]::backdrop,.finder-dialog[open]::backdrop{animation:backdrop-in .38s ease}
+  .wa-float::after{animation:wa-ring 2.4s ease-out 2.5s 3}
+}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@keyframes spot-fill{to{transform:scaleX(1)}}
+@keyframes aurora{to{transform:translate(40%,30%) scale(1.2)}}
+@keyframes rise{from{transform:translateY(30px)}to{transform:none}}
+@keyframes fade-up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes settle{from{transform:scale(1.08)}to{transform:none}}
+@keyframes dialog-in{from{opacity:0;transform:translateY(22px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes backdrop-in{from{opacity:0}}
+@keyframes cart-bump{35%{transform:scale(1.45)}}
+@keyframes wa-ring{from{box-shadow:0 0 0 0 rgba(37,211,102,.55)}to{box-shadow:0 0 0 18px rgba(37,211,102,0)}}
+@media(max-width:750px){
+  .shelf-nav{display:none}
+  .hero-spotlight{left:12px;right:12px;bottom:12px;width:auto;padding:10px 10px 8px}
+  .spot-slides{height:76px}.spot-slide{grid-template-columns:72px minmax(0,1fr) 34px;gap:12px}.spot-slide img{width:72px;height:72px}.spot-go{width:34px;height:34px}
+  .spot-text strong{font-size:16px}
+  .brand-strip{padding-left:14px}.strip-label{display:none}.marquee-list button{padding:14px 20px;font-size:18px}
+}
+@media(prefers-reduced-motion:reduce){
+  .marquee-track{animation:none}.marquee{overflow-x:auto;-webkit-mask-image:none;mask-image:none}.marquee-list[aria-hidden]{display:none}
+  .spot-slide{transition:none}.spot-progress{display:none}.reveal{opacity:1;transform:none}
+}
