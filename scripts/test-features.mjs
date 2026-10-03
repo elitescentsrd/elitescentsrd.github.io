@@ -666,11 +666,20 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const links = [...adminHtml.matchAll(/<a href="#([a-z]+)" data-view-link="([a-z]+)"/g)].map(m => { assert.equal(m[1], m[2], 'Cada enlace del menú lleva a su sección'); return m[1]; });
   const views = [...adminHtml.matchAll(/<section class="admin-card[^"]*" id="([a-z-]+)" data-view="([a-z]+)"/g)].map(m => ({ id: m[1], view: m[2] }));
   assert.deepEqual([...new Set(views.map(v => v.view))].sort(), [...links].sort(), 'Cada sección del menú tiene contenido y todo el contenido está en el menú');
-  assert.deepEqual(links, ['inicio', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
+  assert.deepEqual(links, ['inicio', 'ventas', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'encuesta', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
+  // Inicio solo con lo importante («Hoy»); lo que comparte sección va en pestañas (una cosa por pantalla).
+  assert.deepEqual(views.filter(v => v.view === 'inicio').map(v => v.id), ['today-card'], 'Inicio muestra solo «Hoy»');
+  const tabs = [...adminHtml.matchAll(/id="([a-z-]+)" data-view="([a-z]+)" data-tab="([a-z]+)" data-tab-label="([^"]+)"/g)].map(m => m[2] + '/' + m[3]);
+  assert.deepEqual(tabs, ['pedidos/lista', 'pedidos/nuevo', 'perfumes/buscar', 'perfumes/editar', 'perfumes/fotos'], 'Pestañas en Pedidos y Perfumes');
+  for (const view of new Set(views.map(v => v.view))) {
+    const cards = views.filter(v => v.view === view), tabbed = tabs.filter(t => t.startsWith(view + '/')).length;
+    assert(cards.length === 1 || cards.length === tabbed, 'La sección «' + view + '» muestra una sola tarjeta a la vez');
+  }
+  assert(adminJs.includes("location.hash = '#perfumes/editar'") && adminJs.includes("copy.style.clipPath = 'inset(0 '"), 'Editar abre su pestaña; la píldora de la pestaña se desliza con clip-path');
   const area = adminHtml.slice(adminHtml.indexOf('<div class="admin-views" id="admin-views">'), adminHtml.indexOf('<div class="admin-scrim"'));
   assert.equal((area.match(/<section /g) || []).length, views.length, 'Todas las tarjetas del panel están en una sección del menú');
   for (const id of ['orders-card', 'receivables-card', 'costs-card', 'coupons-card', 'offers-card', 'stock-card', 'product-card', 'security-card']) assert(views.some(v => v.id === id), 'Sigue existiendo #' + id + ' (los enlaces de antes abren su sección)');
-  assert(adminJs.includes("window.addEventListener('hashchange', () => showView());") && adminJs.includes("old?.closest('[data-view]')?.dataset.view || 'inicio'"), 'Una sección a la vez según la dirección (#pedidos), y los enlaces viejos siguen sirviendo');
+  assert(adminJs.includes("window.addEventListener('hashchange', () => showView());") && adminJs.includes("old?.closest('#admin-views > [data-view]')"), 'Una sección a la vez según la dirección (#pedidos), y los enlaces viejos siguen sirviendo');
   assert(adminHtml.includes('id="today-card" data-view="inicio"') && adminJs.includes('function renderToday()') && adminJs.includes("setBadge('pedidos', pending"), '«Hoy» y los números del menú');
   const adminCss = await read('admin.css');
   assert(adminHtml.includes('id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-side"') && adminCss.includes('@media(prefers-reduced-motion:reduce)'), 'En el celular el menú se abre con un botón; sin animaciones si el aparato lo pide');

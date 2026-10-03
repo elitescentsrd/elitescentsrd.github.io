@@ -124,35 +124,65 @@
     loadCustomers(); loadCoupons(); loadStoreSettings(); loadSurvey();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
-  // ---------------- Secciones del panel: una a la vez (#pedidos, #cobros…) con el menú lateral (desplegable en el celular).
+  // ---------------- Secciones del panel: una pantalla a la vez (#pedidos, #cupones…) desde el menú lateral (en el celular,
+  // desde el botón de arriba). Lo que comparte sección va en pestañas (#pedidos/nuevo, #perfumes/editar…).
   const viewLinks = [...document.querySelectorAll('[data-view-link]')];
   const viewLabel = Object.fromEntries(viewLinks.map(a => [a.dataset.viewLink, a.querySelector('span').textContent]));
-  const adminSide = $('#admin-side'), adminScrim = $('#admin-scrim'), menuToggle = $('#admin-menu-toggle');
+  const viewSections = [...document.querySelectorAll('#admin-views > [data-view]')];
+  const tabsOf = view => viewSections.filter(el => el.dataset.view === view && el.dataset.tab);
+  const adminSide = $('#admin-side'), adminScrim = $('#admin-scrim'), menuToggle = $('#admin-menu-toggle'), viewTabs = $('#view-tabs');
   function currentView() {
-    const hash = decodeURIComponent(location.hash.slice(1));
-    if (viewLabel[hash]) return hash;
+    const hash = decodeURIComponent(location.hash.slice(1)), [name, part] = hash.split('/');
+    if (viewLabel[name]) { const tabs = tabsOf(name); return { view: name, tab: tabs.length ? (tabs.find(el => el.dataset.tab === part) || tabs[0]).dataset.tab : '', target: null }; }
     const old = /^[\w-]+$/.test(hash) ? document.getElementById(hash) : null; // enlaces de antes, como #orders-card
-    return old?.closest('[data-view]')?.dataset.view || 'inicio';
+    const section = old?.closest('#admin-views > [data-view]');
+    if (!section) return { view: 'inicio', tab: '', target: null };
+    return { view: section.dataset.view, tab: section.dataset.tab || tabsOf(section.dataset.view)[0]?.dataset.tab || '', target: section === old ? null : old };
   }
   function toggleMenu(open) {
     adminSide.classList.toggle('open', open); adminScrim.hidden = !open; menuToggle.setAttribute('aria-expanded', String(open));
     if (open) adminSide.querySelector('[aria-current="page"]')?.focus();
   }
+  // Pestañas: la píldora dorada es una copia de la lista recortada a la pestaña activa; al cambiar, el recorte se desliza
+  // (el texto y el fondo cambian juntos, sin dos colores a destiempo).
+  function renderTabs(view, tab) {
+    const tabs = tabsOf(view);
+    viewTabs.hidden = !tabs.length;
+    if (!tabs.length) { viewTabs.replaceChildren(); delete viewTabs.dataset.view; return; }
+    if (viewTabs.dataset.view !== view) {
+      const list = (copy) => { const box = document.createElement('div'); box.className = copy ? 'tabs-list tabs-active' : 'tabs-list';
+        if (copy) box.setAttribute('aria-hidden', 'true');
+        for (const el of tabs) { const a = document.createElement('a'); a.href = '#' + view + '/' + el.dataset.tab; a.textContent = el.dataset.tabLabel; a.dataset.tab = el.dataset.tab; if (copy) a.tabIndex = -1; box.append(a); }
+        return box; };
+      viewTabs.replaceChildren(list(false), list(true)); viewTabs.dataset.view = view;
+      viewTabs.setAttribute('aria-label', 'Partes de ' + viewLabel[view]);
+      viewTabs.classList.add('no-slide');
+    }
+    viewTabs.querySelectorAll('.tabs-list:not(.tabs-active) a').forEach(a => a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    requestAnimationFrame(() => {
+      const active = viewTabs.querySelector('.tabs-list:not(.tabs-active) a[aria-current]'), copy = viewTabs.querySelector('.tabs-active');
+      if (!active || !copy) return;
+      const right = copy.clientWidth - active.offsetLeft - active.offsetWidth;
+      copy.style.clipPath = 'inset(0 ' + right + 'px 0 ' + active.offsetLeft + 'px round 999px)';
+      requestAnimationFrame(() => viewTabs.classList.remove('no-slide'));
+    });
+  }
   function showView(scroll = true) {
-    const view = currentView(), hash = decodeURIComponent(location.hash.slice(1));
-    document.querySelectorAll('#admin-views > [data-view]').forEach(el => { el.hidden = el.dataset.view !== view; });
+    const { view, tab, target } = currentView();
+    viewSections.forEach(el => { el.hidden = el.dataset.view !== view || Boolean(tab && el.dataset.tab && el.dataset.tab !== tab); });
     viewLinks.forEach(a => a.dataset.viewLink === view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    renderTabs(view, tab);
     $('#admin-view-name').textContent = viewLabel[view];
     if (!content.classList.contains('hidden')) $('#admin-title').textContent = viewLabel[view];
     toggleMenu(false);
     if (!scroll) return;
-    const target = !viewLabel[hash] && /^[\w-]+$/.test(hash) ? document.getElementById(hash) : null;
     if (target) target.scrollIntoView({ block: 'start' }); else window.scrollTo({ top: 0 });
   }
   menuToggle.addEventListener('click', () => toggleMenu(!adminSide.classList.contains('open')));
   adminScrim.addEventListener('click', () => toggleMenu(false));
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && adminSide.classList.contains('open')) { toggleMenu(false); menuToggle.focus(); } });
   window.addEventListener('hashchange', () => showView());
+  window.addEventListener('resize', () => { const v = currentView(); if (tabsOf(v.view).length) renderTabs(v.view, v.tab); });
   showView(false);
   // En el celular las tablas grandes se ven como tarjetas: cada dato lleva el nombre de su columna.
   function labelCells(tbody, heads) {
@@ -307,10 +337,10 @@
     // Con oferta activa, "Precio" muestra el precio normal y "Precio de oferta" el vigente.
     if(p.original_price){form.elements.price.value=p.original_price;form.elements.offer_price.value=p.price;form.elements.offer_label.value=p.offer_label||'';form.elements.offer_ends.value=toLocalInput(p.offer_ends_at)}
     else{form.elements.offer_price.value='';form.elements.offer_label.value='';form.elements.offer_ends.value=''}
-    $('#form-title').textContent='Editar perfume'; $('#cancel-edit').classList.remove('hidden'); form.scrollIntoView({behavior:'smooth'});
+    $('#form-title').textContent='Editar perfume'; $('#cancel-edit').classList.remove('hidden'); if (location.hash !== '#perfumes/editar') location.hash = '#perfumes/editar'; else window.scrollTo({ top: 0 });
   }
   function resetForm() { form.reset(); form.elements.stock.dataset.loaded=''; form.elements.id.value=''; form.elements.active.checked=true; form.elements.sort_order.value=0; $('#form-title').textContent='Agregar perfume'; $('#cancel-edit').classList.add('hidden'); updateSuggestion(); }
-  $('#cancel-edit').addEventListener('click', resetForm);
+  $('#cancel-edit').addEventListener('click', () => { resetForm(); location.hash = '#perfumes/buscar'; });
   async function upload(file, prefix) {
     if (file.size > MAX_IMAGE_BYTES) throw new Error('Cada imagen debe pesar menos de 3 MB.');
     const ext=(file.name.split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase();
@@ -1190,11 +1220,18 @@
   // ---------------- «Hoy»: lo pendiente en un vistazo (cada cuadro abre su sección) y los números del menú.
   function setBadge(view, n, what) {
     const badge = $('#badge-' + view); if (!badge) return;
-    badge.hidden = !(n > 0); badge.textContent = n > 99 ? '99+' : String(n || '');
-    badge.closest('a').setAttribute('aria-label', viewLabel[view] + (n > 0 ? ' (' + n + ' ' + what + ')' : ''));
+    const before = Number(badge.dataset.count || 0), now = n > 0 ? n : 0;
+    badge.hidden = !now; badge.textContent = now > 99 ? '99+' : String(now || ''); badge.dataset.count = now;
+    badge.closest('a').setAttribute('aria-label', viewLabel[view] + (now ? ' (' + now + ' ' + what + ')' : ''));
+    // Un número que sube (un pedido que acaba de entrar) da un pequeño salto; los demás cambios no se mueven.
+    if (now > before && before >= 0 && badge.dataset.ready && !reduceMotion) badge.animate([{ transform: 'scale(.6)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+    badge.dataset.ready = '1';
   }
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; };
   function renderToday() {
     const grid = $('#today-grid'); if (!grid) return;
+    $('#today-greeting').textContent = greeting();
     $('#today-date').textContent = new Date().toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' });
     const byId = new Map(products.map(p => [Number(p.id), p]));
     const pending = orders.filter(o => (o.status || 'nuevo') === 'nuevo').length;
@@ -1211,11 +1248,24 @@
       ['compras', String(units), units === 1 ? 'perfume por comprar' : 'perfumes por comprar', units ? 'warn' : 'ok', toBuy.length ? 'Lista para La Grada →' : 'Nada pendiente'],
       stockReady === true ? ['inventario', String(low + zero), 'con pocas unidades o en 0', low + zero ? 'warn' : 'ok', tracked.length ? tracked.length + ' con cantidad en casa' : 'Escribe cuántos tienes →'] : null,
     ].filter(Boolean);
-    grid.replaceChildren(...tiles.map(([view, value, text, tone, note]) => {
-      const a = document.createElement('a'), strong = document.createElement('strong'), span = document.createElement('span'), em = document.createElement('em');
-      a.className = 'today-tile ' + tone; a.href = '#' + view; strong.textContent = value; span.textContent = text; em.textContent = note;
-      a.append(strong, ' ', span, ' ', em); return a;
-    }));
+    // Si son los mismos cuadros, solo se cambian los números (no se vuelven a dibujar ni a animar).
+    const key = tiles.map(t => t[0]).join(',');
+    if (grid.dataset.key !== key) {
+      grid.replaceChildren(...tiles.map(([view], i) => {
+        const a = document.createElement('a'), icon = document.createElement('span');
+        a.href = '#' + view; a.style.setProperty('--i', i);
+        icon.className = 'today-ico'; const svg = document.querySelector('[data-view-link="' + view + '"] svg'); if (svg) icon.append(svg.cloneNode(true));
+        a.append(icon, ' ', document.createElement('strong'), ' ', document.createElement('span'), ' ', document.createElement('em'));
+        return a;
+      }));
+      // La entrada escalonada solo la primera vez que se arma «Hoy» (al entrar al panel).
+      if (!grid.dataset.key && !reduceMotion) { grid.classList.add('intro'); setTimeout(() => grid.classList.remove('intro'), 900); }
+      grid.dataset.key = key;
+    }
+    tiles.forEach(([, value, text, tone, note], i) => {
+      const a = grid.children[i]; a.className = 'today-tile ' + tone;
+      a.querySelector('strong').textContent = value; a.querySelector(':scope > span:not(.today-ico)').textContent = text; a.querySelector('em').textContent = note;
+    });
     setBadge('pedidos', pending, pending === 1 ? 'nuevo' : 'nuevos');
     setBadge('cobros', owed ? owed.open : 0, 'por cobrar');
     setBadge('avisame', ready, 'para avisar');
