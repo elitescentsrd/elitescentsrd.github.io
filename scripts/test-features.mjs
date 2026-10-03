@@ -677,4 +677,24 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(adminJs.includes("table.classList.add('cards-on-phone')") && adminCss.includes('.admin-table.cards-on-phone td[data-label]::before{content:attr(data-label)'), 'En el celular las tablas grandes se ven como tarjetas con el nombre de cada dato');
   console.log('Panel por secciones: ' + links.length + ' secciones, «Hoy», contadores, menú y tablas del celular correctos.');
 }
+// ---------------------------------------------------------------- Portada con movimiento (cinta de marcas, destacados, aparecer al bajar)
+{
+  const [mov, css] = await Promise.all([read('movimiento.js'), read('tienda.css')]);
+  assert(template.includes('<ul class="marquee-list"><!-- BRAND_MARQUEE --></ul><ul class="marquee-list" aria-hidden="true" inert><!-- BRAND_MARQUEE_COPY --></ul>'), 'Cinta de marcas en la plantilla (la copia no se lee)');
+  assert(template.indexOf('/tienda.js') < template.indexOf('/movimiento.js') && buildSite.includes("'movimiento.js'"), 'movimiento.js carga después de tienda.js y se publica');
+  assert(template.includes('id="marqueeToggle" aria-pressed="false"') && template.includes('id="spotPause" aria-pressed="false"'), 'La cinta y los destacados se pueden pausar (lo que se mueve solo debe poder detenerse)');
+  // Portada guardada: marcas reales (sin «Sets», que son estuches) y la copia de la cinta sin foco.
+  const brands = [...indexHtml.matchAll(/<button type="button" data-brand="([^"]+)">/g)].map(m => m[1]);
+  assert(brands.length >= 8 && !brands.some(b => /^sets?$/i.test(b)), 'La portada trae la cinta con las marcas con más perfumes');
+  assert.equal([...indexHtml.matchAll(/data-brand="[^"]+" tabindex="-1">/g)].length, brands.length, 'La copia de la cinta no recibe el foco');
+  assert(indexHtml.includes('<script defer src="/movimiento.js"></script>') && indexHtml.includes('id="heroSpotlight"'), 'La portada guardada tiene los destacados y movimiento.js');
+  // tienda.js: destacados solo con foto y sin agotados; tocar uno abre su ficha; tocar una marca filtra el catálogo.
+  assert(tiendaJs.includes("p.availability!=='agotado'&&validImage(p.image_url)") && tiendaJs.includes('.hero-spotlight [data-open-product]') && tiendaJs.includes("e.target.closest('[data-brand]')"), 'Destacados y cinta conectados al catálogo');
+  assert(tiendaJs.includes("new Intl.Collator('es',{sensitivity:'base'}).compare") && !tiendaJs.includes("localeCompare(b,'es',{sensitivity:'base'})"), 'Orden alfabético con un solo comparador (rápido en el celular)');
+  // Con «reducir movimiento» todo queda quieto, y movimiento.js no lee medidas que obliguen a recalcular la página al abrirla.
+  assert(mov.includes("matchMedia?.('(prefers-reduced-motion: reduce)')") && /@media\(prefers-reduced-motion:reduce\)\{\s*\.marquee-track\{animation:none\}/.test(css), 'Con «reducir movimiento» todo queda quieto');
+  assert(!/getBoundingClientRect|offsetHeight|scrollWidth|innerHeight\s*\*/.test(mov) && (mov.match(/offsetWidth/g) || []).length === 1, 'movimiento.js no fuerza cálculos de la página (solo el salto del carrito, al agregar)');
+  assert(/\.reveal\{opacity:0;transform:translateY\(26px\)\}/.test(css) && css.includes('.perfume{transform:translateY(0)}'), 'Aparecer al bajar solo con opacidad y transform');
+  console.log('Portada con movimiento: cinta de ' + brands.length + ' marcas, destacados, pausa y modo quieto correctos.');
+}
 console.log('Pruebas de funciones nuevas superadas.');
