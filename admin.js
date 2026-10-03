@@ -119,17 +119,59 @@
   }
   function showAdmin() {
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
-    loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden');
+    loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden'); showView(false);
     loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));loadFinanzas();loadStats();});
     loadCustomers(); loadCoupons(); loadStoreSettings(); loadSurvey();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
+  // ---------------- Secciones del panel: una a la vez (#pedidos, #cobros…) con el menú lateral (desplegable en el celular).
+  const viewLinks = [...document.querySelectorAll('[data-view-link]')];
+  const viewLabel = Object.fromEntries(viewLinks.map(a => [a.dataset.viewLink, a.querySelector('span').textContent]));
+  const adminSide = $('#admin-side'), adminScrim = $('#admin-scrim'), menuToggle = $('#admin-menu-toggle');
+  function currentView() {
+    const hash = decodeURIComponent(location.hash.slice(1));
+    if (viewLabel[hash]) return hash;
+    const old = /^[\w-]+$/.test(hash) ? document.getElementById(hash) : null; // enlaces de antes, como #orders-card
+    return old?.closest('[data-view]')?.dataset.view || 'inicio';
+  }
+  function toggleMenu(open) {
+    adminSide.classList.toggle('open', open); adminScrim.hidden = !open; menuToggle.setAttribute('aria-expanded', String(open));
+    if (open) adminSide.querySelector('[aria-current="page"]')?.focus();
+  }
+  function showView(scroll = true) {
+    const view = currentView(), hash = decodeURIComponent(location.hash.slice(1));
+    document.querySelectorAll('#admin-views > [data-view]').forEach(el => { el.hidden = el.dataset.view !== view; });
+    viewLinks.forEach(a => a.dataset.viewLink === view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    $('#admin-view-name').textContent = viewLabel[view];
+    if (!content.classList.contains('hidden')) $('#admin-title').textContent = viewLabel[view];
+    toggleMenu(false);
+    if (!scroll) return;
+    const target = !viewLabel[hash] && /^[\w-]+$/.test(hash) ? document.getElementById(hash) : null;
+    if (target) target.scrollIntoView({ block: 'start' }); else window.scrollTo({ top: 0 });
+  }
+  menuToggle.addEventListener('click', () => toggleMenu(!adminSide.classList.contains('open')));
+  adminScrim.addEventListener('click', () => toggleMenu(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && adminSide.classList.contains('open')) { toggleMenu(false); menuToggle.focus(); } });
+  window.addEventListener('hashchange', () => showView());
+  showView(false);
+  // En el celular las tablas grandes se ven como tarjetas: cada dato lleva el nombre de su columna.
+  function labelCells(tbody, heads) {
+    for (const tr of tbody.rows) [...tr.cells].forEach((td, i) => { if (heads[i] && td.colSpan === 1) td.dataset.label = heads[i]; else delete td.dataset.label; });
+  }
+  document.querySelectorAll('#admin-views .admin-table').forEach(table => {
+    const tbody = table.tBodies[0], heads = [...(table.tHead?.rows[0]?.cells || [])].map(th => th.textContent.trim());
+    if (!tbody || heads.length < 5) return;
+    table.classList.add('cards-on-phone'); table.parentElement.classList.add('cards-wrap'); labelCells(tbody, heads);
+    new MutationObserver(() => labelCells(tbody, heads)).observe(tbody, { childList: true, subtree: true });
+  });
+
   // Pedidos sin atender (estado "nuevo"): contador visible y en el título de la pestaña.
   function updatePending() {
     const pending=orders.filter(o=>(o.status||'nuevo')==='nuevo').length;
     const label=$('#pending-count');
     if(label){label.textContent=pending?pending+(pending===1?' pedido nuevo por atender':' pedidos nuevos por atender'):'No hay pedidos nuevos por atender.';label.classList.toggle('has-pending',pending>0)}
     document.title=(pending?'('+pending+') ':'')+'Panel | Elite Scents RD';
+    renderToday();
   }
   // Sonido corto de aviso (el navegador solo permite audio después de que hayas hecho clic en la página).
   function beep() {
@@ -232,7 +274,7 @@
       if(o.coupon_code){const note=document.createElement('small');note.textContent='Cupón '+o.coupon_code+' (−'+money(o.discount_amount)+')';total.append(document.createElement('br'),note)}
       if(paymentsReady&&F&&F.SOLD.includes(String(o.status||'nuevo'))){const b=F.balances([o],payments).rows[0];if(b&&b.total){const note=document.createElement('small');note.className='order-balance'+(b.due>0?' due':'');note.textContent=b.due>0?'Abonado '+rd(b.paid)+' · Falta '+rd(b.due):'Pagado ✓';total.append(note)}}
       const manage=document.createElement('td');manage.className='admin-actions';
-      const statusSelect=document.createElement('select');
+      const statusSelect=document.createElement('select');statusSelect.setAttribute('aria-label','Estado del pedido '+o.id);
       ['nuevo','confirmado','preparando','enviado','entregado','cancelado'].forEach(v=>{const op=document.createElement('option');op.value=v;op.textContent=v.replaceAll('_',' ');op.selected=(o.status||'nuevo')===v;statusSelect.append(op)});
       const eta=document.createElement('input');eta.type='text';eta.maxLength=120;eta.placeholder='Ej. 2-3 días';eta.value=o.estimated_delivery||'';eta.setAttribute('aria-label','Entrega estimada del pedido '+o.id);
       const save=document.createElement('button');save.type='button';save.className='btn btn-secondary';save.textContent='Guardar';
@@ -1014,7 +1056,7 @@
     ['#stock-label', '#stock-help'].forEach(sel => $(sel).classList.toggle('hidden', stockReady !== true));
     renderStock();
     if (!F) return;
-    renderReceivables(); renderRestock(); renderPurchase(); renderCosts(); renderProfit(); updateSuggestion();
+    renderReceivables(); renderRestock(); renderPurchase(); renderCosts(); renderProfit(); updateSuggestion(); renderToday();
   }
 
   // ---------------- Cuentas por cobrar y abonos
@@ -1144,6 +1186,42 @@
   // ---------------- Lista de compra para La Grada
   const purchaseEdits = new Map();
   let purchaseRows = [];
+
+  // ---------------- «Hoy»: lo pendiente en un vistazo (cada cuadro abre su sección) y los números del menú.
+  function setBadge(view, n, what) {
+    const badge = $('#badge-' + view); if (!badge) return;
+    badge.hidden = !(n > 0); badge.textContent = n > 99 ? '99+' : String(n || '');
+    badge.closest('a').setAttribute('aria-label', viewLabel[view] + (n > 0 ? ' (' + n + ' ' + what + ')' : ''));
+  }
+  function renderToday() {
+    const grid = $('#today-grid'); if (!grid) return;
+    $('#today-date').textContent = new Date().toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long' });
+    const byId = new Map(products.map(p => [Number(p.id), p]));
+    const pending = orders.filter(o => (o.status || 'nuevo') === 'nuevo').length;
+    const owed = F && paymentsReady ? F.balances(orders, payments).totals : null;
+    const waiting = (alerts || []).filter(a => (a.status || 'pendiente') === 'pendiente');
+    const ready = waiting.filter(a => byId.get(Number(a.product_id))?.availability === 'disponible').length;
+    const tracked = products.filter(p => stockRows.has(Number(p.id)));
+    const low = tracked.filter(p => { const t = stockTotal(p.id); return t >= 1 && t <= 3; }).length, zero = tracked.filter(p => stockTotal(p.id) === 0).length;
+    const toBuy = purchaseRows.filter(r => r.buy > 0), units = toBuy.reduce((sum, r) => sum + r.buy, 0);
+    const tiles = [
+      ['pedidos', String(pending), pending === 1 ? 'pedido nuevo por confirmar' : 'pedidos nuevos por confirmar', pending ? 'warn' : 'ok', pending ? 'Confirmar →' : 'Al día'],
+      owed ? ['cobros', rd(owed.due), owed.open ? 'por cobrar en ' + owed.open + (owed.open === 1 ? ' pedido' : ' pedidos') : 'por cobrar', owed.due > 0 ? 'warn' : 'ok', owed.due > 0 ? 'Ver cobros →' : 'Nadie te debe'] : null,
+      ['avisame', String(ready), ready === 1 ? 'cliente para avisar: ya llegó su perfume' : 'clientes para avisar: ya llegó su perfume', ready ? 'warn' : 'ok', waiting.length + ' esperando en total'],
+      ['compras', String(units), units === 1 ? 'perfume por comprar' : 'perfumes por comprar', units ? 'warn' : 'ok', toBuy.length ? 'Lista para La Grada →' : 'Nada pendiente'],
+      stockReady === true ? ['inventario', String(low + zero), 'con pocas unidades o en 0', low + zero ? 'warn' : 'ok', tracked.length ? tracked.length + ' con cantidad en casa' : 'Escribe cuántos tienes →'] : null,
+    ].filter(Boolean);
+    grid.replaceChildren(...tiles.map(([view, value, text, tone, note]) => {
+      const a = document.createElement('a'), strong = document.createElement('strong'), span = document.createElement('span'), em = document.createElement('em');
+      a.className = 'today-tile ' + tone; a.href = '#' + view; strong.textContent = value; span.textContent = text; em.textContent = note;
+      a.append(strong, ' ', span, ' ', em); return a;
+    }));
+    setBadge('pedidos', pending, pending === 1 ? 'nuevo' : 'nuevos');
+    setBadge('cobros', owed ? owed.open : 0, 'por cobrar');
+    setBadge('avisame', ready, 'para avisar');
+    setBadge('compras', toBuy.length, 'por comprar');
+    setBadge('inventario', low + zero, 'con pocas unidades');
+  }
   function renderPurchase() {
     if (!F || !$('#purchase-body')) return;
     const { rows, unmatched } = F.purchaseList(orders, products, alerts, { includeAvailable: $('#purchase-available').checked, includeWaiting: $('#purchase-waiting').checked, lines: orderLines, stock: stockReady === true ? stockRows : null });
@@ -1244,7 +1322,7 @@
     check.addEventListener('change', () => { check.checked ? costsSelected.add(Number(p.id)) : costsSelected.delete(Number(p.id)); });
     pick.append(check);
     const costCell = document.createElement('td'), cost = document.createElement('input'); cost.className = 'cost-input'; cost.inputMode = 'decimal'; cost.value = info.costs.map(c => c.toLocaleString('en-US')).join(' / '); cost.setAttribute('aria-label', 'Costo de ' + p.name); costCell.append(cost);
-    const stCell = document.createElement('td'), strategy = document.createElement('select'); strategy.className = 'cost-select';
+    const stCell = document.createElement('td'), strategy = document.createElement('select'); strategy.className = 'cost-select'; strategy.setAttribute('aria-label', 'Estrategia de ' + p.name);
     [['normal', 'Normal'], ['gancho', 'Gancho'], ['exclusivo', 'Exclusivo']].forEach(([v, t]) => strategy.append(new Option(t, v, false, info.strategy === v))); stCell.append(strategy);
     const compCell = document.createElement('td'), comp = document.createElement('input'); comp.className = 'cost-input'; comp.inputMode = 'decimal'; comp.placeholder = 'opcional'; comp.value = info.competitor ? info.competitor.toLocaleString('en-US') : ''; comp.setAttribute('aria-label', 'Precio de la competencia de ' + p.name); compCell.append(comp);
     const fmt = list => list.map(c => rd(c.profit) + ' (' + Math.round(c.margin * 100) + '%)').join(' / ');

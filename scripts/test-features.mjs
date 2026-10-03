@@ -579,7 +579,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(template.includes('<script defer src="/analytics.js"></script>') && productPage.includes('<script defer src="/supabase-config.js"></script><script defer src="/analytics.js"></script>') && productPage.includes('<body data-product-id="' + sample.id + '">') && directory.includes('/analytics.js'), 'Estadísticas en la portada, la lista y cada página de perfume');
   assert(buildSite.includes("'analytics.js'"), 'analytics.js se publica');
   assert(html['privacidad.html'].includes('id="estadisticas"') && /se borra a los 2 días/.test(html['privacidad.html']) && (await read('cookies.js')).includes('contaremos de forma anónima'), 'La privacidad y el aviso de cookies explican las estadísticas');
-  assert(adminHtml.includes('id="stats-card"') && adminHtml.includes('href="#stats-card"') && adminJs.includes("'/rest/v1/rpc/admin_site_stats'") && adminHtml.includes('id="stats-missing"'), 'El panel muestra estadísticas y búsquedas sin resultado');
+  assert(adminHtml.includes('id="stats-card" data-view="estadisticas"') && adminHtml.includes('href="#estadisticas"') && adminJs.includes("'/rest/v1/rpc/admin_site_stats'") && adminHtml.includes('id="stats-missing"'), 'El panel muestra estadísticas y búsquedas sin resultado');
   // 3. Publicación automática: GitHub acepta el aviso de Supabase y espera a juntar cambios.
   const pagesYml = await read('.github/workflows/pages.yml');
   assert(/repository_dispatch:\s*\n\s*types: \[catalogo\]/.test(pagesYml) && /if: github.event_name == 'repository_dispatch'\n\s*run: sleep 60/.test(pagesYml), 'Publicación automática al guardar en el panel');
@@ -656,9 +656,25 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert((await read('tienda.css')).includes('.stock.stock-low{'), 'Estilo de «¡Quedan…!»');
   // Panel: inventario, cantidad en el formulario, elegir perfume en un pedido a mano y respaldo.
   for (const id of ['stock-card', 'stock-body', 'stock-label', 'order-pick', 'order-products', 'order-pick-add']) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en el panel');
-  assert(adminHtml.includes('href="#stock-card"') && adminJs.includes("'/rest/v1/product_stock?on_conflict=product_id,size_index'") && adminJs.includes("resolution=merge-duplicates"), 'Inventario en el menú; guarda con upsert');
+  assert(adminHtml.includes('id="stock-card" data-view="inventario"') && adminHtml.includes('href="#inventario"') && adminJs.includes("'/rest/v1/product_stock?on_conflict=product_id,size_index'") && adminJs.includes("resolution=merge-duplicates"), 'Inventario en el menú; guarda con upsert');
   assert(adminJs.includes("'/rest/v1/order_items?select=order_id,position,product_id,name,size,size_index,qty,stock_taken") && adminJs.includes('lines: orderLines'), 'Ganancia, compras y «más pedidos» con las líneas guardadas');
   assert(adminJs.includes("['cantidad_en_casa', '/rest/v1/product_stock?select=*") && adminJs.includes("['lineas_de_pedido', '/rest/v1/order_items?select=*") && adminJs.includes('if (!missing(err)) backup.sin_acceso.push'), 'El respaldo del panel incluye cantidades y líneas (y no se queja si aún no existen)');
   console.log('Cantidad en casa: «¡Quedan…!» en tienda, portada y página del perfume, inventario y pedido a mano correctos.');
+}
+// ---------------------------------------------------------------- Panel por secciones (una a la vez, con menú lateral)
+{
+  const links = [...adminHtml.matchAll(/<a href="#([a-z]+)" data-view-link="([a-z]+)"/g)].map(m => { assert.equal(m[1], m[2], 'Cada enlace del menú lleva a su sección'); return m[1]; });
+  const views = [...adminHtml.matchAll(/<section class="admin-card[^"]*" id="([a-z-]+)" data-view="([a-z]+)"/g)].map(m => ({ id: m[1], view: m[2] }));
+  assert.deepEqual([...new Set(views.map(v => v.view))].sort(), [...links].sort(), 'Cada sección del menú tiene contenido y todo el contenido está en el menú');
+  assert.deepEqual(links, ['inicio', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
+  const area = adminHtml.slice(adminHtml.indexOf('<div class="admin-views" id="admin-views">'), adminHtml.indexOf('<div class="admin-scrim"'));
+  assert.equal((area.match(/<section /g) || []).length, views.length, 'Todas las tarjetas del panel están en una sección del menú');
+  for (const id of ['orders-card', 'receivables-card', 'costs-card', 'coupons-card', 'offers-card', 'stock-card', 'product-card', 'security-card']) assert(views.some(v => v.id === id), 'Sigue existiendo #' + id + ' (los enlaces de antes abren su sección)');
+  assert(adminJs.includes("window.addEventListener('hashchange', () => showView());") && adminJs.includes("old?.closest('[data-view]')?.dataset.view || 'inicio'"), 'Una sección a la vez según la dirección (#pedidos), y los enlaces viejos siguen sirviendo');
+  assert(adminHtml.includes('id="today-card" data-view="inicio"') && adminJs.includes('function renderToday()') && adminJs.includes("setBadge('pedidos', pending"), '«Hoy» y los números del menú');
+  const adminCss = await read('admin.css');
+  assert(adminHtml.includes('id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-side"') && adminCss.includes('@media(prefers-reduced-motion:reduce)'), 'En el celular el menú se abre con un botón; sin animaciones si el aparato lo pide');
+  assert(adminJs.includes("table.classList.add('cards-on-phone')") && adminCss.includes('.admin-table.cards-on-phone td[data-label]::before{content:attr(data-label)'), 'En el celular las tablas grandes se ven como tarjetas con el nombre de cada dato');
+  console.log('Panel por secciones: ' + links.length + ' secciones, «Hoy», contadores, menú y tablas del celular correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');

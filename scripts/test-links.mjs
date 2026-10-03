@@ -22,8 +22,9 @@ const files = await walk(OUT);
 const pages = files.filter(f => f.endsWith('.html') && !f.startsWith('opaco/'));
 const fileSet = new Set(files);
 const idsCache = new Map();
+// Anclas válidas: los id de la página y las secciones del panel (#pedidos abre la sección data-view="pedidos").
 async function idsOf(path) {
-  if (!idsCache.has(path)) idsCache.set(path, new Set([...(await readFile(join(OUT, path), 'utf8')).matchAll(/\sid="([^"]+)"/g)].map(m => m[1])));
+  if (!idsCache.has(path)) idsCache.set(path, new Set([...(await readFile(join(OUT, path), 'utf8')).matchAll(/\s(?:id|data-view)="([^"]+)"/g)].map(m => m[1])));
   return idsCache.get(path);
 }
 const catalog = JSON.parse(await readFile(join(OUT, 'perfumes.json'), 'utf8'));
