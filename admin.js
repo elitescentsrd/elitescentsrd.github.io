@@ -1277,7 +1277,13 @@
     const now = new Date().toISOString();
     for (let i = 0; i < rows.length; i += 100) {
       const chunk = rows.slice(i, i + 100).map(r => ({ ...r, updated_at: now }));
-      const saved = await api('/rest/v1/product_costs?on_conflict=product_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(chunk) });
+      let saved;
+      try { saved = await api('/rest/v1/product_costs?on_conflict=product_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(chunk) }); }
+      catch (err) {
+        // Una tabla de costos vieja (sin las columnas del panel): se arregla con un script, no escribiendo otra vez.
+        if (/PGRST204|could not find the '\w+' column of 'product_costs'|42703/i.test(String(err?.message || err))) throw new Error('La tabla de costos de Supabase es una versión vieja: corre el script «REPARAR LA TABLA DE COSTOS» (3 de octubre) y vuelve a intentarlo.');
+        throw err;
+      }
       for (const r of saved || []) costRows.set(Number(r.product_id), r);
     }
   }

@@ -135,13 +135,12 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
     else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', 'aplicar supabase/migrations/20260930120000_funciones_y_perfumes_nuevos.sql');
     else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
   }
-  // Diagnóstico temporal: qué columnas tiene product_costs (PGRST204 = no existe; 401 = existe). Filtro sin coincidencias.
-  for (const col of ['id', 'product_id', 'costs', 'cost', 'costo', 'unit_cost', 'price', 'precio', 'strategy', 'competitor_price', 'supplier', 'updated_at', 'created_at', 'notes', 'name', 'currency', 'quantity', 'margin']) {
-    const d = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { [col]: null });
-    record('INFO', 'columna product_costs.' + col, d.json?.code === 'PGRST204' ? 'NO existe' : d.status === 401 ? 'existe' : 'HTTP ' + d.status + ' ' + (d.json?.code || '') + ' ' + String(d.json?.message || '').slice(0, 100));
-  }
+  // Si la tabla de costos es una vieja sin las columnas del panel, la API rechaza la petición antes de tocar la base de
+  // datos (PGRST204): un visitante igual no escribe nada, pero el panel tampoco puede guardar costos hasta repararla.
   const w = await call('PATCH', '/rest/v1/product_costs?product_id=eq.-1', { strategy: 'normal' });
-  denied(w) || pending(w) ? record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status) : record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status + ' ' + (w.json?.code || '') + ' ' + String(w.json?.message || w.text || '').slice(0, 160));
+  if (denied(w) || pending(w)) record('OK', 'PATCH /product_costs denegado a visitantes', 'HTTP ' + w.status);
+  else if (w.json?.code === 'PGRST204') record('AVISO', 'La tabla de costos no tiene las columnas del panel (un visitante igual no puede escribir)', 'aplicar supabase/migrations/20261003200000_reparar_tabla_de_costos.sql');
+  else record('FALLO', 'PATCH /product_costs NO está denegado a visitantes', 'HTTP ' + w.status + ' ' + (w.json?.code || '') + ' ' + String(w.json?.message || w.text || '').slice(0, 160));
 }
 // 4g. Estadísticas y publicación automática (migración 20261003120000_estadisticas_y_publicacion.sql): la tienda anota
 //     eventos anónimos, pero un visitante nunca lee la tabla ni el resumen del panel.
