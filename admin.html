@@ -53,7 +53,7 @@
     </section>
 
     <div id="admin-content" class="hidden">
-      <nav class="admin-nav" aria-label="Secciones del panel"><a href="#sales-card">Resumen</a><a href="#stats-card">Estadísticas</a><a href="#orders-card">Pedidos</a><a href="#receivables-card">Cobros</a><a href="#restock-card">Avísame</a><a href="#purchase-card">Compras</a><a href="#product-card">Producto</a><a href="#costs-card">Costos y precios</a><a href="#offers-card">Ofertas</a><a href="#coupons-card">Cupones</a><a href="#catalog-card">Catálogo PDF</a></nav>
+      <nav class="admin-nav" aria-label="Secciones del panel"><a href="#sales-card">Resumen</a><a href="#stats-card">Estadísticas</a><a href="#orders-card">Pedidos</a><a href="#receivables-card">Cobros</a><a href="#restock-card">Avísame</a><a href="#purchase-card">Compras</a><a href="#stock-card">Inventario</a><a href="#product-card">Producto</a><a href="#costs-card">Costos y precios</a><a href="#offers-card">Ofertas</a><a href="#coupons-card">Cupones</a><a href="#catalog-card">Catálogo PDF</a></nav>
       <section class="admin-card" id="sales-card">
         <div class="admin-head"><div><p class="eyebrow">Resumen</p><h2>Resumen de ventas</h2><p class="muted">Se calcula con los pedidos del panel. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados; los nuevos quedan "por confirmar" y los cancelados no suman.</p></div><label class="sales-period-label">Período<select id="sales-period"><option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="all">Todo el historial</option></select></label></div>
         <div class="sales-kpis" id="sales-kpis"></div>
@@ -109,6 +109,7 @@
           <label class="span-2">Subir galería (máximo 3)<input name="gallery_files" type="file" multiple accept="image/jpeg,image/png,image/webp"></label>
           <label class="span-2" id="inspired-label">Inspirado en (opcional)<input name="inspired_by" maxlength="120" placeholder="Creed Aventus"></label>
           <label id="cost-label">Costo del suplidor (privado)<input name="cost" inputmode="decimal" placeholder="2,650 o 2,650 / 3,400"></label>
+          <label id="stock-label">Cantidad en casa (privado)<input name="stock" inputmode="numeric" maxlength="40" placeholder="Vacío = no llevar la cuenta" aria-describedby="stock-help"></label>
           <label id="strategy-label">Estrategia de precio<select name="strategy"><option value="normal">Normal</option><option value="gancho">Gancho (muy buscado)</option><option value="exclusivo">Exclusivo (nicho)</option></select></label>
           <p class="span-4 muted" id="price-suggestion" aria-live="polite"></p>
           <label class="span-4">Descripción<textarea name="description" maxlength="1200" placeholder="Descripción breve del aroma y la ocasión recomendada"></textarea></label>
@@ -118,6 +119,7 @@
           <label><input name="active" type="checkbox" checked> Producto visible</label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar producto</button><span id="product-status" aria-live="polite"></span></div>
           <p class="span-4 muted">Los perfumes con precio de RD$7,000 o más se guardan automáticamente como “Solo por encargo”, salvo que los marques como “Agotado”.</p>
+          <p class="span-4 muted" id="stock-help">Cantidad en casa (opcional): se descuenta sola al confirmar un pedido; en 0 el perfume pasa a “Agotado” y, cuando vuelves a tener, a “Disponible”. Con 3 o menos la tienda muestra “¡Quedan 2!”. Varios tamaños: una cantidad por tamaño, por ejemplo “2 / 1”.</p>
         </form>
       </section>
 
@@ -264,7 +266,11 @@
           <label>Teléfono<input name="phone" type="tel" maxlength="40" required></label>
           <label>Importe acordado<input name="amount" maxlength="70"></label>
           <label>Estado<select name="status"><option value="nuevo">Nuevo</option><option value="confirmado">Confirmado</option><option value="entregado">Entregado</option><option value="cancelado">Cancelado</option></select></label>
-          <label class="span-2">Productos<textarea name="items" maxlength="2000" required></textarea></label>
+          <label class="span-2">Agregar perfume<input id="order-pick" list="order-products" autocomplete="off" placeholder="Escribe el nombre y elígelo de la lista"></label>
+          <label>Cantidad<input id="order-pick-qty" type="number" min="1" max="99" value="1"></label>
+          <div class="admin-actions order-pick-actions"><button id="order-pick-add" class="btn btn-secondary" type="button">Agregar al pedido</button></div>
+          <datalist id="order-products"></datalist>
+          <label class="span-2">Productos (uno por línea)<textarea name="items" maxlength="2000" required placeholder="2x Lattafa Asad (100 ML)"></textarea></label>
           <label class="span-2">Notas internas<textarea name="notes" maxlength="2000"></textarea></label>
           <div class="span-4 admin-actions"><button class="btn" type="submit">Guardar pedido</button><span id="order-status" aria-live="polite"></span></div>
         </form>
@@ -310,6 +316,16 @@
         <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Comprar</th><th>Perfume</th><th>Tamaño</th><th>En pedidos</th><th>Personas esperando</th><th>Estado</th><th>Costo</th><th>Subtotal</th></tr></thead><tbody id="purchase-body"></tbody></table></div>
         <div id="purchase-unmatched" class="muted"></div>
         <div class="admin-actions"><button id="purchase-copy" class="btn" type="button">Copiar mensaje para WhatsApp</button><button id="purchase-csv" class="btn btn-secondary" type="button">Descargar (Excel)</button><span id="purchase-status" aria-live="polite"></span></div>
+      </section>
+
+      <section class="admin-card" id="stock-card">
+        <div class="admin-head"><div><p class="eyebrow">Inventario</p><h2>Cantidad en casa</h2><p class="muted">Opcional, perfume por perfume. Al confirmar un pedido se descuenta sola (y se devuelve si lo cancelas, lo vuelves a «nuevo» o lo borras). Al llegar a 0 el perfume pasa a «Agotado» y, cuando vuelves a tener, a «Disponible»; los «Solo por encargo» no cambian. Con 3 o menos, la tienda muestra «¡Quedan 2!». Vacío = no llevar la cuenta (como hoy). Varios tamaños: una cantidad por tamaño, por ejemplo «2 / 1».</p></div></div>
+        <p id="stock-notice" class="muted hidden"></p>
+        <div class="sales-kpis" id="stock-kpis"></div>
+        <div class="offer-filters"><label class="offer-filter-search">Buscar<input id="stock-search" type="search" placeholder="Perfume o marca" autocomplete="off"></label><label>Mostrar<select id="stock-view"><option value="all">Todos</option><option value="tracked">Los que llevo</option><option value="low">Pocas unidades (3 o menos)</option><option value="zero">En 0</option><option value="untracked">Sin cantidad</option></select></label></div>
+        <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Tamaño</th><th>En casa</th><th>En la tienda</th><th>Acciones</th></tr></thead><tbody id="stock-body"></tbody></table></div>
+        <p id="stock-count" class="muted"></p>
+        <div class="admin-actions"><button id="stock-more" class="btn btn-secondary hidden" type="button">Mostrar más</button><button id="stock-csv" class="btn btn-secondary" type="button">Descargar inventario (Excel)</button><span id="stock-status" aria-live="polite"></span></div>
       </section>
     </div>
   </main>

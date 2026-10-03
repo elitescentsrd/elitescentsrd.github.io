@@ -71,3 +71,4 @@ body.admin-light input[type="file"]{color:#171714!important}
 @media(max-width:700px){.admin-nav{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}.admin-nav a{flex:0 0 auto}}
 /* Tablas cortas de los resúmenes (ventas y estadísticas): sin ancho mínimo, para que se vea la última columna */
 .sales-columns .admin-table{min-width:0}
+.order-pick-actions{align-self:end}

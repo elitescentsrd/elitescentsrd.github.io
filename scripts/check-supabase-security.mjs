@@ -156,6 +156,22 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
   else if (pending(st)) record('AVISO', 'admin_site_stats todavía no existe en Supabase', MIG);
   else record('FALLO', 'Un visitante puede ver el resumen de estadísticas', 'HTTP ' + st.status);
 }
+// 4h. Líneas de pedido y cantidad en casa (migración 20261003180000_lineas_de_pedido_y_existencias.sql): un visitante
+//     solo ve «¡Quedan…!» (products.stock_left, de 0 a 3); nunca las líneas de los pedidos ni la cantidad exacta.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST205';
+  const MIG = 'aplicar supabase/migrations/20261003180000_lineas_de_pedido_y_existencias.sql';
+  for (const table of ['order_items', 'product_stock']) {
+    const r = await call('GET', '/rest/v1/' + table + '?select=*&limit=1');
+    if (denied(r) || ((r.status === 200 || r.status === 206) && Array.isArray(r.json) && r.json.length === 0)) record('OK', 'Visitantes no leen ' + table, 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', 'La tabla ' + table + ' todavía no existe en Supabase', MIG);
+    else record('FALLO', 'Un visitante puede leer ' + table, 'HTTP ' + r.status);
+  }
+  const s = await call('GET', '/rest/v1/products?select=stock_left&stock_left=gt.3&limit=1');
+  if ((s.status === 200 || s.status === 206) && Array.isArray(s.json) && s.json.length === 0) record('OK', '«¡Quedan…!» nunca publica más de 3', 'HTTP ' + s.status);
+  else if (s.status === 400) record('AVISO', 'products.stock_left todavía no existe en Supabase', MIG);
+  else record('FALLO', 'products.stock_left publica una cantidad mayor que 3', 'HTTP ' + s.status);
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

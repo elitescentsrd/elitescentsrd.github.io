@@ -1,7 +1,7 @@
 name: Respaldo semanal de la tienda
 
 # Cada lunes (y cuando lo pidas en Actions → «Respaldo semanal de la tienda» → Run workflow) descarga las tablas de la
-# tienda en archivos CSV que abre Excel 2013 (perfumes, pedidos, abonos, clientes, cupones, avisos, costos, encuesta y
+# tienda en archivos CSV que abre Excel 2013 (perfumes, pedidos y sus líneas, abonos, clientes, cupones, avisos, costos, cantidad en casa, encuesta y
 # estadísticas) y los guarda en un .7z cifrado con AES-256 (también los nombres de archivo). Queda 90 días como
 # artefacto de la ejecución: descárgalo y ábrelo con 7-Zip y tu contraseña.
 # Necesita dos secretos (Settings → Secrets and variables → Actions):
@@ -43,7 +43,7 @@ jobs:
           RESUMEN="$DIR/LEEME.txt"
           echo "Respaldo de Elite Scents RD del $FECHA (hora de República Dominicana)." > "$RESUMEN"
           echo "Cada archivo .csv es una tabla; ábrelo con Excel. Filas por tabla:" >> "$RESUMEN"
-          for T in products orders order_payments customer_profiles coupons coupon_redemptions restock_alerts product_costs store_settings survey_responses site_events product_variants order_items; do
+          for T in products orders order_payments customer_profiles coupons coupon_redemptions restock_alerts product_costs store_settings survey_responses site_events product_stock order_items; do
             case " $TABLAS " in *" $T "*) ;; *) echo "  $T: no existe (todavía)" >> "$RESUMEN"; continue ;; esac
             FILAS=$(psql "$DB_URL" -X -v ON_ERROR_STOP=1 -c "\copy (select * from public.$T order by 1) to '$DIR/$T.csv' with (format csv, header true, encoding 'UTF8')" | sed -n 's/^COPY \([0-9]*\)$/\1/p')
             # Excel 2013 reconoce los acentos solo si el archivo empieza con la marca UTF-8 (BOM).

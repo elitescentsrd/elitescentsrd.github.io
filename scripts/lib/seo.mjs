@@ -23,6 +23,8 @@ const nums = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Num
 const genderText = { hombre: 'para hombre', mujer: 'para mujer', unisex: 'unisex' };
 const genderLabel = { hombre: 'Hombre', mujer: 'Mujer', unisex: 'Unisex' };
 const statusLabel = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'Solo por encargo' };
+// «¡Quedan 2!» (solo si el dueño lleva la cantidad en casa y quedan de 1 a 3).
+export const stockText = p => { const n = Number(p.stock_left); return p.availability === 'disponible' && Number.isInteger(n) && n >= 1 && n <= 3 ? (n === 1 ? '¡Queda 1!' : '¡Quedan ' + n + '!') : ''; };
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
 const listNotes = items => (items || []).join(', ');
 
@@ -85,7 +87,7 @@ export function renderProductPage(p, related = []) {
     '<p class="eyebrow">' + esc(p.brand || BRAND) + '</p><h1 class="detail-title">' + esc(p.name) + '</h1>' +
     (onOffer ? '<span class="offer-badge detail-offer">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<p class="detail-price' + (onOffer ? ' price-offer' : '') + '">' + (onOffer ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small> ' : '') + '<strong>' + (onOffer ? 'Ahora ' : '') + esc(price) + '</strong></p>' +
-    '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + '</dd></div>' +
+    '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + (stockText(p) ? ' · <strong class="stock-low-text">' + stockText(p) + '</strong>' : '') + '</dd></div>' +
     (p.inspired_by ? '<div class="inspired-fact"><dt>Inspirado en</dt><dd>' + esc(p.inspired_by) + '</dd></div>' : '') + notes + '</dl>' +
     (p.inspired_by ? '<p class="inspired-note">Referencia de estilo del aroma: no es el perfume original. Las marcas mencionadas pertenecen a sus dueños.</p>' : '') +
     '<p class="dialog-description">' + esc(p.description || '') + '</p>' +

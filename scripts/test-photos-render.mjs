@@ -23,6 +23,10 @@ const withPhoto = real.map((p, i) => i < 12 ? { ...p, image_url: base + '/storag
 let src = await readFile(REPO + '/scripts/build-catalog.mjs', 'utf8');
 const start = src.indexOf('const controller = new AbortController();'), end = src.indexOf('if (!Array.isArray(databaseProducts)');
 src = src.slice(0, start) + 'const databaseProducts = JSON.parse(await readFile("data/fixture.json", "utf8"));\n' + src.slice(end);
+// Cantidad en casa (script del 3-oct): un perfume disponible con 2 en casa y el resto con stock_left null.
+const lowIndex = withPhoto.findIndex((p, i) => i >= 13 && i < 24 && p.availability === 'disponible' && Number(p.id) !== offerId && ![localA, localB].includes(Number(p.id)));
+const lowId = lowIndex >= 0 ? Number(withPhoto[lowIndex].id) : null;
+withPhoto.forEach((p, i) => { p.stock_left = i === lowIndex ? 2 : null; });
 await writeFile(TMP + '/data/fixture.json', JSON.stringify(withPhoto));
 await writeFile(TMP + '/scripts/build-catalog.mjs', src);
 // Dos productos más con foto guardada en el sitio (img/productos/), sin image_url en la base.
@@ -59,5 +63,12 @@ assert(!/"page":|"slot":/.test(fullHtml + JSON.stringify(publicProducts)), 'page
   assert.equal(offerSchema.offers.price, '4000'); assert.equal(offerSchema.offers.priceValidUntil, '2030-01-01');
   const pOffer = publicProducts.find(p => Number(p.id) === offerId); assert.equal(pOffer.original_price, 'RD$4,500'); assert.equal(pOffer.price, 'RD$4,000');
   assert(publicProducts.every(p => !('created_at' in p) && !('updated_at' in p) && !('active' in p) && !('page' in p)), 'El JSON público solo debe llevar los campos previstos');
+  assert(lowId !== null, 'Hay un perfume disponible entre las primeras tarjetas para probar «¡Quedan…!»');
+  {
+    assert(html.includes('<span class="stock stock-disponible stock-low">¡Quedan 2!</span>'), 'La tarjeta dice «¡Quedan 2!»');
+    assert.equal((html.match(/stock-low/g) || []).length, 1, 'Solo en ese perfume');
+    assert.deepEqual(publicProducts.filter(p => 'stock_left' in p).map(p => [Number(p.id), p.stock_left]), [[lowId, 2]], 'perfumes.json lleva stock_left solo cuando hay pocas unidades');
+    assert(/"stock":true/.test(fullHtml.match(/<script type="application\/json" id="catalogInfo">([^<]*)</)[1]), 'La portada avisa a la tienda que pida stock_left');
+  }
 }
 console.log('Fichas y tarjetas correctas: 12 fotos de Supabase + 2 del sitio, la URL de lámina se ignoró, ' + (real.length - 14) + ' sin foto.');

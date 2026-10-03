@@ -456,6 +456,31 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   eq(plain(ganancia.months), [{ month: '2026-08', sales: 0, cost: 0, profit: 0, orders: 0, unknown: 0 }, { month: '2026-09', sales: 8500, cost: 5600, profit: 2900, orders: 2, unknown: 1 }], 'Ganancia real por mes (costo + logística por unidad; sin costo aparte)');
   assert.equal(ganancia.perOrder.get('21').cost, 1900, 'Usa el costo de la presentación pedida');
 
+  // Líneas guardadas por la base de datos (order_items): el perfume va por número, así un nombre cambiado no se pierde.
+  const renombrado = catalog.map(p => p.id === 10 ? { ...p, name: 'Lattafa Asad (nuevo nombre)' } : p);
+  const filas = [{ order_id: 20, position: 1, product_id: 10, name: 'Lattafa Asad', size: '100 ML', size_index: 0, qty: 2, stock_taken: 0 },
+    { order_id: 21, position: 1, product_id: 12, name: 'Duo', size: '100 ML', size_index: 1, qty: 1, stock_taken: 0 },
+    { order_id: 22, position: 1, product_id: 11, name: 'Club de Nuit', size: null, size_index: 0, qty: 1, stock_taken: 0 }];
+  const lineas = F.groupLines(filas);
+  eq(plain(lineas.get('20')), [{ name: 'Lattafa Asad', qty: 2, size: '100 ML', product_id: 10, size_index: 0, stock_taken: 0 }], 'Agrupa las líneas por pedido');
+  const sinLineas = F.profitSummary(ventas, renombrado, new Map([[10, [1750]], [12, [1000, 1800]]]), params, { months: 1, now: new Date(2026, 8, 30) });
+  const conLineas = F.profitSummary(ventas, renombrado, new Map([[10, [1750]], [12, [1000, 1800]]]), params, { months: 1, now: new Date(2026, 8, 30), lines: lineas });
+  assert.equal(sinLineas.perOrder.get('20').known, false, 'Leyendo el texto, un perfume renombrado se pierde');
+  eq(plain(conLineas.perOrder.get('20')), { sale: 6000, cost: 3700, profit: 2300, known: true }, 'Con las líneas guardadas, no');
+  assert.equal(conLineas.perOrder.get('21').cost, 1900, 'y el tamaño también sale de la línea');
+  // Cantidad en casa en la lista de compra: lo ya descontado por pedidos confirmados y lo que hay en casa no se compra.
+  const casa = [{ id: 30, status: 'confirmado', items: '' }, { id: 31, status: 'nuevo', items: '' }, { id: 32, status: 'nuevo', items: '' }];
+  const lineasCasa = F.groupLines([{ order_id: 30, position: 1, product_id: 11, name: 'Club de Nuit', size_index: 0, qty: 2, stock_taken: 2 },
+    { order_id: 31, position: 1, product_id: 11, name: 'Club de Nuit', size_index: 0, qty: 3, stock_taken: 0 },
+    { order_id: 31, position: 2, product_id: 12, name: 'Duo', size: '50 ML', size_index: 0, qty: 1, stock_taken: 0 },
+    { order_id: 32, position: 1, product_id: null, name: 'Escrito a mano', size: null, size_index: null, qty: 1, stock_taken: 0 }]);
+  compra = F.purchaseList(casa, catalog, [], { lines: lineasCasa, stock: new Map([[11, [1]], [12, [5, 0]]]) });
+  eq(compra.rows.map(r => [r.product.id, r.size, r.qty, r.home, r.need]), [[11, '105 ML', 5, 1, 2]], 'Pide 5 − 2 ya apartados − 1 en casa = 2; el Duo de 50 ML alcanza con lo de casa');
+  eq(plain(compra.unmatched), [{ order: 32, text: '1x Escrito a mano' }], 'Las líneas sin perfume se muestran aparte');
+  const SV = await runUmd('sales.js'), todas = F.groupLines([...filas, { order_id: 23, position: 1, product_id: 10, name: 'Lattafa Asad', size: null, size_index: 0, qty: 1, stock_taken: 0 }]);
+  eq(plain(SV.topProducts(ventas, 10, { lines: todas, products: renombrado })).map(t => [t.name, t.units, t.orders]), [['Lattafa Asad (nuevo nombre)', 3, 2], ['Club de Nuit', 1, 1], ['Duo', 1, 1]], '«Más pedidos» con el nombre de hoy y sin partir en dos un perfume renombrado');
+  eq(plain(SV.topProducts(ventas, 10)).map(t => [t.name, t.units]), [['Lattafa Asad', 3], ['Club de Nuit', 1], ['Duo', 1]], 'Sin líneas guardadas, como antes');
+
   // Panel: cada elemento que usa admin.js existe; finanzas.js carga antes y se publica.
   for (const id of idsUsed(adminJs, /\$\('#([A-Za-z][\w-]*)'\)/g)) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en admin.html');
   assert(adminHtml.indexOf('/finanzas.js') > -1 && adminHtml.indexOf('/finanzas.js') < adminHtml.indexOf('/admin.js'), 'finanzas.js carga antes que admin.js');
@@ -570,7 +595,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
     assert(/^[0-9]{14}_[a-z0-9_]+\.sql$/.test(file) && !/^\s*(begin|commit|rollback)\s*;/im.test(await read('supabase/migrations/' + file)), file + ' se puede correr desde GitHub');
   // 8. Respaldo: semanal, cifrado (también los nombres), comprobado y sin dejar nada legible en el repositorio público.
   assert(/schedule:\n\s*- cron: '17 9 \* \* 1'/.test(backupYml) && backupYml.includes('workflow_dispatch:'), 'Respaldo cada lunes y cuando el dueño quiera');
-  for (const table of ['products', 'orders', 'order_payments', 'customer_profiles', 'coupons', 'product_costs', 'store_settings', 'site_events', 'order_items']) assert(new RegExp('for T in [a-z_ ]*\\b' + table + '\\b').test(backupYml), 'El respaldo incluye ' + table);
+  for (const table of ['products', 'orders', 'order_payments', 'customer_profiles', 'coupons', 'product_costs', 'store_settings', 'site_events', 'order_items', 'product_stock']) assert(new RegExp('for T in [a-z_ ]*\\b' + table + '\\b').test(backupYml), 'El respaldo incluye ' + table);
   assert(backupYml.includes("printf '\\xEF\\xBB\\xBF'") && backupYml.includes('PGTZ=America/Santo_Domingo'), 'CSV para Excel 2013 con la hora de República Dominicana');
   assert(backupYml.includes('7z a -t7z -mhe=on -mx=9 -p"$CLAVE"') && backupYml.includes('[ "${#CLAVE}" -lt 16 ]') && backupYml.includes('7z t -p"contraseña-equivocada"'), 'Cifrado con contraseña larga y comprobado');
   assert(backupYml.includes('|| { echo "No se pudo conectar a Supabase') && backupYml.includes("grep -q '^  products: [1-9]'"), 'Nunca guarda un respaldo vacío');
@@ -611,5 +636,25 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const publishSql = await read('supabase/migrations/20261003120000_estadisticas_y_publicacion.sql');
   assert(publishSql.includes('https://api.github.com/repos/elitescentsrd/elitescentsrd.github.io/dispatches') && changeDomain(publishSql, DEFAULT_HOST, trial) === publishSql, 'La dirección del repositorio en GitHub no cambia con el dominio');
   console.log('Dominio propio: una sola dirección en ' + files.length + ' archivos y cambio de dominio en un paso (' + touched + ' archivos) correctos.');
+}
+// ---------------------------------------------------------------- Cantidad en casa: «¡Quedan…!» en la tienda y el panel
+{
+  const { stockText: seoStock } = await import('./lib/seo.mjs');
+  const fromSource = (source, pattern) => vm.runInNewContext('(' + source.match(pattern)[1] + ')');
+  const tiendaStock = fromSource(tiendaJs, /const stockText=(p=>\{[^}]*\})/), buildStock = fromSource(await read('scripts/build-catalog.mjs'), /const stockText = (p => \{[^}]*\})/);
+  const casos = [[{ availability: 'disponible', stock_left: 2 }, '¡Quedan 2!'], [{ availability: 'disponible', stock_left: 1 }, '¡Queda 1!'], [{ availability: 'disponible', stock_left: 3 }, '¡Quedan 3!'],
+    [{ availability: 'disponible', stock_left: 0 }, ''], [{ availability: 'disponible', stock_left: 4 }, ''], [{ availability: 'disponible', stock_left: null }, ''], [{ availability: 'disponible' }, ''],
+    [{ availability: 'agotado', stock_left: 2 }, ''], [{ availability: 'encargo', stock_left: 1 }, ''], [{ availability: 'disponible', stock_left: '2"><b>' }, '']];
+  for (const [p, want] of casos) for (const [name, fn] of [['tienda', tiendaStock], ['portada', buildStock], ['página del perfume', seoStock]]) assert.equal(fn(p), want, name + ': ' + JSON.stringify(p));
+  const sample = { ...products.find(p => p.availability === 'disponible'), stock_left: 2 };
+  assert(renderProductPage(sample, []).includes('<strong class="stock-low-text">¡Quedan 2!</strong>') && !renderProductPage({ ...sample, stock_left: null }, []).includes('¡Queda'), 'La página del perfume dice «¡Quedan 2!» solo con pocas unidades');
+  assert(tiendaJs.includes("+(catalogInfo().stock===true?',stock_left':'')") && tiendaJs.includes('p.availability,p.stock_left].join'), 'La tienda pide stock_left solo si la base de datos ya la tiene, y vuelve a dibujar si cambia');
+  assert((await read('tienda.css')).includes('.stock.stock-low{'), 'Estilo de «¡Quedan…!»');
+  // Panel: inventario, cantidad en el formulario, elegir perfume en un pedido a mano y respaldo.
+  for (const id of ['stock-card', 'stock-body', 'stock-label', 'order-pick', 'order-products', 'order-pick-add']) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en el panel');
+  assert(adminHtml.includes('href="#stock-card"') && adminJs.includes("'/rest/v1/product_stock?on_conflict=product_id,size_index'") && adminJs.includes("resolution=merge-duplicates"), 'Inventario en el menú; guarda con upsert');
+  assert(adminJs.includes("'/rest/v1/order_items?select=order_id,position,product_id,name,size,size_index,qty,stock_taken") && adminJs.includes('lines: orderLines'), 'Ganancia, compras y «más pedidos» con las líneas guardadas');
+  assert(adminJs.includes("['cantidad_en_casa', '/rest/v1/product_stock?select=*") && adminJs.includes("['lineas_de_pedido', '/rest/v1/order_items?select=*") && adminJs.includes('if (!missing(err)) backup.sin_acceso.push'), 'El respaldo del panel incluye cantidades y líneas (y no se queja si aún no existen)');
+  console.log('Cantidad en casa: «¡Quedan…!» en tienda, portada y página del perfume, inventario y pedido a mano correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');

@@ -153,6 +153,23 @@
     for (const p of products || []) byName.set(norm(p.name), p);
     return byName;
   }
+  // Líneas de pedido guardadas por la base de datos (order_items): perfume por número, así un nombre cambiado no se pierde.
+  // Agrupa las filas por pedido; sin ellas (script del 3-oct sin aplicar) se lee el texto del pedido como siempre.
+  function groupLines(rows) {
+    if (!Array.isArray(rows)) return null;
+    const map = new Map();
+    for (const r of [...rows].sort((a, b) => (Number(a.order_id) - Number(b.order_id)) || (Number(a.position) - Number(b.position)))) {
+      const key = String(r.order_id), list = map.get(key) || [];
+      list.push({ name: String(r.name || ''), qty: Math.max(1, Math.min(99, Number(r.qty) || 1)), size: String(r.size || ''),
+        product_id: r.product_id === null || r.product_id === undefined ? null : Number(r.product_id),
+        size_index: Number.isInteger(r.size_index) ? r.size_index : null, stock_taken: Math.max(0, Number(r.stock_taken) || 0) });
+      map.set(key, list);
+    }
+    return map;
+  }
+  const linesOf = (order, lines) => (lines && lines.has(String(order.id)) ? lines.get(String(order.id)) : parseLines(order.items));
+  const productOf = (line, byName, byId) => (line.product_id !== null && line.product_id !== undefined && byId && byId.get(Number(line.product_id))) || byName.get(norm(line.name));
+  const indexOf = (product, line) => (Number.isInteger(line.size_index) ? line.size_index : sizeIndex(product, line.size));
   // Presentación de la línea: por el tamaño escrito (p. ej. "50 ML") o la primera.
   function sizeIndex(product, size) {
     const sizes = String(product.size || '').split('/').map(norm);
@@ -161,26 +178,26 @@
   }
 
   // ---------------------------------------------------------------- Ganancia real (pedidos vendidos con costo conocido)
-  function orderProfit(order, byName, costsById, params) {
-    const p = validParams(params), extra = p ? p.logistica : 0, lines = parseLines(order.items);
-    let cost = 0, known = lines.length > 0;
-    for (const line of lines) {
-      const product = byName.get(norm(line.name)), c = product && costsById.get(Number(product.id));
+  function orderProfit(order, byName, costsById, params, lines, byId) {
+    const p = validParams(params), extra = p ? p.logistica : 0, list = linesOf(order, lines);
+    let cost = 0, known = list.length > 0;
+    for (const line of list) {
+      const product = productOf(line, byName, byId), c = product && costsById.get(Number(product.id));
       if (!c || !c.length) { known = false; continue; }
-      cost += line.qty * (c[Math.min(sizeIndex(product, line.size), c.length - 1)] + extra);
+      cost += line.qty * (c[Math.min(indexOf(product, line), c.length - 1)] + extra);
     }
     const sale = amountOf(order);
     return { sale, cost: Math.round(cost), profit: known ? Math.round(sale - cost) : null, known };
   }
   function profitSummary(orders, products, costsById, params, options = {}) {
-    const byName = productIndex(products), months = options.months || 6, now = options.now || new Date();
+    const byName = productIndex(products), byId = new Map((products || []).map(p => [Number(p.id), p])), months = options.months || 6, now = options.now || new Date();
     const keyOf = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     const table = new Map();
     for (let i = months - 1; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); table.set(keyOf(d), { month: keyOf(d), sales: 0, cost: 0, profit: 0, orders: 0, unknown: 0 }); }
     const perOrder = new Map();
     for (const o of orders || []) {
       if (!SOLD.includes(statusOf(o))) continue;
-      const r = orderProfit(o, byName, costsById, params); perOrder.set(String(o.id), r);
+      const r = orderProfit(o, byName, costsById, params, options.lines, byId); perOrder.set(String(o.id), r);
       const t = Date.parse(o.created_at); if (Number.isNaN(t)) continue;
       const row = table.get(keyOf(new Date(t))); if (!row) continue;
       if (r.known) { row.sales += r.sale; row.cost += r.cost; row.profit += r.profit; row.orders += 1; } else row.unknown += 1;
@@ -190,23 +207,30 @@
 
   // ---------------------------------------------------------------- Lista de compra para el suplidor
   // Suma lo que falta entregar (pedidos nuevos, confirmados y en preparación) y, aparte, cuánta gente espera cada agotado.
+  // Con la cantidad en casa (options.stock: número de perfume → cantidades por tamaño) solo pide lo que falta: lo que
+  // los pedidos confirmados ya descontaron (stock_taken) y lo que hay en casa no se vuelve a comprar.
   function purchaseList(orders, products, alerts, options = {}) {
-    const byName = productIndex(products), map = new Map(), unmatched = [];
+    const byName = productIndex(products), byId = new Map((products || []).map(p => [Number(p.id), p])), map = new Map(), unmatched = [];
+    const stock = options.stock && typeof options.stock.get === 'function' ? options.stock : null, tracked = product => Boolean(stock && stock.has(Number(product.id)));
     for (const o of orders || []) {
       if (!PENDING.includes(statusOf(o))) continue;
-      for (const line of parseLines(o.items)) {
-        const product = byName.get(norm(line.name));
+      for (const line of linesOf(o, options.lines)) {
+        const product = productOf(line, byName, byId);
         if (!product) { unmatched.push({ order: o.id, text: line.qty + 'x ' + line.name + (line.size ? ' (' + line.size + ')' : '') }); continue; }
-        if (!options.includeAvailable && product.availability === 'disponible') continue;
-        const size = String(product.size || '').split('/').map(s => s.trim())[sizeIndex(product, line.size)] || product.size || '';
+        if (!options.includeAvailable && product.availability === 'disponible' && !tracked(product)) continue;
+        const index = indexOf(product, line), size = String(product.size || '').split('/').map(s => s.trim())[index] || product.size || '';
         const key = product.id + '|' + norm(size);
-        const e = map.get(key) || { product, size, qty: 0, orders: [], waiting: 0 };
-        e.qty += line.qty; if (!e.orders.includes(o.id)) e.orders.push(o.id); map.set(key, e);
+        const e = map.get(key) || { product, size, sizeIndex: index, qty: 0, covered: 0, orders: [], waiting: 0 };
+        e.qty += line.qty; e.covered += Math.min(line.qty, Number(line.stock_taken) || 0); if (!e.orders.includes(o.id)) e.orders.push(o.id); map.set(key, e);
       }
     }
     const waitingBy = new Map();
     for (const a of alerts || []) if ((a.status || 'pendiente') === 'pendiente') waitingBy.set(Number(a.product_id), (waitingBy.get(Number(a.product_id)) || 0) + 1);
-    for (const e of map.values()) e.waiting = waitingBy.get(Number(e.product.id)) || 0;
+    for (const e of map.values()) {
+      e.waiting = waitingBy.get(Number(e.product.id)) || 0;
+      if (tracked(e.product)) { e.home = Number(stock.get(Number(e.product.id))[e.sizeIndex]) || 0; e.need = Math.max(0, e.qty - e.covered - e.home); }
+    }
+    for (const [key, e] of map) if (e.need === 0 && !e.waiting) map.delete(key); // lo que hay en casa ya alcanza
     const waiting = [];
     if (options.includeWaiting !== false) {
       const byId = new Map((products || []).map(p => [Number(p.id), p]));
@@ -217,7 +241,8 @@
         waiting.push({ product, size: String(product.size || '').split('/')[0].trim(), qty: 0, orders: [], waiting: count });
       }
     }
-    const rows = [...map.values(), ...waiting].sort((a, b) => (b.qty - a.qty) || (b.waiting - a.waiting) || a.product.name.localeCompare(b.product.name, 'es'));
+    const toBuy = e => (e.need !== undefined ? e.need : e.qty);
+    const rows = [...map.values(), ...waiting].sort((a, b) => (toBuy(b) - toBuy(a)) || (b.waiting - a.waiting) || a.product.name.localeCompare(b.product.name, 'es'));
     return { rows, unmatched };
   }
   function purchaseText(rows, supplier = 'La Grada') {
@@ -274,6 +299,6 @@
   }
 
   return { SOLD, PENDING, norm, amounts, amountOf, money, balances, collected, waNumber, waLink, reminderText, restockText, validParams, marginAt,
-    suggestPrice, suggestText, reviewPrice, currentProfit, parseLines, productIndex, sizeIndex, orderProfit, profitSummary, purchaseList, purchaseText,
+    suggestPrice, suggestText, reviewPrice, currentProfit, parseLines, productIndex, groupLines, sizeIndex, orderProfit, profitSummary, purchaseList, purchaseText,
     csvCell, toCsv, splitCsvLine, costsCsv, parseCostsCsv };
 });

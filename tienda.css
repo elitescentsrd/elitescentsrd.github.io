@@ -189,3 +189,5 @@ html.guarded:not(.guard-ok) body,html.framed body{display:none!important}
 /* Modo oscuro: la sección de opiniones quedaba con fondo claro y letra clara (ilegible). */
 [data-theme="dark"] .testimonials{background:var(--surface-soft)}[data-theme="dark"] .testimonial-empty{background:var(--surface)}[data-theme="dark"] .testimonial-empty p{color:var(--ink)}
 @media(prefers-color-scheme:dark){:root:not([data-theme]) .testimonials{background:var(--surface-soft)}:root:not([data-theme]) .testimonial-empty{background:var(--surface)}:root:not([data-theme]) .testimonial-empty p{color:var(--ink)}}
+/* «¡Quedan 2!»: pocas unidades (solo si el dueño lleva la cantidad en casa). */
+.stock.stock-low{border-color:#e6c48a;background:#fff4dc;color:#7a4a00}.stock-low-text{color:var(--status-warn)}

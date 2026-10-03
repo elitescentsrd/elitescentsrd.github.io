@@ -195,6 +195,7 @@
         api('/rest/v1/products?select=*&order=sort_order.asc,name.asc'),
         api('/rest/v1/orders?select=*&order=created_at.desc')
       ]);
+      await loadOrderData(); fillOrderPicker();
       renderProducts(productQuery?products.filter(p=>(p.name+' '+(p.brand||'')).toLocaleLowerCase('es').includes(productQuery)):products);
       applyOfferUi(); renderOffers(); renderFinanzas();
     } catch (err) { status(productStatus, err.message, 'error'); }
@@ -205,7 +206,7 @@
       const img = document.createElement('img'); img.src = p.image_url || '/logo-oficial.webp'; img.alt = '';
       const cells = [document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td'), document.createElement('td')];
       cells[0].append(img); cells[1].textContent = p.name; cells[2].textContent = p.brand || '—'; cells[3].textContent = p.original_price ? p.price + ' (antes ' + p.original_price + ')' : (p.price || '—');
-      cells[4].textContent = p.active === false ? 'Oculto' : (p.availability || 'disponible');
+      cells[4].textContent = (p.active === false ? 'Oculto' : (p.availability || 'disponible')) + (stockRows.has(Number(p.id)) ? ' · en casa: ' + stockLabel(p.id) : '');
       const edit = document.createElement('button'); edit.type='button'; edit.className='btn btn-secondary'; edit.textContent='Editar'; edit.addEventListener('click',()=>editProduct(p));
       const del = document.createElement('button'); del.type='button'; del.className='btn btn-secondary'; del.textContent='Eliminar'; del.addEventListener('click',()=>deleteProduct(p));
       cells[5].className='admin-actions'; cells[5].append(edit,del); tr.append(...cells); return tr;
@@ -258,13 +259,15 @@
     for (const name of ['id','name','brand','price','size','gender','availability','sort_order','description','image_url']) if (form.elements[name]) form.elements[name].value=p[name]??'';
     form.elements.notes_top.value=(p.notes_top||[]).join(', '); form.elements.notes_heart.value=(p.notes_heart||[]).join(', '); form.elements.notes_base.value=(p.notes_base||[]).join(', ');
     form.elements.gallery_urls.value=(p.gallery_urls||[]).join('\n'); form.elements.active.checked=p.active!==false;
+    // La cantidad solo se guarda si la cambias aquí (si mientras tanto se confirmó un pedido, no se pisa lo que descontó).
+    form.elements.stock.value=form.elements.stock.dataset.loaded=stockLabel(p.id);
     form.elements.inspired_by.value=p.inspired_by||''; {const cr=costRows.get(Number(p.id)); form.elements.cost.value=cr?cr.costs.map(Number).map(c=>c.toLocaleString('en-US')).join(' / '):''; form.elements.strategy.value=cr?.strategy||'normal';} updateSuggestion();
     // Con oferta activa, "Precio" muestra el precio normal y "Precio de oferta" el vigente.
     if(p.original_price){form.elements.price.value=p.original_price;form.elements.offer_price.value=p.price;form.elements.offer_label.value=p.offer_label||'';form.elements.offer_ends.value=toLocalInput(p.offer_ends_at)}
     else{form.elements.offer_price.value='';form.elements.offer_label.value='';form.elements.offer_ends.value=''}
     $('#form-title').textContent='Editar perfume'; $('#cancel-edit').classList.remove('hidden'); form.scrollIntoView({behavior:'smooth'});
   }
-  function resetForm() { form.reset(); form.elements.id.value=''; form.elements.active.checked=true; form.elements.sort_order.value=0; $('#form-title').textContent='Agregar perfume'; $('#cancel-edit').classList.add('hidden'); updateSuggestion(); }
+  function resetForm() { form.reset(); form.elements.stock.dataset.loaded=''; form.elements.id.value=''; form.elements.active.checked=true; form.elements.sort_order.value=0; $('#form-title').textContent='Agregar perfume'; $('#cancel-edit').classList.add('hidden'); updateSuggestion(); }
   $('#cancel-edit').addEventListener('click', resetForm);
   async function upload(file, prefix) {
     if (file.size > MAX_IMAGE_BYTES) throw new Error('Cada imagen debe pesar menos de 3 MB.');
@@ -286,6 +289,7 @@
       const priceText=normalizePrice(fd.get('price')), rawPrice=priceText?1:NaN;
       const payload={name:String(fd.get('name')).trim(),brand:String(fd.get('brand')||'').trim(),price:priceText,size:String(fd.get('size')||'').trim(),gender:String(fd.get('gender')),availability:String(fd.get('availability')),sort_order:Number(fd.get('sort_order'))||0,image_url:imageUrl||null,notes_top:normalizeArray(fd.get('notes_top')),notes_heart:normalizeArray(fd.get('notes_heart')),notes_base:normalizeArray(fd.get('notes_base')),gallery_urls:gallery,description:String(fd.get('description')||'').trim(),active:fd.get('active')==='on'};
       if(!payload.name||!Number.isFinite(rawPrice)) throw new Error('Completa el nombre y un precio válido.');
+      const stockRaw=String(fd.get('stock')||'').trim(), stockPlan=stockReady===true&&stockRaw!==(form.elements.stock.dataset.loaded||'')?parseStock(stockRaw,payload.size):undefined;
       if(hasInspired()){const insp=String(fd.get('inspired_by')||'').trim();if(insp.length===1)throw new Error('«Inspirado en» debe tener al menos 2 letras (o déjalo vacío).');payload.inspired_by=insp||null;}
       if(offersEnabled()){
         const offerText=normalizePrice(fd.get('offer_price'));
@@ -299,8 +303,9 @@
       }
       const path=id?'/rest/v1/products?id=eq.'+encodeURIComponent(id):'/rest/v1/products';
       const saved=await api(path,{method:id?'PATCH':'POST',headers:{Prefer:'return=representation'},body:JSON.stringify(payload)});
-      const costNote=await saveProductCost(id||(Array.isArray(saved)&&saved[0]?saved[0].id:null));
-      status(productStatus,'Producto guardado.'+costNote,'success'); resetForm(); await loadAll();
+      const savedId=id||(Array.isArray(saved)&&saved[0]?saved[0].id:null), costNote=await saveProductCost(savedId);
+      let stockNote='';if(stockPlan!==undefined&&savedId){try{stockNote=await saveStock(savedId,stockPlan)}catch(err){stockNote='(La cantidad en casa no se guardó: '+err.message+')'}}
+      status(productStatus,'Producto guardado.'+costNote+(stockNote?' '+stockNote:''),'success'); resetForm(); await loadAll();
     } catch(err){status(productStatus,err.message,'error')}
   });
   // --- Carga de fotos por lote: el ID del producto sale del nombre del archivo (0012-nombre.jpg). ---
@@ -587,7 +592,7 @@
   function renderSales() {
     const Sales = window.EliteSales; if (!Sales || !$('#sales-kpis')) return;
     try {
-      const s = Sales.summarize(orders, customers, { period: $('#sales-period').value }), t = s.totals, p = s.previous;
+      const s = Sales.summarize(orders, customers, { period: $('#sales-period').value, lines: orderLines, products }), t = s.totals, p = s.previous;
       $('#sales-kpis').replaceChildren(
         kpi('Pedidos recibidos', String(t.received), p ? versus(t.received, p.received) : ''),
         kpi('Ventas confirmadas', rd(t.sales), (p ? versus(t.sales, p.sales) : '') || t.soldCount + ' pedido(s) confirmado(s)'),
@@ -741,6 +746,7 @@
     ['cupones', '/rest/v1/coupons?select=*&order=code.asc'], ['usos_de_cupones', '/rest/v1/coupon_redemptions?select=*&order=id.asc'],
     ['ajustes_tienda', '/rest/v1/store_settings?select=*'], ['encuesta_respuestas', '/rest/v1/survey_responses?select=*&order=id.asc'],
     ['abonos', '/rest/v1/order_payments?select=*&order=id.asc'], ['avisos_reposicion', '/rest/v1/restock_alerts?select=*&order=id.asc'], ['costos_privados', '/rest/v1/product_costs?select=*&order=product_id.asc'],
+    ['cantidad_en_casa', '/rest/v1/product_stock?select=*&order=product_id.asc,size_index.asc'], ['lineas_de_pedido', '/rest/v1/order_items?select=*&order=order_id.asc,position.asc'],
   ];
   $('#backup-download').addEventListener('click', async () => {
     const st = $('#backup-status'), button = $('#backup-download');
@@ -748,7 +754,7 @@
     const backup = { tienda: 'Elite Scents RD', creado: new Date().toISOString(), aviso: 'Contiene datos personales de clientes. Guárdalo en un lugar privado y no lo compartas.', tablas: {}, sin_acceso: [] };
     try {
       for (const [name, path] of BACKUP_SOURCES) {
-        try { backup.tablas[name] = await fetchAll(path); } catch (err) { backup.sin_acceso.push(name + ': ' + err.message); }
+        try { backup.tablas[name] = await fetchAll(path); } catch (err) { if (!missing(err)) backup.sin_acceso.push(name + ': ' + err.message); }
       }
       if (!backup.tablas.productos?.length) throw new Error('No se pudieron leer los productos; no se descargó nada.');
       const blob = new Blob([JSON.stringify(backup, null, 1)], { type: 'application/json' });
@@ -862,6 +868,140 @@
     catch { prompt('Copia este texto:', text); }
   }
 
+  // ---------------- Líneas de pedido y cantidad en casa (script «LÍNEAS DE PEDIDO Y CANTIDAD EN CASA», 3-oct)
+  // Sin el script, todo sigue como antes: los cálculos leen el texto de cada pedido y no se lleva la cantidad.
+  let orderLines = null, stockRows = new Map(), stockReady = null, stockVisible = 30;
+  const STOCK_PAGE = 30;
+  async function loadOrderData() {
+    const [lines, stock] = await Promise.all([
+      fetchAll('/rest/v1/order_items?select=order_id,position,product_id,name,size,size_index,qty,stock_taken&order=order_id.asc,position.asc').catch(() => null),
+      fetchAll('/rest/v1/product_stock?select=product_id,size_index,qty').catch(() => null),
+    ]);
+    orderLines = lines && F ? F.groupLines(lines) : null;
+    stockReady = Array.isArray(stock);
+    stockRows = new Map();
+    for (const r of stock || []) { const id = Number(r.product_id), list = stockRows.get(id) || []; list[Number(r.size_index)] = Number(r.qty); stockRows.set(id, list); }
+  }
+  const sizesOf = p => String(p?.size || '').split('/').map(s => s.trim()).filter(Boolean);
+  const stockLabel = id => stockRows.has(Number(id)) ? [...stockRows.get(Number(id))].map(n => n ?? 0).join(' / ') : '';
+  const stockTotal = id => (stockRows.get(Number(id)) || []).reduce((s, n) => s + (Number(n) || 0), 0);
+  // «2» o «2 / 1» (una cantidad por tamaño). Vacío = dejar de llevar la cuenta (null).
+  function parseStock(raw, sizeText) {
+    const text = String(raw || '').trim();
+    if (!text) return null;
+    const parts = text.split('/').map(s => s.trim()), sizes = Math.max(1, String(sizeText || '').split('/').filter(s => s.trim()).length);
+    if (parts.some(s => !/^\d{1,4}$/.test(s))) throw new Error('La cantidad en casa va en números enteros, por ejemplo 2 (o 2 / 1 si tiene dos tamaños).');
+    if (parts.length !== sizes) throw new Error('Escribe una cantidad por tamaño (' + sizes + '), separadas por «/». Por ejemplo: ' + Array(sizes).fill('1').join(' / ') + '.');
+    return parts.map(Number);
+  }
+  async function saveStock(productId, qty) {
+    const id = Number(productId), had = stockRows.has(id);
+    if (qty === null) {
+      if (!had) return '';
+      await api('/rest/v1/product_stock?product_id=eq.' + id, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+      stockRows.delete(id); return 'Ya no se lleva la cantidad en casa de este perfume.';
+    }
+    await api('/rest/v1/product_stock?on_conflict=product_id,size_index', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(qty.map((n, i) => ({ product_id: id, size_index: i, qty: n }))) });
+    if (had && stockRows.get(id).length > qty.length) await api('/rest/v1/product_stock?product_id=eq.' + id + '&size_index=gte.' + qty.length, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    stockRows.set(id, qty); return 'Cantidad en casa guardada.';
+  }
+  function stockTags(p, box) {
+    box.replaceChildren(tag(p.active === false ? 'Oculto' : (availabilityText[p.availability] || '—'), p.availability === 'disponible' && p.active !== false ? 'ok' : 'warn'));
+    const left = Number(p.stock_left);
+    if (p.availability === 'disponible' && Number.isInteger(left) && left >= 1 && left <= 3) box.append(' ', tag(left === 1 ? '¡Queda 1!' : '¡Quedan ' + left + '!', 'warn'));
+  }
+  function stockRow(p) {
+    const tr = document.createElement('tr'), inCell = document.createElement('td'), input = document.createElement('input'), state = document.createElement('td'), actions = document.createElement('td');
+    input.className = 'cost-input'; input.inputMode = 'numeric'; input.maxLength = 40; input.value = stockLabel(p.id);
+    input.placeholder = sizesOf(p).length > 1 ? sizesOf(p).map(() => '0').join(' / ') : 'sin contar';
+    input.setAttribute('aria-label', 'Cantidad en casa de ' + p.name + (p.size ? ' (' + p.size + ')' : ''));
+    inCell.append(input); stockTags(p, state); actions.className = 'admin-actions';
+    const save = button('Guardar', async () => {
+      const st = $('#stock-status'); save.disabled = true;
+      try {
+        const msg = await saveStock(p.id, parseStock(input.value, p.size));
+        // La base de datos ajusta sola la disponibilidad y «¡Quedan…!»: se lee de nuevo este perfume.
+        const fresh = await api('/rest/v1/products?id=eq.' + encodeURIComponent(p.id) + '&select=*');
+        if (Array.isArray(fresh) && fresh[0]) { Object.assign(p, fresh[0]); stockTags(p, state); }
+        input.value = stockLabel(p.id); status(st, p.name + ': ' + (msg || 'sin cambios.'), 'success'); renderStockKpis();
+      } catch (err) { status(st, p.name + ': ' + err.message, 'error'); save.disabled = false; }
+    }, false);
+    save.disabled = true;
+    input.addEventListener('input', () => { save.disabled = input.value.trim() === stockLabel(p.id); });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (!save.disabled) save.click(); } });
+    actions.append(save); tr.append(cell(p.name), cell(p.size || '—'), inCell, state, actions);
+    return tr;
+  }
+  function renderStockKpis() {
+    const tracked = products.filter(p => stockRows.has(Number(p.id)));
+    const low = tracked.filter(p => { const t = stockTotal(p.id); return t >= 1 && t <= 3; }), zero = tracked.filter(p => stockTotal(p.id) === 0);
+    $('#stock-kpis').replaceChildren(kpi('Perfumes con cantidad', tracked.length + ' de ' + products.length, tracked.length ? '' : 'empieza por los que más vendes'),
+      kpi('Unidades en casa', String(tracked.reduce((s, p) => s + stockTotal(p.id), 0)), ''),
+      kpi('Pocas unidades', String(low.length), '3 o menos: la tienda dice «¡Quedan…!»', low.length ? 'warn' : ''),
+      kpi('En 0', String(zero.length), 'se muestran «Agotado»', zero.length ? 'warn' : ''));
+  }
+  function renderStock() {
+    if (!$('#stock-body')) return;
+    const notice = $('#stock-notice'), body = $('#stock-body');
+    if (stockReady !== true) {
+      notice.classList.remove('hidden'); notice.textContent = 'Para llevar la cantidad en casa falta aplicar el script «LÍNEAS DE PEDIDO Y CANTIDAD EN CASA» (3 de octubre) en Supabase.';
+      $('#stock-kpis').replaceChildren(); body.replaceChildren(); $('#stock-count').textContent = ''; $('#stock-more').classList.add('hidden'); return;
+    }
+    notice.classList.add('hidden'); renderStockKpis();
+    const q = $('#stock-search').value.trim().toLocaleLowerCase('es'), view = $('#stock-view').value;
+    const list = products.filter(p => {
+      const id = Number(p.id), has = stockRows.has(id), t = stockTotal(id);
+      return (!q || (p.name + ' ' + (p.brand || '')).toLocaleLowerCase('es').includes(q)) &&
+        (view === 'all' || (view === 'tracked' && has) || (view === 'untracked' && !has) || (view === 'low' && has && t >= 1 && t <= 3) || (view === 'zero' && has && t === 0));
+    });
+    const shown = list.slice(0, stockVisible);
+    $('#stock-count').textContent = list.length ? 'Mostrando ' + shown.length + ' de ' + list.length + ' perfumes.' : '';
+    const more = $('#stock-more'); more.classList.toggle('hidden', list.length <= shown.length); more.textContent = 'Mostrar ' + Math.min(STOCK_PAGE, list.length - shown.length) + ' más';
+    body.replaceChildren(...(shown.length ? shown.map(stockRow) : [emptyRow(5, view === 'tracked' ? 'Todavía no llevas la cantidad de ningún perfume: elige «Todos» y escribe cuántos tienes.' : 'No hay perfumes en esta vista.')]));
+  }
+  $('#stock-search').addEventListener('input', () => { stockVisible = STOCK_PAGE; renderStock(); });
+  $('#stock-view').addEventListener('change', () => { stockVisible = STOCK_PAGE; renderStock(); });
+  $('#stock-more').addEventListener('click', () => { stockVisible += STOCK_PAGE; renderStock(); });
+  $('#stock-csv').addEventListener('click', () => {
+    if (!F) return;
+    const rows = [['id', 'perfume', 'tamaño', 'en casa', 'en la tienda']].concat(products.map(p => [p.id, p.name, p.size || '', stockLabel(p.id), p.active === false ? 'oculto' : (availabilityText[p.availability] || '')]));
+    download('inventario-elite-scents-' + todayInput() + '.csv', F.toCsv(rows), 'text/csv;charset=utf-8');
+  });
+
+  // ---------------- Pedido a mano: elegir el perfume de la lista escribe la línea exacta («2x Nombre (tamaño)»)
+  let orderPick = new Map(), orderAutoAmount = '';
+  function fillOrderPicker() {
+    const list = $('#order-products'); if (!list) return;
+    orderPick = new Map();
+    for (const p of products) {
+      if (p.active === false) continue;
+      // «60 / 100 ML» se muestra «60 ML» y «100 ML» (la unidad va solo en el último).
+      const sizes = sizesOf(p), unit = ((sizes[sizes.length - 1] || '').match(/[a-z]+\.?$/i) || [''])[0];
+      (sizes.length ? sizes : ['']).forEach((size, i) => orderPick.set(p.name + (size ? ' (' + (/^[0-9.,]+$/.test(size) && unit ? size + ' ' + unit : size) + ')' : ''), { p, i }));
+    }
+    list.replaceChildren(...[...orderPick.keys()].map(text => new Option(text)));
+  }
+  function orderTotal(text) {
+    if (!F) return 0;
+    let total = 0;
+    for (const line of F.parseLines(text)) {
+      const pick = orderPick.get(line.name + (line.size ? ' (' + line.size + ')' : '')) || orderPick.get(line.name);
+      if (!pick) return 0; // una línea escrita a mano: el total lo pones tú
+      const prices = F.amounts(pick.p.price); total += line.qty * (prices[Math.min(pick.i, prices.length - 1)] || 0);
+    }
+    return total;
+  }
+  $('#order-pick-add').addEventListener('click', () => {
+    const orderForm = $('#order-form'), pick = $('#order-pick'), qty = Math.max(1, Math.min(99, Math.round(Number($('#order-pick-qty').value) || 1)));
+    const text = pick.value.trim(), el = $('#order-status');
+    if (!orderPick.has(text)) { status(el, 'Elige el perfume de la lista que aparece al escribir (así el pedido queda con el nombre exacto).', 'error'); pick.focus(); return; }
+    const items = orderForm.elements.items, amount = orderForm.elements.amount;
+    items.value = (items.value.trim() ? items.value.trim() + '\n' : '') + qty + 'x ' + text;
+    const total = orderTotal(items.value);
+    if (total && (!amount.value.trim() || amount.value === orderAutoAmount)) { orderAutoAmount = 'RD$' + total.toLocaleString('en-US'); amount.value = orderAutoAmount; }
+    pick.value = ''; $('#order-pick-qty').value = 1; status(el, ''); pick.focus();
+  });
+
   async function loadFinanzas() {
     await Promise.all([loadPayments(), loadAlerts(), loadCosts()]);
     renderFinanzas();
@@ -871,6 +1011,8 @@
     renderOrders();
     $('#inspired-label').classList.toggle('hidden', products.length > 0 && !hasInspired());
     ['#cost-label', '#strategy-label'].forEach(sel => $(sel).classList.toggle('hidden', costsReady === false || !F));
+    ['#stock-label', '#stock-help'].forEach(sel => $(sel).classList.toggle('hidden', stockReady !== true));
+    renderStock();
     if (!F) return;
     renderReceivables(); renderRestock(); renderPurchase(); renderCosts(); renderProfit(); updateSuggestion();
   }
@@ -1004,8 +1146,8 @@
   let purchaseRows = [];
   function renderPurchase() {
     if (!F || !$('#purchase-body')) return;
-    const { rows, unmatched } = F.purchaseList(orders, products, alerts, { includeAvailable: $('#purchase-available').checked, includeWaiting: $('#purchase-waiting').checked });
-    purchaseRows = rows.map(r => { const key = r.product.id + '|' + r.size; return { ...r, key, buy: purchaseEdits.has(key) ? purchaseEdits.get(key) : (r.qty || (r.waiting ? 1 : 0)) }; });
+    const { rows, unmatched } = F.purchaseList(orders, products, alerts, { includeAvailable: $('#purchase-available').checked, includeWaiting: $('#purchase-waiting').checked, lines: orderLines, stock: stockReady === true ? stockRows : null });
+    purchaseRows = rows.map(r => { const key = r.product.id + '|' + r.size; return { ...r, key, buy: purchaseEdits.has(key) ? purchaseEdits.get(key) : ((r.need !== undefined ? r.need : r.qty) || (r.waiting ? 1 : 0)) }; });
     const unitCost = r => { const c = costsOf(r.product.id); return c.length ? c[Math.min(F.sizeIndex(r.product, r.size), c.length - 1)] : null; };
     const totals = () => {
       const units = purchaseRows.reduce((s, r) => s + r.buy, 0), priced = purchaseRows.filter(r => r.buy > 0 && unitCost(r) !== null);
@@ -1020,7 +1162,7 @@
       input.addEventListener('input', () => { r.buy = Math.max(0, Math.min(99, Math.round(Number(input.value) || 0))); purchaseEdits.set(r.key, r.buy); refresh(); totals(); });
       qtyCell.append(input); refresh();
       const state = document.createElement('td'); state.append(tag(availabilityText[r.product.availability] || '—', r.product.availability === 'disponible' ? 'ok' : 'warn'));
-      tr.append(qtyCell, cell(r.product.name), cell(r.size || '—'), cell(r.qty ? r.qty + ' (pedido ' + r.orders.map(id => '#' + id).join(', ') + ')' : '—'), cell(r.waiting ? String(r.waiting) : '—'), state, cell(unitCost(r) !== null ? rd(unitCost(r)) : '—', 'num'), sub);
+      tr.append(qtyCell, cell(r.product.name), cell(r.size || '—'), cell(r.qty ? r.qty + ' (pedido ' + r.orders.map(id => '#' + id).join(', ') + ')' + (r.home !== undefined ? ' · en casa ' + r.home + (r.covered ? ' · ya apartados ' + r.covered : '') : '') : '—'), cell(r.waiting ? String(r.waiting) : '—'), state, cell(unitCost(r) !== null ? rd(unitCost(r)) : '—', 'num'), sub);
       return tr;
     }) : [emptyRow(8, 'No hay nada pendiente por comprar.')]));
     totals();
@@ -1193,7 +1335,7 @@
     const params = F.validParams(pricingParams);
     if (!costRows.size || !params) { $('#profit-body').replaceChildren(emptyRow(7, costsReady === false ? 'Para calcular la ganancia ' + MIGRATION_NOTE : 'Carga tus costos y la fórmula (sección «Costos y precios») para ver la ganancia real.')); return; }
     const costs = new Map([...costRows].map(([id]) => [id, costsOf(id)]));
-    const { months } = F.profitSummary(orders, products, costs, params, { months: 6 });
+    const { months } = F.profitSummary(orders, products, costs, params, { months: 6, lines: orderLines });
     $('#profit-body').replaceChildren(...months.slice().reverse().map(m => {
       const tr = document.createElement('tr'), [y, mo] = m.month.split('-').map(Number);
       tr.append(cell(new Date(y, mo - 1, 1).toLocaleDateString('es-DO', { month: 'long', year: 'numeric' })), cell(String(m.orders)), cell(rd(m.sales), 'num'), cell(rd(m.cost), 'num'), cell(rd(m.profit), 'num'), cell(m.sales ? Math.round(m.profit / m.sales * 100) + '%' : '—'), cell(String(m.unknown)));
@@ -1212,7 +1354,7 @@
     if (costRows.size && params) {
       const byName = F.productIndex(products), costs = new Map([...costRows].map(([id]) => [id, costsOf(id)]));
       const sold = orders.filter(o => F.SOLD.includes(String(o.status || 'nuevo')) && (!range.start || Date.parse(o.created_at) >= range.start.getTime()) && Date.parse(o.created_at) < range.end.getTime());
-      const results = sold.map(o => F.orderProfit(o, byName, costs, params)), known = results.filter(r => r.known);
+      const byId = new Map(products.map(p => [Number(p.id), p])), results = sold.map(o => F.orderProfit(o, byName, costs, params, orderLines, byId)), known = results.filter(r => r.known);
       out.push(kpi('Ganancia estimada', known.length ? rd(known.reduce((s, r) => s + r.profit, 0)) : '—', known.length + ' de ' + sold.length + ' pedido(s) con costo'));
     }
     return out;

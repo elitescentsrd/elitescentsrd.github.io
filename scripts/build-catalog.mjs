@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { SITE_URL, productPath, productUrl, absoluteUrl, brandSchemaScript } from './lib/seo.mjs';
 const USD_RATE_DOP = 63;
 // Se pide select=* (funciona aunque una migración de columnas aún no se haya aplicado) y se publican solo estos campos.
-const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at', 'inspired_by'];
+const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at', 'inspired_by', 'stock_left'];
 const template = await readFile('src/index.template.html', 'utf8');
 const enrichment = JSON.parse(await readFile('data/product-enrichment.json', 'utf8'));
 const config = await readFile('supabase-config.js', 'utf8');
@@ -47,7 +47,8 @@ async function bestSellers() {
   } catch { return []; }
 }
 const products = databaseProducts.map(({ page, slot, ...rest }) => {
-  const product = Object.fromEntries(PUBLIC_FIELDS.filter(k => rest[k] !== undefined).map(k => [k, rest[k]]));
+  // stock_left («¡Quedan…!») solo cuando hay cantidad baja: así el archivo no crece con un null por perfume.
+  const product = Object.fromEntries(PUBLIC_FIELDS.filter(k => rest[k] !== undefined && !(k === 'stock_left' && rest[k] === null)).map(k => [k, rest[k]]));
   positions[product.id] = { page, slot };
   const extra = enrichment[String(product.id)];
   return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
@@ -61,6 +62,10 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp
 const nums = value => (String(value).match(/[0-9][0-9,.]*/g) || []).map(v => Number(v.replace(/[,.]/g, ''))).filter(Number.isFinite);
 const gender = { hombre: 'Hombre', mujer: 'Mujer', unisex: 'Unisex' };
 const status = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'Solo por encargo' };
+// «¡Quedan 2!»: solo si el dueño lleva la cantidad en casa y quedan de 1 a 3 (la base de datos nunca publica más).
+const stockText = p => { const n = Number(p.stock_left); return p.availability === 'disponible' && Number.isInteger(n) && n >= 1 && n <= 3 ? (n === 1 ? '¡Queda 1!' : '¡Quedan ' + n + '!') : ''; };
+// La base de datos ya tiene la columna stock_left (script del 3 de octubre): la tienda la pide al día en cada visita.
+const stockTracked = databaseProducts.some(row => Object.prototype.hasOwnProperty.call(row, 'stock_left'));
 // Solo devuelve una URL de imagen individual real. A propósito NO cae a la
 // lámina completa de /pages/: esa lámina muestra hasta 12 productos distintos
 // y jamás debe declararse como la foto de un producto en datos estructurados
@@ -126,7 +131,7 @@ function card(p, shelf = false) {
   const availability = status[p.availability] ? p.availability : 'disponible';
   const notes = [...(p.notes_top || []), ...(p.notes_heart || []), ...(p.notes_base || [])].slice(0,3).join(' · ') || (gender[p.gender] || 'Unisex');
   return '<article class="perfume"' + (shelf ? ' role="listitem"' : ' id="producto-' + esc(p.id) + '"') + ' data-product-id="' + esc(p.id) + '">' +
-    visual(p) + '<span class="stock stock-' + availability + '">' + status[availability] + '</span>' + (p.original_price ? '<span class="offer-badge">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
+    visual(p) + '<span class="stock stock-' + availability + (stockText(p) ? ' stock-low' : '') + '">' + (stockText(p) || status[availability]) + '</span>' + (p.original_price ? '<span class="offer-badge">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
     '<h3><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a></h3>' + (p.inspired_by ? '<p class="inspired">Inspirado en <span>' + esc(p.inspired_by) + '</span></p>' : '') + '<div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
     (availability === 'agotado' || availability === 'encargo' ? '<button type="button" class="notify-link" data-notify-product="' + esc(p.id) + '">🔔 Avísame cuando llegue</button>' : '') +
@@ -161,7 +166,7 @@ for (const kind of ['vendidos', 'ofertas', 'nuevos']) {
 if (shelvesShown) html = html.replace('id="destacados" aria-label="Destacados de la tienda" hidden>', 'id="destacados" aria-label="Destacados de la tienda">');
 
 const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="grid" aria-busy="false">\n' + products.slice(0, FIRST_CARDS).map(p => card(p)).join('\n') + '\n</div>\n' +
-  '<script type="application/json" id="catalogInfo">' + JSON.stringify({ src: catalogSrc, total: products.length }) + '<\/script>\n' +
+  '<script type="application/json" id="catalogInfo">' + JSON.stringify({ src: catalogSrc, total: products.length, ...(stockTracked ? { stock: true } : {}) }) + '<\/script>\n' +
   '<script type="application/json" id="homeSections">' + JSON.stringify(homeSections) + '<\/script>\n<!-- PRODUCT_CATALOG_END -->';
 const output = html
   .replace(/<!-- PRODUCT_CATALOG_START -->[\s\S]*?<!-- PRODUCT_CATALOG_END -->/, catalog)
