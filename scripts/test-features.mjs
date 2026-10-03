@@ -557,4 +557,24 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(pagesYml.includes('npm run test:links'), 'Enlaces rotos revisados en cada publicación');
   console.log('Lista de 20 puntos: aviso legal, privacidad, títulos, favicon, 404, antispam, WhatsApp, estadísticas y publicación automática correctos.');
 }
+// ---------------------------------------------------------------- Scripts de la base de datos y respaldo desde GitHub
+{
+  const scriptYml = (await read('.github/workflows/supabase-script.yml')).replace(/\r\n/g, '\n'), backupYml = (await read('.github/workflows/respaldo.yml')).replace(/\r\n/g, '\n');
+  // 4. Aplicar un script: solo cuando el dueño lo pide, solo de supabase/migrations, todo o nada y con ensayo que no cambia nada.
+  assert(/\non:\n  workflow_dispatch:/.test(scriptYml) && !/\n  (push|pull_request|schedule):/.test(scriptYml), 'Los scripts solo corren cuando el dueño lo pide');
+  assert(scriptYml.includes("grep -Eq '^[0-9]{14}_[a-z0-9_]+\\.sql$'") && scriptYml.includes('FILE="supabase/migrations/$ARCHIVO"'), 'Solo archivos de supabase/migrations con nombre válido');
+  assert(scriptYml.includes("(begin|commit|rollback)[[:space:]]*;") && scriptYml.includes("echo '\\set ON_ERROR_STOP on'") && scriptYml.includes("echo 'BEGIN;'"), 'Una sola operación que se detiene en el primer error');
+  assert(scriptYml.includes("if [ \"$MODO\" = aplicar ]; then FIN='COMMIT;'; else FIN='ROLLBACK;'; fi") && /options: \[ensayar, aplicar\]\n\s*default: ensayar/.test(scriptYml), 'Ensayar (por defecto) deshace todo; aplicar guarda');
+  assert(scriptYml.includes('DB_URL: ${{ secrets.SUPABASE_DB_URL }}') && scriptYml.includes('--no-psqlrc'), 'La conexión va en un secreto de GitHub');
+  for (const file of (await import('node:fs')).readdirSync('supabase/migrations').filter(f => f.endsWith('.sql') && f >= '20260928'))
+    assert(/^[0-9]{14}_[a-z0-9_]+\.sql$/.test(file) && !/^\s*(begin|commit|rollback)\s*;/im.test(await read('supabase/migrations/' + file)), file + ' se puede correr desde GitHub');
+  // 8. Respaldo: semanal, cifrado (también los nombres), comprobado y sin dejar nada legible en el repositorio público.
+  assert(/schedule:\n\s*- cron: '17 9 \* \* 1'/.test(backupYml) && backupYml.includes('workflow_dispatch:'), 'Respaldo cada lunes y cuando el dueño quiera');
+  for (const table of ['products', 'orders', 'order_payments', 'customer_profiles', 'coupons', 'product_costs', 'store_settings', 'site_events', 'order_items']) assert(new RegExp('for T in [a-z_ ]*\\b' + table + '\\b').test(backupYml), 'El respaldo incluye ' + table);
+  assert(backupYml.includes("printf '\\xEF\\xBB\\xBF'") && backupYml.includes('PGTZ=America/Santo_Domingo'), 'CSV para Excel 2013 con la hora de República Dominicana');
+  assert(backupYml.includes('7z a -t7z -mhe=on -mx=9 -p"$CLAVE"') && backupYml.includes('[ "${#CLAVE}" -lt 16 ]') && backupYml.includes('7z t -p"contraseña-equivocada"'), 'Cifrado con contraseña larga y comprobado');
+  assert(backupYml.includes('|| { echo "No se pudo conectar a Supabase') && backupYml.includes("grep -q '^  products: [1-9]'"), 'Nunca guarda un respaldo vacío');
+  assert(backupYml.includes('rm -rf "$DIR"') && /path: \$\{\{ env\.ARCHIVO \}\}\n\s*retention-days: 90/.test(backupYml) && !/git (add|commit|push)/.test(backupYml), 'Solo se guarda el archivo cifrado, 90 días, nunca en el repositorio');
+  console.log('Aplicar scripts desde GitHub (ensayar / aplicar) y respaldo semanal cifrado correctos.');
+}
 console.log('Pruebas de funciones nuevas superadas.');

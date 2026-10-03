@@ -137,5 +137,21 @@ for (const file of published.filter(f => f.endsWith('.js'))) {
   assert(!/pull_request_target/.test(wf), 'No se usa pull_request_target (daría permisos a código ajeno)');
   assert(/@electric-sql\/pglite@\d+\.\d+\.\d+/.test(wf), 'El paquete de pruebas de base de datos tiene versión exacta');
   assert(!/upload-pages-artifact/.test(job('sql')), 'Las pruebas con paquetes externos no tocan el sitio que se publica');
+  // Todos los procesos (publicar, aplicar scripts, respaldo): sin permisos de escritura de más, sin pull_request_target y
+  // sin ${{ }} dentro de los comandos (lo que escribe el dueño o llega de afuera pasa por env, así no se cuela en la consola).
+  const runBlocks = text => text.split('\n').flatMap((line, i, lines) => {
+    const m = line.match(/^(\s*)run: (.*)$/); if (!m) return [];
+    if (m[2].trim() !== '|') return [m[2]];
+    const block = []; for (let j = i + 1; j < lines.length && (!lines[j].trim() || lines[j].search(/\S/) > m[1].length); j++) block.push(lines[j]);
+    return [block.join('\n')];
+  });
+  const { readdirSync } = await import('node:fs');
+  for (const file of readdirSync('.github/workflows').filter(f => /\.ya?ml$/.test(f))) {
+    const y = (await read('.github/workflows/' + file)).replace(/\r\n/g, '\n');
+    assert(!/pull_request_target/.test(y), file + ': no usa pull_request_target');
+    assert.equal((y.match(/actions\/checkout@/g) || []).length, (y.match(/persist-credentials: false/g) || []).length, file + ': el token de GitHub no se guarda en el disco');
+    for (const block of runBlocks(y)) assert(!block.includes('${{'), file + ': nada de ${{ }} dentro de los comandos');
+    if (file !== 'pages.yml') assert(/\npermissions:\n  contents: read\n\n/.test(y) && !/: write/.test(y), file + ': solo puede leer el código');
+  }
 }
 console.log('Pruebas de seguridad superadas: CSP en ' + pages.length + ' páginas, clickjacking, formularios, JavaScript, claves y permisos.');
