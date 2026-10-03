@@ -546,6 +546,10 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   for (const [name, page] of [['portada', indexHtml], ...Object.entries(html), ['página de perfume', productPage], ['lista completa', directory]])
     assert(/<a class="wa-float" href="https:\/\/wa\.me\/18094333348\?text=[^"]+" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp"/.test(page), 'Botón de WhatsApp en ' + name);
   assert((await read('cookies.js')).includes("classList.add('cookie-open')"), 'El botón no tapa el aviso de cookies');
+  // 20. Una sola llamada a la acción: en la portada, un botón principal («Explorar colección»); WhatsApp va en el botón flotante.
+  const hero = template.slice(template.indexOf('<div class="hero-actions">'), template.indexOf('<div class="hero-note">'));
+  assert.equal((hero.match(/class="button /g) || []).length, 1, 'Un solo botón principal en la portada');
+  assert(!template.includes('class="nav-cta"') && (template.match(/class="wa-float"/g) || []).length === 1, 'WhatsApp no se repite en la cabecera');
   // 19. Analítica propia (analytics.js): solo con «Aceptar todas»; nunca nombre, teléfono ni correo.
   const analyticsJs = await read('analytics.js');
   const runAnalytics = (choice, productId) => {
