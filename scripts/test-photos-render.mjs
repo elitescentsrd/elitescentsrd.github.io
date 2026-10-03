@@ -4,7 +4,7 @@
 import { readFile, writeFile, mkdir, cp, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { productSchema } from './lib/seo.mjs';
+import { productSchema, SITE_URL } from './lib/seo.mjs';
 const REPO = process.cwd();
 const TMP = (await import('node:os')).tmpdir() + '/elite-render-test';
 await mkdir(TMP + '/scripts', { recursive: true }); await mkdir(TMP + '/src', { recursive: true }); await mkdir(TMP + '/data', { recursive: true });
@@ -19,7 +19,7 @@ const real = await (await fetch(base + '/rest/v1/products?select=' + fields + '&
 // deben caer entre las primeras 24 tarjetas (las que cargan la miniatura al abrir) y después de las 13 de Supabase/lámina.
 const offerId = Number(real[16].id), [localA, localB] = [real[18], real[19]].map(p => Number(p.id));
 const localFile = (id, suffix) => String(id).padStart(4, '0') + '-foto-local-' + suffix + '.jpg';
-const withPhoto = real.map((p, i) => i < 12 ? { ...p, image_url: base + '/storage/v1/object/public/product-images/products/' + p.id + '/foto.jpg' } : i === 12 ? { ...p, image_url: 'https://elitescentsrd.github.io/pages/page-02.webp' } : Number(p.id) === offerId ? { ...p, original_price: 'RD$4,500', price: 'RD$4,000', offer_label: 'Evento de prueba', offer_ends_at: '2030-01-01T04:00:00Z' } : [localA, localB].includes(Number(p.id)) ? { ...p, image_url: null } : p);
+const withPhoto = real.map((p, i) => i < 12 ? { ...p, image_url: base + '/storage/v1/object/public/product-images/products/' + p.id + '/foto.jpg' } : i === 12 ? { ...p, image_url: SITE_URL + '/pages/page-02.webp' } : Number(p.id) === offerId ? { ...p, original_price: 'RD$4,500', price: 'RD$4,000', offer_label: 'Evento de prueba', offer_ends_at: '2030-01-01T04:00:00Z' } : [localA, localB].includes(Number(p.id)) ? { ...p, image_url: null } : p);
 let src = await readFile(REPO + '/scripts/build-catalog.mjs', 'utf8');
 const start = src.indexOf('const controller = new AbortController();'), end = src.indexOf('if (!Array.isArray(databaseProducts)');
 src = src.slice(0, start) + 'const databaseProducts = JSON.parse(await readFile("data/fixture.json", "utf8"));\n' + src.slice(end);
@@ -43,7 +43,7 @@ assert.equal(conFoto.length, 14);
 assert.equal(schemas.length, real.length);
 for (const [id, file] of [[localA, localFile(localA, 'a')], [localB, localFile(localB, 'b')]]) {
   const p = withPhoto.find(x => Number(x.id) === id);
-  assert(schemas.find(s => s.name === p.name).image.includes('https://elitescentsrd.github.io/img/productos/' + file), 'JSON-LD debe usar la URL absoluta de la foto local de ' + p.name);
+  assert(schemas.find(s => s.name === p.name).image.includes(SITE_URL + '/img/productos/' + file), 'JSON-LD debe usar la URL absoluta de la foto local de ' + p.name);
   assert(html.includes('<img src="/img/productos/thumbs/' + file.replace('.jpg', '.webp') + '"'), 'La tarjeta debe usar la miniatura del sitio de ' + p.name);
 }
 for (const p of withPhoto.slice(0, 12)) assert(schemas.find(s => s.name === p.name).image.includes(p.image_url), 'JSON-LD debe usar la foto individual de ' + p.name);

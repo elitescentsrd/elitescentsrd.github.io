@@ -301,7 +301,7 @@ assert(/revoke execute on function public\.place_customer_order\(jsonb\) from pu
 assert(/grant execute on function public\.place_customer_order\(jsonb\) to authenticated/i.test(lockSql),'La RPC debe conservar EXECUTE para authenticated');
 // --- Cuenta de cliente: el correo de confirmación debe volver a la web real, nunca a localhost ---
 assert(customer.includes("/auth/v1/signup?redirect_to='+encodeURIComponent(redirectUrl())"),'El registro debe indicar redirect_to');
-assert(customer.includes("const SITE_URL='https://elitescentsrd.github.io'"),'Debe existir la URL pública como respaldo');
+assert(customer.includes("const SITE_URL='"+SITE_URL+"'"),'Debe existir la URL pública como respaldo');
 assert(!/localhost/i.test(customer),'customer.js no debe mencionar localhost');
 assert(customer.includes('async function handleAuthRedirect()')&&customer.includes("q.get('access_token')")&&customer.includes('history.replaceState'),'Debe procesar la sesión del enlace de confirmación y limpiar la URL');
 assert(customer.includes('/auth/v1/resend?redirect_to='),'Debe poder reenviar el correo de confirmación');

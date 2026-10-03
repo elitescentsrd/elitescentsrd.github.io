@@ -179,7 +179,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
     for (const tag of ['g:id', 'title', 'description', 'link', 'g:image_link', 'g:availability', 'g:price', 'g:brand', 'g:condition']) assert(item.includes('<' + tag + '>'), 'Falta ' + tag);
     assert.match(item.match(/<g:price>([^<]*)<\/g:price>/)[1], /^\d+\.\d{2} DOP$/);
     assert.match(item.match(/<g:availability>([^<]*)<\/g:availability>/)[1], /^(in_stock|out_of_stock|backorder)$/);
-    assert(item.match(/<link>([^<]*)<\/link>/)[1].startsWith('https://elitescentsrd.github.io/perfumes/'));
+    assert(item.match(/<link>([^<]*)<\/link>/)[1].startsWith(SITE_URL + '/perfumes/'));
     assert(item.match(/<g:image_link>([^<]*)<\/g:image_link>/)[1].startsWith('https://'), 'La foto debe ser una URL completa');
     assert(item.match(/<title>([^<]*)<\/title>/)[1].length <= 150);
   }
@@ -284,7 +284,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const handle = INSTAGRAM.replace('https://www.instagram.com/', '').replace(/\/$/, '');
   const phone = WHATSAPP.replace(/^1(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
   assert.equal(handle, 'elite.scentsrd', 'El usuario oficial de Instagram');
-  for (const text of [INSTAGRAM, '@' + handle, 'https://wa.me/' + WHATSAPP, phone, SITE_URL + '/', 'elitescentsrd.github.io']) assert(page.includes(text), 'La página de canales oficiales debe incluir ' + text);
+  for (const text of [INSTAGRAM, '@' + handle, 'https://wa.me/' + WHATSAPP, phone, SITE_URL + '/', new URL(SITE_URL).host]) assert(page.includes(text), 'La página de canales oficiales debe incluir ' + text);
   // Los datos de contacto de la página son los mismos que usa el resto del sitio (evita errores de tipeo).
   assert(template.includes(INSTAGRAM) && template.includes('https://wa.me/' + WHATSAPP) && template.includes('tel:+' + WHATSAPP));
   const links = [...page.matchAll(/<a [^>]*href="(https?:\/\/[^"]+)"[^>]*>/g)].map(m => m[0]);
@@ -576,5 +576,40 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(backupYml.includes('|| { echo "No se pudo conectar a Supabase') && backupYml.includes("grep -q '^  products: [1-9]'"), 'Nunca guarda un respaldo vacío');
   assert(backupYml.includes('rm -rf "$DIR"') && /path: \$\{\{ env\.ARCHIVO \}\}\n\s*retention-days: 90/.test(backupYml) && !/git (add|commit|push)/.test(backupYml), 'Solo se guarda el archivo cifrado, 90 días, nunca en el repositorio');
   console.log('Aplicar scripts desde GitHub (ensayar / aplicar) y respaldo semanal cifrado correctos.');
+}
+// ---------------------------------------------------------------- Dominio propio: una sola dirección y cambio en un paso
+{
+  const { changeDomain, validHost, currentHost, trackedTextFiles, DEFAULT_HOST } = await import('./cambiar-dominio.mjs');
+  const host = new URL(SITE_URL).host;
+  assert.equal(currentHost(), host, 'El script lee la dirección actual de seo.mjs');
+  for (const ok of ['www.elitescentsrd.com', 'elitescentsrd.com', 'tienda.elitescentsrd.com.do', DEFAULT_HOST]) assert(validHost(ok), ok + ' es un dominio válido');
+  for (const bad of ['', 'http://elitescentsrd.com', 'elitescentsrd.com/', 'localhost', 'elite scents.com', '-elite.com', 'elite-.com', 'elite..com', 'otro.github.io', 'elite.c'])
+    assert(!validHost(bad), '«' + bad + '» no es un dominio válido');
+  // Todas las direcciones del sitio salen de la misma: canónicas, og:url, robots.txt, cuenta de clientes, panel y Opaco.
+  const files = trackedTextFiles(), texts = Object.fromEntries(await Promise.all(files.map(async f => [f, await read(f)])));
+  for (const [file, text] of Object.entries(texts)) {
+    if (file.endsWith('.html')) for (const m of text.matchAll(/<link rel="canonical" href="([^"]+)"/g)) assert(m[1].startsWith(SITE_URL + '/'), file + ': canónica con la dirección de la tienda (' + m[1] + ')');
+    if (file.endsWith('.html')) for (const m of text.matchAll(/<meta property="og:url" content="([^"]+)"/g)) assert(m[1].startsWith(SITE_URL + '/'), file + ': og:url con la dirección de la tienda');
+    if (host !== DEFAULT_HOST) assert(!text.includes('https://' + DEFAULT_HOST), file + ': quedó la dirección anterior');
+  }
+  assert(texts['robots.txt'].includes('Sitemap: ' + SITE_URL + '/sitemap.xml') && customerJs.includes("const SITE_URL='" + SITE_URL + "'") && adminJs.includes("const SURVEY_URL = '" + SITE_URL + "/encuesta.html'") &&
+    texts['finanzas.js'].includes("'" + SITE_URL + "/#producto-'") && texts['scripts/opaco-paginas.mjs'].includes("export const SITE = '" + SITE_URL + "/opaco'"), 'robots.txt, clientes, panel y Opaco usan la misma dirección');
+  // Ensayo en memoria con un dominio de prueba: no queda la dirección actual y al volver todo queda idéntico.
+  const trial = host === 'www.ejemplo-de-prueba.com' ? 'www.otro-ejemplo.com' : 'www.ejemplo-de-prueba.com', left = new RegExp('https://' + host.replace(/\./g, '\\.') + '(?![a-z0-9-]|\\.[a-z0-9])');
+  let touched = 0;
+  for (const [file, text] of Object.entries(texts)) {
+    const moved = changeDomain(text, host, trial, file);
+    if (moved !== text) touched++;
+    assert(!left.test(moved), file + ': no queda la dirección actual después del cambio');
+    assert.equal(changeDomain(moved, trial, host, file), text, file + ': al volver queda igual que antes');
+  }
+  assert(touched >= 20, 'El cambio llega a todas las páginas (' + touched + ' archivos)');
+  const canales = changeDomain(texts['canales-oficiales.html'], host, trial, 'canales-oficiales.html');
+  assert(canales.includes('<span>' + trial + '</span>') && canales.includes('href="https://' + trial + '/"') && canales.includes('es solo <strong>' + trial + '</strong>') &&
+    canales.includes('La dirección anterior, <strong>' + DEFAULT_HOST + '</strong>, también es nuestra'), 'Canales oficiales: dirección nueva y aviso de que la anterior también es nuestra');
+  assert(!changeDomain(canales, trial, DEFAULT_HOST, 'canales-oficiales.html').includes('dominio-anterior'), 'Al volver a github.io se quita ese aviso');
+  const publishSql = await read('supabase/migrations/20261003120000_estadisticas_y_publicacion.sql');
+  assert(publishSql.includes('https://api.github.com/repos/elitescentsrd/elitescentsrd.github.io/dispatches') && changeDomain(publishSql, DEFAULT_HOST, trial) === publishSql, 'La dirección del repositorio en GitHub no cambia con el dominio');
+  console.log('Dominio propio: una sola dirección en ' + files.length + ' archivos y cambio de dominio en un paso (' + touched + ' archivos) correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');
