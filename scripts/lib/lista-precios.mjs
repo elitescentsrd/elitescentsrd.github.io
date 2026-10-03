@@ -28,7 +28,7 @@ export function renderPriceList(products, now = new Date()) {
   return '<!doctype html><html lang="es-DO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; img-src \'self\' data: https:; connect-src \'self\'; font-src \'self\'; object-src \'none\'; base-uri \'self\'; form-action \'self\'; upgrade-insecure-requests">' +
     '<title>Lista de precios | ' + BRAND + '</title><meta name="description" content="Lista de precios de ' + BRAND + ' al ' + esc(date) + ': ' + products.length + ' perfumes con precio en pesos dominicanos. Guárdala en PDF o imprímela.">' +
-    '<meta name="robots" content="noindex,follow"><link rel="canonical" href="' + SITE_URL + '/lista-de-precios.html"><link rel="icon" href="/logo-oficial.webp" type="image/webp">' +
+    '<meta name="robots" content="noindex,follow"><link rel="canonical" href="' + SITE_URL + '/lista-de-precios.html"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/img/app/icon-192.png" sizes="192x192" type="image/png">' +
     '<link rel="stylesheet" href="/lista-precios.css"></head><body>' +
     '<header class="sheet-head"><img src="/logo-oficial.webp" width="64" height="64" alt="Logotipo de ' + BRAND + '"><div><h1>Lista de precios</h1>' +
     '<p>' + BRAND + ' · Actualizada el ' + esc(date) + ' · ' + products.length + ' perfumes</p>' +

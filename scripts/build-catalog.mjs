@@ -175,9 +175,10 @@ await writeFile('index.html', output);
 // mano en STATIC_PAGES cuando edites privacidad.html o pedidos-envios.html.
 const today = new Date().toISOString().slice(0, 10);
 const STATIC_PAGES = [
-  { path: 'pedidos-envios.html', lastmod: '2026-09-20', changefreq: 'monthly', priority: '0.6' },
-  { path: 'privacidad.html', lastmod: '2026-09-30', changefreq: 'yearly', priority: '0.3' },
-  { path: 'canales-oficiales.html', lastmod: '2026-09-21', changefreq: 'yearly', priority: '0.4' },
+  { path: 'pedidos-envios.html', lastmod: '2026-10-03', changefreq: 'monthly', priority: '0.6' },
+  { path: 'privacidad.html', lastmod: '2026-10-03', changefreq: 'yearly', priority: '0.3' },
+  { path: 'canales-oficiales.html', lastmod: '2026-10-03', changefreq: 'yearly', priority: '0.4' },
+  { path: 'aviso-legal.html', lastmod: '2026-10-03', changefreq: 'yearly', priority: '0.3' },
 ];
 const sitemapUrl = (loc, lastmod, changefreq, priority) =>
   '  <url><loc>' + SITE_URL + loc + '</loc><lastmod>' + lastmod + '</lastmod><changefreq>' + changefreq + '</changefreq><priority>' + priority + '</priority></url>';

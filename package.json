@@ -15,8 +15,10 @@
     "verify": "npm run build && npm test && npm run test:images && npm run test:security",
     "check:generated": "npm run build && git diff --exit-code -- index.html",
     "site": "node scripts/build-site-artifact.mjs",
-    "serve": "npm run build && npm run site && node scripts/serve.mjs"
+    "serve": "npm run build && npm run site && node scripts/serve.mjs",
+    "test:links": "node scripts/test-links.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
-

@@ -45,6 +45,8 @@ jobs:
         run: npm run test:security
       - name: Build clean public artifact (_site/)
         run: npm run site
+      - name: Broken links in the published site
+        run: npm run test:links
       # Revisión privada: en ramas y pull requests el artefacto _site/ se puede
       # descargar desde la ejecución del workflow (no se despliega a producción).
       - name: Upload review artifact (branches and pull requests)

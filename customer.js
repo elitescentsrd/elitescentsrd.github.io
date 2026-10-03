@@ -332,7 +332,7 @@ async function loadOrders(){
  }catch(err){$('#myOrders').textContent=err.message}
 }
 $('#loginTab').addEventListener('click',()=>setMode('login'));$('#signupTab').addEventListener('click',()=>setMode('signup'));
-$('#authForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),email=String(fd.get('email')).trim(),password=String(fd.get('password'));$('#authStatus').textContent='Procesando…';try{mode==='login'?await login(email,password):await signup(email,password)}catch(err){$('#authStatus').textContent=friendly(err.message);if(/email not confirmed/i.test(err.message))offerResend(email)}});
+$('#authForm').addEventListener('submit',async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),email=String(fd.get('email')).trim(),password=String(fd.get('password'));if(String(fd.get('website')||'').trim()){$('#authStatus').textContent='Procesando…';return}$('#authStatus').textContent='Procesando…';try{mode==='login'?await login(email,password):await signup(email,password)}catch(err){$('#authStatus').textContent=friendly(err.message);if(/email not confirmed/i.test(err.message))offerResend(email)}});
 $('#resendConfirm').addEventListener('click',()=>resendConfirmation().catch(err=>$('#authStatus').textContent=friendly(err.message)));
 $('#profileForm').addEventListener('submit',async e=>{e.preventDefault();$('#profileStatus').textContent='Guardando…';try{await saveProfile(new FormData(e.currentTarget));$('#profileStatus').textContent='Datos guardados.'}catch(err){$('#profileStatus').textContent=err.message}});
 $('#signOut').addEventListener('click',()=>{saveSession(null);location.reload()});

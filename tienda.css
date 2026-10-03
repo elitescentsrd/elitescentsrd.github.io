@@ -155,5 +155,37 @@ html.guarded:not(.guard-ok) body,html.framed body{display:none!important}
 .directory-size,.directory-status{font-size:12px;color:var(--muted)}
 .directory-price{white-space:nowrap;font-weight:700}
 .directory-price s{font-weight:400;color:var(--muted);margin-right:4px}
-.directory-status.status-disponible{color:#2f6b33}.directory-status.status-agotado{color:#a13025}.directory-status.status-encargo{color:#765719}
+.directory-status.status-disponible{color:var(--status-ok)}.directory-status.status-agotado{color:var(--status-bad)}.directory-status.status-encargo{color:var(--status-warn)}
 @media(max-width:620px){.directory-list li{grid-template-columns:minmax(0,1fr) auto;gap:2px 10px}.directory-size,.directory-status{grid-column:1}.directory-price{grid-column:2;grid-row:1}}
+
+/* Campo trampa contra robots en formularios (invisible para personas y lectores de pantalla) */
+.hp-field{position:absolute!important;left:-10000px!important;top:auto!important;width:1px!important;height:1px!important;overflow:hidden!important}
+
+/* Página 404: buscador y enlaces útiles */
+.error-search{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0;max-width:560px}
+.error-search input{flex:1 1 220px;min-width:0;padding:12px 14px;border:1px solid var(--line,#ded8cc);border-radius:10px;font:inherit;background:var(--surface,#fff);color:var(--ink,#171714)}
+.error-links{display:flex;flex-wrap:wrap;gap:10px 22px}
+.error-links a{font-weight:700}
+/* Botón flotante de WhatsApp (todas las páginas públicas) */
+.wa-float{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:900;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:#1f7a46;color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.28);text-decoration:none;transition:transform .15s ease}
+.wa-float:hover,.wa-float:focus-visible{transform:scale(1.06)}
+.wa-float:focus-visible{outline:3px solid #b49252;outline-offset:3px}
+.wa-float svg{width:30px;height:30px;fill:currentColor}
+.cookie-open .wa-float{display:none}
+@media print{.wa-float{display:none}}
+
+/* Contraste (WCAG 2.1 AA). El dorado de marca (#b49252) sobre fondo claro se veía poco (2.7:1): en textos sobre fondo
+   claro se usa un dorado más oscuro (5.3:1 en letra pequeña, 3.9:1 en títulos grandes); sobre fondos oscuros (portada,
+   historia, pie) se mantiene el dorado original, y en modo oscuro se usa uno más claro. */
+:root{--gold-text:#7c5d24;--gold-display:#95712f;--meta:#6f5f3c;--offer-text:#a13025;--status-ok:#2f6b33;--status-bad:#a13025;--status-warn:#765719}
+[data-theme="dark"]{--gold-text:#c9a866;--gold-display:#c9a866;--meta:#b9a57c;--offer-text:#ff9a8a;--status-ok:#8fd19e;--status-bad:#f19a8f;--status-warn:#e2c27f}
+@media(prefers-color-scheme:dark){:root:not([data-theme]){--gold-text:#c9a866;--gold-display:#c9a866;--meta:#b9a57c;--offer-text:#ff9a8a;--status-ok:#8fd19e;--status-bad:#f19a8f;--status-warn:#e2c27f}}
+.brand em,.eyebrow,.search span,.faq summary::after,.hero-note span{color:var(--gold-text)}
+.section-head h2 i,.shelf-head h2 i,.survey-page .doc-title span,.testimonial-empty>span{color:var(--gold-display)}
+.hero .eyebrow,.hero h1 i,.hero h1 .h1-brand,.hero-note span,.story .eyebrow,.story h2 i,.footer .brand em,.footer .eyebrow{color:var(--gold)}
+.footer .brand small{color:#a8a69c}
+.meta,.product-facts dt,.note-pyramid strong{color:var(--meta)}
+.price-offer strong{color:var(--offer-text)}
+/* Modo oscuro: la sección de opiniones quedaba con fondo claro y letra clara (ilegible). */
+[data-theme="dark"] .testimonials{background:var(--surface-soft)}[data-theme="dark"] .testimonial-empty{background:var(--surface)}[data-theme="dark"] .testimonial-empty p{color:var(--ink)}
+@media(prefers-color-scheme:dark){:root:not([data-theme]) .testimonials{background:var(--surface-soft)}:root:not([data-theme]) .testimonial-empty{background:var(--surface)}:root:not([data-theme]) .testimonial-empty p{color:var(--ink)}}

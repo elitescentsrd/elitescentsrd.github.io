@@ -20,6 +20,7 @@ const FILES = [
   'checkout.html',
   'customer.js',
   'privacidad.html',
+  'aviso-legal.html',
   'pedidos-envios.html',
   'canales-oficiales.html',
   'encuesta.html',

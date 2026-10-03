@@ -489,4 +489,38 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   new Script(await read('lista-precios.js'), { filename: 'lista-precios.js' }); new Script(await read('finanzas.js'), { filename: 'finanzas.js' });
   console.log('Cobros, precio sugerido, ganancia, compras, «Avísame», «Inspirado en», portada y lista de precios correctos.');
 }
+// ---------------------------------------------------------------- Lista de 20 puntos para una web profesional
+{
+  const { existsSync } = await import('node:fs');
+  const publicPages = ['privacidad.html', 'pedidos-envios.html', 'canales-oficiales.html', 'aviso-legal.html', 'encuesta.html', '404.html', 'checkout.html'];
+  const html = Object.fromEntries(await Promise.all(publicPages.map(async f => [f, await read(f)])));
+  const sample = products[0], productPage = renderProductPage(sample, []), { renderDirectory } = await import('./lib/seo.mjs'), directory = renderDirectory(products);
+  // 1-3. Aviso legal, privacidad y cookies enlazados desde todas las páginas con pie.
+  assert(/Ley 358-05/.test(html['aviso-legal.html']) && /Ley 172-13/.test(html['aviso-legal.html']) && /Inspirado en/.test(html['aviso-legal.html']), 'Aviso legal con derechos del consumidor, datos e «Inspirado en»');
+  for (const [name, page] of [...Object.entries(html).filter(([f]) => f !== 'aviso-legal.html'), ['portada', indexHtml], ['página de perfume', productPage], ['lista completa', directory]])
+    if (/<footer/.test(page)) assert(page.includes('href="/aviso-legal.html"') && page.includes('href="/privacidad.html"'), 'El pie de ' + name + ' enlaza aviso legal y privacidad');
+  assert(html['checkout.html'].includes('aceptas el <a href="/aviso-legal.html">aviso legal</a> y la <a href="/privacidad.html">política de privacidad</a>'), 'El registro informa del aviso legal y la privacidad');
+  assert(buildSite.includes("'aviso-legal.html'") && buildSite.includes("'favicon.ico'"), 'Aviso legal y favicon se publican');
+  // 5. Títulos y descripciones: únicos, con la marca y de 70 a 160 letras en las páginas que Google muestra.
+  const meta = page => ({ title: (page.match(/<title>([^<]*)<\/title>/) || [])[1] || '', description: ((page.match(/<meta name="description" content="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'") });
+  for (const [name, page] of [['portada', indexHtml], ['privacidad', html['privacidad.html']], ['envíos', html['pedidos-envios.html']], ['canales', html['canales-oficiales.html']], ['aviso legal', html['aviso-legal.html']], ['lista completa', directory], ...products.slice(0, 40).map(p => [p.name, renderProductPage(p, [])])]) {
+    const m = meta(page);
+    assert(m.title.includes('Elite Scents RD') && m.title.length <= 80, 'Título con la marca en ' + name + ': ' + m.title);
+    assert(m.description.length >= 70 && m.description.length <= 160, 'Descripción de 70 a 160 letras en ' + name + ' (' + m.description.length + ')');
+  }
+  // 9. Favicon: .ico de 48 px y PNG de 192 px (múltiplos de 48, como pide Google).
+  assert(existsSync('favicon.ico') && indexHtml.includes('<link rel="icon" href="/favicon.ico" sizes="48x48">') && indexHtml.includes('<link rel="icon" href="/img/app/icon-192.png" sizes="192x192" type="image/png">'), 'Favicon para Google y navegadores');
+  for (const [name, page] of [...Object.entries(html), ['página de perfume', productPage], ['lista completa', directory]]) assert(page.includes('href="/favicon.ico"'), 'Favicon en ' + name);
+  // 15. Página 404 útil: no se indexa, buscador y enlaces a la lista completa y a WhatsApp.
+  assert(/<meta name="robots" content="noindex">/.test(html['404.html']) && html['404.html'].includes('<form class="error-search" action="/" method="get"') && html['404.html'].includes('href="/perfumes/"') && html['404.html'].includes('wa.me/18094333348'), '404 con buscador y enlaces útiles');
+  assert(tiendaJs.includes("new URLSearchParams(location.search).get('q')"), 'La tienda abre la búsqueda que llega desde la 404 (/?q=)');
+  // 17. Formularios con campo trampa contra robots (además de los límites en la base de datos).
+  assert(template.includes('class="hp-field"') && tiendaJs.includes("form.elements.website?.value"), '«Avísame» con campo trampa');
+  assert(html['checkout.html'].includes('class="hp-field"') && customerJs.includes("fd.get('website')"), 'Registro con campo trampa');
+  // 18. Botón flotante de WhatsApp con el número oficial y texto para lectores de pantalla.
+  for (const [name, page] of [['portada', indexHtml], ...Object.entries(html), ['página de perfume', productPage], ['lista completa', directory]])
+    assert(/<a class="wa-float" href="https:\/\/wa\.me\/18094333348\?text=[^"]+" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp"/.test(page), 'Botón de WhatsApp en ' + name);
+  assert((await read('cookies.js')).includes("classList.add('cookie-open')"), 'El botón no tapa el aviso de cookies');
+  console.log('Lista de 20 puntos: aviso legal, privacidad, títulos, favicon, 404, antispam y WhatsApp correctos.');
+}
 console.log('Pruebas de funciones nuevas superadas.');

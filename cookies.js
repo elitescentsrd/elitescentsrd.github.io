@@ -28,7 +28,7 @@
   }
 
   let banner = null;
-  function closeBanner() { banner?.remove(); banner = null; }
+  function closeBanner() { banner?.remove(); banner = null; document.documentElement.classList.remove('cookie-open'); }
   function choose(choice) { writeChoice(choice); captureFirstTouch(); closeBanner(); }
 
   function openBanner() {
@@ -45,6 +45,7 @@
     actions.append(all, necessary);
     banner.append(title, text, actions);
     document.body.append(banner);
+    document.documentElement.classList.add('cookie-open');
   }
 
   // Enlace permanente para cambiar la elección en cualquier momento.
