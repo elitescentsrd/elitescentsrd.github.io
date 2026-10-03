@@ -26,6 +26,11 @@ const idsNuevos = Object.keys(nuevos.perfumes).map(Number);
   assert(!/pricing\s*=|'\{"/i.test(code), 'La migración no carga la fórmula de precios');
   assert(/^-- FUNCIONES NUEVAS Y PERFUMES NUEVOS/.test(migration) && /-- FIN\s*$/.test(migration), 'Empieza y termina con las marcas para comprobar el pegado');
   assert(/create temp table modo on commit drop as select false as deshacer;/.test(migration), 'Queda en modo aplicar');
+  // Supabase devolvió «deadlock detected» con un cliente comprando a la vez (lee ajustes y luego perfumes): el script
+  // aparta todo lo que va a cambiar al principio, sin esperar con algo apartado (NOWAIT y reintentos).
+  const turno = code.indexOf('lock table public.products, public.store_settings in access exclusive mode nowait');
+  assert(turno > 0 && turno < code.indexOf('alter table public.products add column'), 'Aparta perfumes y ajustes antes del primer cambio');
+  assert(/lock table public\.orders in share row exclusive mode nowait/.test(code) && /exception when lock_not_available then\s+perform pg_sleep/.test(code), 'Pedidos también, y si están ocupados suelta todo y reintenta');
 }
 
 async function nuevaBase() {

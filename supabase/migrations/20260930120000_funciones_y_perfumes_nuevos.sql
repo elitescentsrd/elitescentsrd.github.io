@@ -42,6 +42,23 @@ begin
   end if;
 end $$;
 
+-- 0b) Turno: aparta los perfumes, los ajustes y los pedidos antes de empezar (unos segundos), sin quedarse
+--     esperando mientras tiene algo apartado. Así no choca con un cliente que esté comprando en ese momento
+--     («deadlock detected»): si alguien los está usando, suelta todo, espera un instante y vuelve a intentar.
+do $$
+begin
+  for intento in 1..80 loop
+    begin
+      lock table public.products, public.store_settings in access exclusive mode nowait;
+      lock table public.orders in share row exclusive mode nowait;
+      return;
+    exception when lock_not_available then
+      perform pg_sleep(0.25);
+    end;
+  end loop;
+  raise exception 'La tienda está muy ocupada en este momento. Espera un minuto y vuelve a darle Run. No se cambió nada.';
+end $$;
+
 -- 1) «Inspirado en…» (lo ve todo el mundo, igual que el nombre y el precio).
 alter table public.products add column if not exists inspired_by text;
 do $$
