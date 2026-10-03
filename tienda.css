@@ -135,3 +135,25 @@ html.guarded:not(.guard-ok) body,html.framed body{display:none!important}
 .shelf-row>.perfume{scroll-snap-align:start}.shelf-row .perfume h3{min-height:0;font-size:16px}
 @media(max-width:600px){.home-shelves{padding:44px 4vw 0}.shelf-row{grid-auto-columns:minmax(165px,72vw)}}
 .product-facts .inspired-fact{grid-column:1/-1}.inspired-note{font-size:12px;color:var(--muted);margin:-8px 0 16px}
+
+/* Fotos de tarjeta como imagen con carga diferida (antes: fondo CSS) */
+.photo.custom img{display:block;width:100%;height:100%;object-fit:contain}
+.load-wrap{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:center}
+.all-link{font-weight:700}
+/* /perfumes/: lista completa de la A a la Z */
+.directory{max-width:1100px}
+.directory-intro{color:var(--muted);margin:6px 0 16px}
+.directory-brands{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 18px}
+.directory-brands a{padding:6px 10px;border:1px solid var(--line,#ded8cc);border-radius:999px;font-size:13px;text-decoration:none;color:inherit}
+.directory-brands a:hover,.directory-brands a:focus-visible{border-color:var(--gold,#b49252)}
+.directory-group{scroll-margin-top:12px}
+.directory-group h2 small{font-size:.6em;color:var(--muted);font-weight:400}
+.directory-list{list-style:none;margin:0 0 18px;padding:0;display:grid;gap:4px}
+.directory-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line,#ded8cc)}
+.directory-list a{font-weight:700;text-decoration:none;color:inherit}
+.directory-list a:hover,.directory-list a:focus-visible{text-decoration:underline}
+.directory-size,.directory-status{font-size:12px;color:var(--muted)}
+.directory-price{white-space:nowrap;font-weight:700}
+.directory-price s{font-weight:400;color:var(--muted);margin-right:4px}
+.directory-status.status-disponible{color:#2f6b33}.directory-status.status-agotado{color:#a13025}.directory-status.status-encargo{color:#765719}
+@media(max-width:620px){.directory-list li{grid-template-columns:minmax(0,1fr) auto;gap:2px 10px}.directory-size,.directory-status{grid-column:1}.directory-price{grid-column:2;grid-row:1}}

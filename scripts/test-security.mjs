@@ -6,15 +6,15 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-import { renderProductPage } from './lib/seo.mjs';
+import { renderProductPage, renderDirectory } from './lib/seo.mjs';
 
 const read = path => readFile(path, 'utf8');
 const buildSite = await read('scripts/build-site-artifact.mjs');
 const published = [...buildSite.match(/const FILES = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
 assert(published.length > 20, 'Se leyó la lista de archivos publicados');
 const indexHtml = await read('index.html');
-const products = JSON.parse(indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]);
-const pages = [['portada (index.html)', indexHtml], ['página de perfume', renderProductPage(products[0], products.slice(1, 3))]];
+const products = JSON.parse(await read('perfumes.json'));
+const pages = [['portada (index.html)', indexHtml], ['página de perfume', renderProductPage(products[0], products.slice(1, 3))], ['lista completa (/perfumes/)', renderDirectory(products)]];
 for (const file of published.filter(f => f.endsWith('.html') && f !== 'index.html')) pages.push([file, await read(file)]);
 
 // ---------------------------------------------------------------- CSP y HTML de todas las páginas

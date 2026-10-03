@@ -4,6 +4,7 @@
 import { readFile, writeFile, mkdir, cp, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { productSchema } from './lib/seo.mjs';
 const REPO = process.cwd();
 const TMP = (await import('node:os')).tmpdir() + '/elite-render-test';
 await mkdir(TMP + '/scripts', { recursive: true }); await mkdir(TMP + '/src', { recursive: true }); await mkdir(TMP + '/data', { recursive: true });
@@ -28,21 +29,26 @@ await writeFile(TMP + '/scripts/build-catalog.mjs', src);
 await rm(TMP + '/img', { recursive: true, force: true }); await mkdir(TMP + '/img/productos', { recursive: true });
 await writeFile(TMP + '/img/productos/' + localFile(localA, 'a'), 'x'); await writeFile(TMP + '/img/productos/' + localFile(localB, 'b'), 'x');
 execFileSync('node', ['scripts/build-catalog.mjs'], { cwd: TMP, stdio: 'inherit' });
-const html = await readFile(TMP + '/index.html', 'utf8');
-const schemas = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => JSON.parse(m[1])).filter(s => s['@type'] === 'Product');
+const fullHtml = await readFile(TMP + '/index.html', 'utf8');
+// Las primeras 24 tarjetas del catálogo (las secciones destacadas dependen de las ventas reales y se revisan aparte).
+const html = fullHtml.slice(fullHtml.indexOf('<div id="productGrid"'), fullHtml.indexOf('<script type="application/json" id="catalogInfo">'));
+const publicProducts = JSON.parse(await readFile(TMP + '/perfumes.json', 'utf8'));
+// Ficha Product de cada perfume: la misma que lleva su página (/perfumes/…).
+const schemas = publicProducts.map(productSchema);
 const conFoto = schemas.filter(s => s.image);
-console.log('tarjetas con foto:', (html.match(/class="photo custom"/g) || []).length, '| placeholders:', (html.match(/class="photo placeholder"/g) || []).length, '| JSON-LD con image:', conFoto.length, '| JSON-LD total:', schemas.length);
+console.log('tarjetas con foto:', (html.match(/class="photo custom"/g) || []).length, '| placeholders:', (html.match(/class="photo placeholder"/g) || []).length, '| fichas con image:', conFoto.length, '| fichas:', schemas.length);
 assert.equal((html.match(/class="photo custom"/g) || []).length, 14);
-assert.equal((html.match(/class="photo placeholder"/g) || []).length, real.length - 14);
+assert.equal((html.match(/class="photo placeholder"/g) || []).length, Math.min(24, real.length) - 14);
 assert.equal(conFoto.length, 14);
+assert.equal(schemas.length, real.length);
 for (const [id, file] of [[localA, localFile(localA, 'a')], [localB, localFile(localB, 'b')]]) {
   const p = withPhoto.find(x => Number(x.id) === id);
   assert(schemas.find(s => s.name === p.name).image.includes('https://elitescentsrd.github.io/img/productos/' + file), 'JSON-LD debe usar la URL absoluta de la foto local de ' + p.name);
-  assert(html.includes('url(&quot;/img/productos/thumbs/' + file.replace('.jpg', '.webp') + '&quot;)'), 'La tarjeta debe usar la miniatura del sitio de ' + p.name);
+  assert(html.includes('<img src="/img/productos/thumbs/' + file.replace('.jpg', '.webp') + '"'), 'La tarjeta debe usar la miniatura del sitio de ' + p.name);
 }
 for (const p of withPhoto.slice(0, 12)) assert(schemas.find(s => s.name === p.name).image.includes(p.image_url), 'JSON-LD debe usar la foto individual de ' + p.name);
-assert(!html.includes('/pages/page-'), 'no debe haber láminas en el HTML');
-assert(!/"page":|"slot":/.test(html), 'page/slot no deben salir en el HTML');
+assert(!fullHtml.includes('/pages/page-') && !JSON.stringify(publicProducts).includes('/pages/page-'), 'no debe haber láminas en el HTML ni en el catálogo');
+assert(!/"page":|"slot":/.test(fullHtml + JSON.stringify(publicProducts)), 'page/slot no deben salir en el HTML ni en el catálogo');
 // Oferta: precio anterior tachado, precio de oferta, etiqueta del evento y validez en JSON-LD (el resto no muestra oferta).
 {
   const offerCard = html.match(new RegExp('<article class="perfume" id="producto-' + offerId + '"[\\s\\S]*?<\\/article>'))[0];
@@ -51,8 +57,7 @@ assert(!/"page":|"slot":/.test(html), 'page/slot no deben salir en el HTML');
   assert.equal((html.match(/class="offer-badge"/g) || []).length, 1, 'Solo el producto en oferta debe tener etiqueta');
   const offerSchema = schemas.find(s => s.name === withPhoto.find(x => Number(x.id) === offerId).name);
   assert.equal(offerSchema.offers.price, '4000'); assert.equal(offerSchema.offers.priceValidUntil, '2030-01-01');
-  const publicProducts = JSON.parse(html.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]);
   const pOffer = publicProducts.find(p => Number(p.id) === offerId); assert.equal(pOffer.original_price, 'RD$4,500'); assert.equal(pOffer.price, 'RD$4,000');
   assert(publicProducts.every(p => !('created_at' in p) && !('updated_at' in p) && !('active' in p) && !('page' in p)), 'El JSON público solo debe llevar los campos previstos');
 }
-console.log('JSON-LD y tarjetas correctos: 12 fotos de Supabase + 2 del sitio, la URL de lámina se ignoró, ' + (real.length - 14) + ' placeholders.');
+console.log('Fichas y tarjetas correctas: 12 fotos de Supabase + 2 del sitio, la URL de lámina se ignoró, ' + (real.length - 14) + ' sin foto.');

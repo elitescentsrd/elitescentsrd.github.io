@@ -3,21 +3,20 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { Script } from 'node:vm';
 import { imageSize, imageProblems } from './check-product-images.mjs';
-import { renderProductPage, productPath, productUrl, slugify, SITE_URL } from './lib/seo.mjs';
+import { renderProductPage, renderDirectory, productPath, productUrl, slugify, SITE_URL } from './lib/seo.mjs';
 
-const [html, template, css, js, enrichmentText, pricingText, positionsText] = await Promise.all([
+const [html, template, css, js, enrichmentText, catalogText, referenciaText] = await Promise.all([
   readFile('index.html', 'utf8'),
   readFile('src/index.template.html', 'utf8'),
   readFile('tienda.css', 'utf8'),
   readFile('tienda.js', 'utf8'),
   readFile('data/product-enrichment.json', 'utf8'),
-  readFile('data/la-grada-pricing-2026.json', 'utf8'),
-  readFile('data/product-positions.json', 'utf8')
+  readFile('perfumes.json', 'utf8'),
+  readFile('data/precios-referencia-2026-09-28.json', 'utf8')
 ]);
 const enrichment = JSON.parse(enrichmentText);
-const pricing = JSON.parse(pricingText);
-// page/slot son datos internos de la auditoría de precios; no forman parte del HTML público.
-const positions = JSON.parse(positionsText);
+// Precio normal público de cada perfume el 28-sep (sin costos): referencia para detectar un precio escrito por error.
+const referencia = JSON.parse(referenciaText).precios;
 // Precios públicos después del catálogo de La Grada de sept. 2026 (sin costos) y perfumes que se pueden ocultar mientras se confirman.
 const precios2609 = JSON.parse(await readFile('data/precios-2026-09.json', 'utf8'));
 // Perfumes nuevos del catálogo de La Grada (números 421 en adelante): existen en la tienda cuando se aplica su script SQL.
@@ -26,10 +25,15 @@ const idsNuevos = new Set(Object.keys(nuevos2609.perfumes).map(Number)), notasPe
 const inspirado = JSON.parse(await readFile('data/inspirado-en.json', 'utf8')).perfumes;
 new Script(js,{filename:'tienda.js'});
 
-const products = JSON.parse(html.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1] || '[]');
-const productSchemas = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
-  .map(match => JSON.parse(match[1]))
-  .filter(item => item['@type'] === 'Product');
+// El catálogo público está en perfumes.json; la portada trae solo las primeras tarjetas y las secciones destacadas,
+// y la ficha Product (JSON-LD) de cada perfume está en su propia página.
+const products = JSON.parse(catalogText);
+const relatedOf = p => p.brand ? products.filter(x => x.brand === p.brand && x.id !== p.id).slice(0, 6) : [];
+const productSchemas = products.map(p => [...renderProductPage(p, relatedOf(p)).matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)]
+  .map(match => JSON.parse(match[1])).find(item => item['@type'] === 'Product'));
+const staticCards = [...html.matchAll(/<article class="perfume"( role="listitem"| id="producto-(\d+)") data-product-id="(\d+)">([\s\S]*?)<\/article>/g)]
+  .map(m => ({ shelf: Boolean(m[1].includes('listitem')), id: Number(m[3]), body: m[4] }));
+const gridCards = staticCards.filter(c => !c.shelf);
 
 // Catálogo: 420 perfumes + los nuevos de La Grada; los de precios2609.ocultos pueden estar ocultos (active = false) y los
 // nuevos aparecen cuando se aplica su script SQL (antes de eso la tienda sigue con 420).
@@ -49,15 +53,23 @@ assert(N >= BASE - ocultables.size && N <= TOTAL, 'Deben pre-renderizarse entre 
   }
 }
 for(const p of products){assert(p.id!=null);assert(String(p.name||'').trim());assert(String(p.price||'').match(/\d/));}
-assert.equal((html.match(/data-product-id=/g) || []).length, N, 'Debe existir una tarjeta estática por producto');
-for(const p of products) assert(html.includes('data-open-product="'+p.id+'"'),'Falta Ver detalles: '+p.name);
-assert.equal(productSchemas.length, N, 'Debe existir un Product JSON-LD por producto');
+// Portada liviana: las primeras 24 tarjetas del catálogo (en orden), sin fichas Product repetidas y con el catálogo aparte.
+assert.deepEqual(gridCards.map(c => c.id), products.slice(0, 24).map(p => Number(p.id)), 'La portada trae las primeras 24 tarjetas del catálogo');
+assert.equal((html.match(/data-product-id=/g) || []).length, staticCards.length, 'Solo hay tarjetas del catálogo y de las secciones destacadas');
+for (const c of staticCards) assert(c.body.includes('data-open-product="' + c.id + '"'), 'Falta Ver detalles en la tarjeta #' + c.id);
+assert(!/"@type":"Product"/.test(html), 'Las fichas Product van en la página de cada perfume, no repetidas en la portada');
+const catalogInfo = JSON.parse(html.match(/<script type="application\/json" id="catalogInfo">([\s\S]*?)<\/script>/)[1]);
+assert(/^\/perfumes\.json\?v=[a-f0-9]{12}$/.test(catalogInfo.src) && catalogInfo.total === N, 'La portada indica el catálogo con su versión');
+assert(html.includes('<link rel="preload" href="' + catalogInfo.src + '" as="fetch" type="application/json" crossorigin="anonymous">'), 'El catálogo se pide desde el <head>');
+assert(Buffer.byteLength(html) < 200 * 1024, 'La portada debe pesar menos de 200 KB (hoy ' + Math.round(Buffer.byteLength(html) / 1024) + ' KB)');
+assert(!html.includes('id="preRenderedProducts"'), 'El catálogo completo ya no va dentro de la portada');
+assert.equal(productSchemas.filter(Boolean).length, N, 'Debe existir un Product JSON-LD por producto (en su página)');
 assert(productSchemas.every(item => item.name && item.brand?.name && item.offers?.priceCurrency === 'DOP'));
 // El JSON-LD nunca debe declarar una lámina completa (/pages/page-XX.webp)
 // como foto de un producto individual. Mientras un producto no tenga foto
 // propia, "image" debe estar ausente, no apuntar a la lámina.
 assert(productSchemas.every(item => !item.image || item.image.every(url => !url.includes('/pages/page-'))), 'El JSON-LD no debe usar la lámina completa como imagen de producto');
-assert.equal((html.match(/US\$\d+ aprox\./g) || []).length, N, 'Cada tarjeta debe mostrar el precio aproximado en USD');
+assert.equal((html.match(/US\$\d+ aprox\./g) || []).length, staticCards.length, 'Cada tarjeta debe mostrar el precio aproximado en USD');
 // catalogo.html (el visor de las 36 láminas completas) ya no se publica en
 // _site/; el enlace del footer no debe reaparecer por accidente.
 assert(!template.includes('/catalogo.html'), 'La plantilla no debe enlazar catalogo.html: ya no se publica');
@@ -115,13 +127,9 @@ assert(adminJs.includes('function checkNewOrders()'),'Admin debe comprobar pedid
 assert(adminJs.includes("Notification.permission==='granted'"),'Admin debe respetar permiso de notificaciones');
 
 function numericPrices(value){return (String(value).match(/[0-9][0-9,.]*/g)||[]).map(v=>Number(v.replace(/[,.]/g,''))).filter(Number.isFinite)}
-function expectedMarkup(cost){
-  const row=pricing.pricing_rule.find(rule=>rule.max_cost===null || cost<=rule.max_cost);
-  assert(row,'Debe existir una regla de precio para costo '+cost);
-  return row.markup;
-}
-assert.equal(pricing.items,420,'La auditoría de La Grada debe cubrir 420 productos');
-assert.equal(Object.values(pricing.costs_by_page).reduce((n,row)=>n+row.length,0),420,'El mapa de costos debe tener 420 posiciones');
+assert.equal(Object.keys(referencia).length,BASE,'La referencia pública cubre los 420 perfumes');
+assert(!/cost|costo|margen|markup/i.test(JSON.stringify(referencia)),'La referencia de precios no tiene costos');
+assert(!existsSync('data/la-grada-pricing-2026.json'),'Los costos del catálogo anterior no deben estar en el repositorio público');
 const fueraDeRango=[];
 for(const p of products){
   if(idsNuevos.has(Number(p.id))){
@@ -130,24 +138,15 @@ for(const p of products){
     sells.forEach((v,i)=>{if(!(v>=esperado[i]/2&&v<=esperado[i]*2))fueraDeRango.push(p.name+': RD$'+v+' (esperado cerca de RD$'+esperado[i]+')')});
     continue;
   }
-  const position=positions[p.id];
-  assert(position,'Falta posición interna de auditoría para '+p.name);
-  const page=pricing.costs_by_page[String(position.page)];
-  assert(page,'Falta página de costo para '+p.name);
-  const raw=page[Number(position.slot)];
-  assert(raw!==undefined,'Falta costo para '+p.name);
-  const costs=Array.isArray(raw)?raw:[raw];
-  // Durante una oferta, price es el precio de oferta y original_price el normal: la política de márgenes aplica al normal.
+  // El precio normal lo decide el dueño en el panel: puede ser el de la referencia pública del 28-sep, el recomendado tras
+  // el catálogo de sept. 2026 u otro que ponga a mano. Solo se rechaza uno absurdo (menos de la mitad o más del doble de
+  // esas referencias), que casi siempre es un error al escribir; un precio cambiado a mano no debe frenar la publicación.
   const sells=numericPrices(p.original_price||p.price);
-  assert.equal(sells.length,costs.length,'Presentaciones no coinciden para '+p.name);
-  // El precio normal lo decide el dueño en el panel: puede ser la regla original (costo + margen), el recomendado tras el
-  // catálogo de sept. 2026 u otro que ponga a mano. Solo se rechaza uno absurdo (menos de la mitad o más del doble de esas
-  // referencias), que casi siempre es un error al escribir; un precio cambiado a mano no debe frenar la publicación de la web.
-  const recomendado=numericPrices(precios2609.precios_recomendados[String(p.id)]||'');
-  costs.forEach((cost,i)=>{
-    const referencias=[cost+expectedMarkup(cost),recomendado[i]].filter(Number.isFinite);
-    const minimo=Math.min(...referencias)/2,maximo=Math.max(...referencias)*2;
-    if(!(sells[i]>=minimo&&sells[i]<=maximo))fueraDeRango.push(p.name+': RD$'+sells[i]+' (esperado entre RD$'+minimo+' y RD$'+maximo+')');
+  const refs=[numericPrices(referencia[String(p.id)]||''),numericPrices(precios2609.precios_recomendados[String(p.id)]||'')].filter(r=>r.length===sells.length);
+  assert(refs.length,'Presentaciones no coinciden para '+p.name);
+  sells.forEach((v,i)=>{
+    const valores=refs.map(r=>r[i]),minimo=Math.min(...valores)/2,maximo=Math.max(...valores)*2;
+    if(!(v>=minimo&&v<=maximo))fueraDeRango.push(p.name+': RD$'+v+' (esperado entre RD$'+minimo+' y RD$'+maximo+')');
   });
 }
 assert.equal(fueraDeRango.length,0,'Precios fuera de rango (¿error al escribir en el panel?):\n'+fueraDeRango.join('\n'));
@@ -203,22 +202,35 @@ assert(!js.includes('/pages/page-')&&!js.includes('pages/page-'),'tienda.js no d
 assert(js.includes("wrap.classList.add('placeholder')"),'tienda.js debe mostrar el placeholder si no hay foto');
 assert(css.includes('.photo.placeholder')&&css.includes('Foto próximamente'),'El CSS debe definir el placeholder');
 const withoutPhoto=products.filter(p=>!p.image_url).length;
-assert.equal((html.match(/class="photo placeholder"/g)||[]).length,withoutPhoto,'Cada producto sin foto debe usar el placeholder');
-assert.equal((html.match(/class="photo custom"/g)||[]).length,products.length-withoutPhoto,'Cada producto con foto debe usar su imagen');
+{
+  const byId=new Map(products.map(p=>[Number(p.id),p]));
+  for(const c of staticCards){
+    const p=byId.get(c.id); assert(p,'Tarjeta de un perfume que no está en el catálogo: #'+c.id);
+    assert(p.image_url?c.body.includes('<div class="photo custom"><img src="'+p.image_url.replace('/img/productos/','/img/productos/thumbs/').replace(/\.(jpe?g|png)$/i,'.webp')+'"'):c.body.includes('class="photo placeholder"'),'Foto o placeholder de la tarjeta #'+c.id);
+  }
+}
 for(const legacy of ['catalogo.html','catalogo-app.js','catalogo-viewer.js','site-features.js','pages','catalogo-data-1.js','catalogo-1.webp'])
   assert(!existsSync(legacy),'El archivo legado debe estar archivado, no en la raíz pública: '+legacy);
 assert(existsSync('archive/catalogo-legacy/catalogo.html'),'La copia archivada del catálogo antiguo debe conservarse');
 
-// Rendimiento: al abrir la portada solo se descargan las fotos de las primeras 24 tarjetas (no las 420, ~20 MB).
-assert((html.match(/background-image:url\(&quot;\/img\/productos\//g)||[]).length<=24,'El HTML solo puede pedir 24 fotos al abrir la portada');
-assert(html.includes('data-bg="/img/productos/thumbs/'),'Las tarjetas restantes deben guardar la miniatura en data-bg');
+// Rendimiento: las fotos de las tarjetas son miniaturas con carga diferida (el celular las baja al acercarse).
+{
+  const cardImgs=[...html.matchAll(/<div class="photo custom"><img ([^>]*)>/g)].map(m=>m[1]);
+  assert(cardImgs.length>0&&cardImgs.every(a=>/src="\/img\/productos\/thumbs\/[^"]+\.webp"/.test(a)&&a.includes('loading="lazy"')&&a.includes('decoding="async"')&&/alt="Frasco de [^"]+"/.test(a)&&a.includes('width="420" height="420"')),'Fotos de tarjeta: miniatura, carga diferida, tamaño y texto alternativo');
+  assert(!/background-image:url\(&quot;\/img\/productos|data-bg=/.test(html),'Las tarjetas ya no usan fondos CSS para la foto');
+}
 {
   const { readdir, stat } = await import('node:fs/promises');
   const thumbs=(await readdir('img/productos/thumbs')).filter(f=>f.endsWith('.webp')), fulls=(await readdir('img/productos')).filter(f=>/\.jpg$/i.test(f));
   assert.equal(thumbs.length,TOTAL,'Debe haber una miniatura WebP por perfume ('+TOTAL+')');
   for(const f of fulls) assert(thumbs.includes(f.replace(/\.jpg$/i,'.webp')),'Falta la miniatura de '+f);
   for(const f of thumbs){const s=(await stat('img/productos/thumbs/'+f)).size; assert(s>500&&s<40*1024,'La miniatura debe pesar menos de 40 KB: '+f+' '+s);}
-  assert(!/(background-image:url\(&quot;|data-bg=")\/img\/productos\/[0-9]/.test(html),'Las tarjetas no deben usar la foto grande, solo la miniatura');
+  assert(!/<img src="\/img\/productos\/[0-9]/.test(html),'Las tarjetas no deben usar la foto grande, solo la miniatura');
+  // Fotos grandes en WebP (más livianas) para la ficha y la página de cada perfume; el JPG queda para Google y Meta.
+  const webps=(await readdir('img/productos/webp')).filter(f=>f.endsWith('.webp'));
+  assert.equal(webps.length,TOTAL,'Debe haber una foto WebP por perfume ('+TOTAL+')');
+  for(const f of fulls){const w='img/productos/webp/'+f.replace(/\.jpg$/i,'.webp');assert(webps.includes(f.replace(/\.jpg$/i,'.webp')),'Falta la foto WebP de '+f);assert((await stat(w)).size<(await stat('img/productos/'+f)).size,'La foto WebP debe pesar menos que el JPG: '+f)}
+  for(const p of products) if(/^\/img\/productos\/[^/]+\.jpg$/.test(p.image_url||'')) assert.equal(p.image_webp,p.image_url.replace('/img/productos/','/img/productos/webp/').replace(/\.jpg$/,'.webp'),'Ruta WebP de #'+p.id);
 }
 // --- 420 fotos individuales guardadas en el sitio (img/productos/): una por producto, válidas y sin láminas ---
 {
@@ -332,13 +344,17 @@ assert(productSchemas.every(s=>String(s.description||'').length>=120),'El JSON-L
   assert(metaDescription.startsWith('Elite Scents RD')&&metaDescription.length>=100&&metaDescription.length<=200,'La descripción debe empezar con la marca y tener una longitud útil');
   assert(html.includes('property="og:site_name" content="Elite Scents RD"'),'Debe declarar og:site_name');
   const sitemap=await readFile('sitemap.xml','utf8');
+  const directory=renderDirectory(products);
+  assert(directory.includes('<link rel="canonical" href="'+SITE_URL+'/perfumes/">')&&directory.includes('<meta name="robots" content="index,follow">')&&/<title>Todos los perfumes[^<]*\| Elite Scents RD<\/title>/.test(directory),'La lista completa es indexable, con título y canonical');
+  assert(sitemap.includes('<loc>'+SITE_URL+'/perfumes/</loc>'),'El sitemap debe incluir la lista completa');
+  assert(html.includes('href="/perfumes/"'),'La portada enlaza a la lista completa');
   const paths=new Set(), titles=new Set();
   for(const p of products){
     const path=productPath(p); assert(!paths.has(path),'Ruta de perfume repetida: '+path); paths.add(path);
-    assert(html.includes('<a href="'+path+'">'),'La tarjeta de '+p.name+' debe enlazar a su página');
+    if(staticCards.some(c=>c.id===Number(p.id))) assert(html.includes('<a href="'+path+'">'),'La tarjeta de '+p.name+' debe enlazar a su página');
+    assert(directory.includes('<a href="'+path+'">'),'La lista completa debe enlazar a '+p.name);
     assert(sitemap.includes('<loc>'+productUrl(p)+'</loc>'),'El sitemap debe incluir '+path);
-    const related=p.brand?products.filter(x=>x.brand===p.brand&&x.id!==p.id).slice(0,6):[];
-    const page=renderProductPage(p,related);
+    const page=renderProductPage(p,relatedOf(p));
     assert(page.includes('<link rel="canonical" href="'+productUrl(p)+'">'),'Canonical de '+path);
     assert(page.includes('<title>')&&page.includes('| Elite Scents RD</title>'),'Título con marca en '+path);
     assert(!page.includes('/pages/page-'),'Sin láminas en '+path);

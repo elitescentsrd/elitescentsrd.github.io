@@ -4,7 +4,7 @@
 import { cp, mkdir, rm, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
-import { renderProductPage, productPath } from './lib/seo.mjs';
+import { renderProductPage, renderDirectory, productPath } from './lib/seo.mjs';
 import { merchantFeed } from './lib/feeds.mjs';
 import { renderPriceList } from './lib/lista-precios.mjs';
 
@@ -13,6 +13,8 @@ const OUT = '_site';
 // Archivos sueltos que el sitio realmente sirve.
 const FILES = [
   'index.html',
+  'perfumes.json',
+  'favicon.ico',
   'admin.html',
   'admin.js',
   'checkout.html',
@@ -102,19 +104,19 @@ async function listAll(base, prefix = '') {
   return out;
 }
 
-// Una página indexable por perfume (título, descripción, foto, precio y datos estructurados propios).
-// Se generan desde el catálogo ya construido en index.html; no se versionan porque cambian con cada build.
+// Una página indexable por perfume (título, descripción, foto, precio y datos estructurados propios) y la lista
+// completa /perfumes/. Se generan desde perfumes.json (lo escribe npm run build); no se versionan porque cambian con cada build.
 {
-  const indexHtml = await readFile('index.html', 'utf8');
-  const data = indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)?.[1];
-  if (!data) throw new Error('index.html no trae el catálogo precargado; ejecuta npm run build antes de npm run site.');
-  const products = JSON.parse(data);
+  if (!existsSync('perfumes.json')) throw new Error('Falta perfumes.json; ejecuta npm run build antes de npm run site.');
+  const products = JSON.parse(await readFile('perfumes.json', 'utf8'));
+  if (!Array.isArray(products) || !products.length) throw new Error('perfumes.json está vacío.');
   await mkdir(OUT + '/perfumes', { recursive: true });
+  await writeFile(OUT + '/perfumes/index.html', renderDirectory(products));
   for (const p of products) {
     const related = p.brand ? products.filter(x => x.brand === p.brand && x.id !== p.id).slice(0, 6) : [];
     await writeFile(OUT + productPath(p), renderProductPage(p, related));
   }
-  console.log('Páginas de perfume generadas: ' + products.length);
+  console.log('Páginas de perfume generadas: ' + products.length + ' (y la lista completa /perfumes/).');
   // Archivo de productos para Google Merchant Center e Instagram/Facebook: /feeds/productos.xml
   const feed = merchantFeed(products);
   await mkdir(OUT + '/feeds', { recursive: true });

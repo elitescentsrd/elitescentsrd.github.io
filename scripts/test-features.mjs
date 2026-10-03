@@ -12,7 +12,7 @@ const read = path => readFile(path, 'utf8');
 const [indexHtml, template, tiendaJs, adminHtml, adminJs, checkoutHtml, customerJs, buildSite, swSource] = await Promise.all([
   read('index.html'), read('src/index.template.html'), read('tienda.js'), read('admin.html'), read('admin.js'), read('checkout.html'), read('customer.js'), read('scripts/build-site-artifact.mjs'), read('sw.js'),
 ]);
-const products = JSON.parse(indexHtml.match(/<script type="application\/json" id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]);
+const products = JSON.parse(await read('perfumes.json'));
 // 420 perfumes + los nuevos de La Grada (cuando se aplica su script); algunos pueden estar ocultos (data/precios-2026-09.json).
 const ocultables = JSON.parse(await read('data/precios-2026-09.json')).ocultos.length;
 const nuevosTotal = Object.keys(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).perfumes).length;
@@ -475,7 +475,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const visibles = new Set(products.map(p => Number(p.id)));
   assert(Array.isArray(home.vendidos) && Array.isArray(home.nuevos) && [...home.vendidos, ...home.nuevos].every(id => visibles.has(id)), 'Las secciones de la portada solo usan perfumes visibles');
   assert(home.vendidos.length === 0 || home.vendidos.length >= 4, '«Lo más vendido» aparece con al menos 4 perfumes');
-  assert(!/created_at/.test(indexHtml.match(/id="preRenderedProducts">([\s\S]*?)<\/script>/)[1]), 'La fecha de creación no se publica');
+  assert(!/created_at/.test(await read('perfumes.json')) && !/created_at/.test(indexHtml), 'La fecha de creación no se publica');
   const sample = { ...products[0], inspired_by: 'Creed Aventus', availability: 'agotado' };
   const page = renderProductPage(sample, []);
   assert(page.includes('<dt>Inspirado en</dt><dd>Creed Aventus</dd>') && page.includes('no es el perfume original') && page.includes('href="/#avisame-' + sample.id + '"'), 'La página del perfume muestra la referencia y «Avísame»');

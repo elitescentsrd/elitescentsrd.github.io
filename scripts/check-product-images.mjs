@@ -3,7 +3,7 @@
 // Reglas (ver plan de continuidad):
 //  - responden 200 por HTTPS, tipo JPG/PNG/WebP, pesan como máximo 3 MB y miden al menos 500x500;
 //  - ninguna URL puede apuntar a una lámina (/pages/page-XX);
-//  - el JSON-LD de index.html usa la misma URL individual que el producto;
+//  - el catálogo publicado (perfumes.json, del que salen las páginas de perfume y sus fichas para Google) usa la misma foto;
 //  - a partir de la fecha de corte (IMAGE_CUTOFF, por defecto 2026-10-20) TODOS los productos activos deben tener foto.
 // Antes de la fecha de corte solo se validan las fotos que ya existan.
 import { readFile, readdir } from 'node:fs/promises';
@@ -89,16 +89,15 @@ async function run() {
   }
   await Promise.all(Array.from({ length: 8 }, worker));
 
-  // JSON-LD: la misma foto individual que el producto y nunca una lámina.
+  // Catálogo publicado: la misma foto individual que el producto (de ahí salen las páginas y sus fichas para Google).
   try {
-    const html = await readFile('index.html', 'utf8');
-    const schemas = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => JSON.parse(m[1])).filter(s => s['@type'] === 'Product');
-    const byName = new Map(schemas.map(s => [s.name, s]));
+    const catalog = JSON.parse(await readFile('perfumes.json', 'utf8'));
+    const byId = new Map(catalog.map(p => [Number(p.id), p]));
     for (const p of withImage) {
-      const schema = byName.get(p.name);
-      if (schema && !(schema.image || []).includes(p.image_url)) failures.push('#' + p.id + ' ' + p.name + ': el JSON-LD de index.html no usa su foto (ejecuta npm run build)');
+      const published = byId.get(Number(p.id));
+      if (published && published.image_url !== p.image_url) failures.push('#' + p.id + ' ' + p.name + ': el catálogo publicado no usa su foto (ejecuta npm run build)');
     }
-  } catch { /* index.html se valida en test-site.mjs */ }
+  } catch { /* perfumes.json se valida en test-site.mjs */ }
 
   if (failures.length) {
     console.error('Problemas con las fotos de producto:\n - ' + failures.join('\n - '));

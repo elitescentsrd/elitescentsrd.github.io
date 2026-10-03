@@ -49,13 +49,14 @@ export function renderProductPage(p, related = []) {
   const whatsapp = 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent('Hola Elite Scents RD, me interesa: ' + p.name + ' (' + (p.size || 'tamaño por confirmar') + ', ' + price + '). ¿Puedes ayudarme?');
   const breadcrumb = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
     { '@type': 'ListItem', position: 1, name: 'Inicio', item: SITE_URL + '/' },
-    { '@type': 'ListItem', position: 2, name: 'Perfumes', item: SITE_URL + '/#coleccion' },
+    { '@type': 'ListItem', position: 2, name: 'Perfumes', item: SITE_URL + '/perfumes/' },
     { '@type': 'ListItem', position: 3, name: p.name, item: url },
   ] };
   const notes = [['Salida', p.notes_top], ['Corazón', p.notes_heart], ['Fondo', p.notes_base]].filter(([, list]) => (list || []).length)
     .map(([label, list]) => '<div><dt>' + label + '</dt><dd>' + esc(listNotes(list)) + '</dd></div>').join('');
+  const img = '<img src="' + esc(p.image_url) + '" alt="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" width="900" height="900" fetchpriority="high">';
   const photo = image
-    ? '<img src="' + esc(p.image_url) + '" alt="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" width="900" height="900" fetchpriority="high">'
+    ? (p.image_webp ? '<picture><source srcset="' + esc(p.image_webp) + '" type="image/webp">' + img + '</picture>' : img)
     : '<div class="photo placeholder" role="img" aria-label="' + esc('Foto próximamente de ' + p.name) + '"></div>';
   const relatedHtml = related.length
     ? '<section class="related"><h2 class="doc-h2">Más perfumes de ' + esc(p.brand) + '</h2><ul class="related-list">' + related.map(r => '<li><a href="' + esc(productPath(r)) + '">' + esc(r.name) + '</a> <span>' + esc(r.price || '') + '</span></li>').join('') + '</ul></section>'
@@ -68,7 +69,7 @@ export function renderProductPage(p, related = []) {
     '<meta name="theme-color" content="#14130f"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">' +
     '<link rel="stylesheet" href="/tienda.css"><link rel="icon" href="/logo-oficial.webp" type="image/webp">' + jsonLd(productSchema(p)) + jsonLd(breadcrumb) + '</head><body>' +
     '<header class="header"><a class="brand" href="/"><img src="/logo-oficial.webp" width="48" height="48" alt="Logotipo de Elite Scents RD"><span>ELITE <em>SCENTS</em><small>REPÚBLICA DOMINICANA</small></span></a><a href="/#coleccion">← Ver todos los perfumes</a></header>' +
-    '<main class="collection product-page"><nav class="breadcrumb" aria-label="Ruta"><a href="/">Inicio</a> › <a href="/#coleccion">Perfumes</a> › <span>' + esc(p.name) + '</span></nav>' +
+    '<main class="collection product-page"><nav class="breadcrumb" aria-label="Ruta"><a href="/">Inicio</a> › <a href="/perfumes/">Perfumes</a> › <span>' + esc(p.name) + '</span></nav>' +
     '<article class="product-detail"><div class="product-detail-photo">' + photo + '</div><div class="product-detail-info">' +
     '<p class="eyebrow">' + esc(p.brand || BRAND) + '</p><h1 class="detail-title">' + esc(p.name) + '</h1>' +
     (onOffer ? '<span class="offer-badge detail-offer">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
@@ -102,3 +103,43 @@ export function brandSchema() {
   };
 }
 export const brandSchemaScript = () => jsonLd(brandSchema());
+
+// /perfumes/: todos los perfumes de la A a la Z por marca, con precio y disponibilidad. Liviana e indexable: le da a
+// Google (y a quien prefiere una lista) un camino a cada página de perfume sin cargar el catálogo completo en la portada.
+export function renderDirectory(products) {
+  const url = SITE_URL + '/perfumes/', total = products.length;
+  const title = 'Todos los perfumes de la A a la Z | ' + BRAND;
+  const description = 'Lista completa de los ' + total + ' perfumes de ' + BRAND + ' con precio en pesos dominicanos y disponibilidad. Para hombre, mujer y unisex; pídelos por WhatsApp.';
+  const groups = new Map();
+  for (const p of products) {
+    const brand = String(p.brand || '').trim() || 'Otras marcas';
+    if (!groups.has(brand)) groups.set(brand, []);
+    groups.get(brand).push(p);
+  }
+  const brands = [...groups.keys()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  const anchor = brand => 'marca-' + slugify(brand);
+  const breadcrumb = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Inicio', item: SITE_URL + '/' },
+    { '@type': 'ListItem', position: 2, name: 'Perfumes', item: url },
+  ] };
+  const item = p => {
+    const availability = statusLabel[p.availability] ? p.availability : 'disponible';
+    return '<li><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a><span class="directory-size">' + esc(p.size || '') + '</span>' +
+      '<span class="directory-price">' + (p.original_price ? '<s>' + esc(p.original_price) + '</s> ' : '') + esc(p.price || 'Precio a confirmar') + '</span>' +
+      '<span class="directory-status status-' + availability + '">' + statusLabel[availability] + '</span></li>';
+  };
+  return '<!doctype html><html lang="es-DO"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\'; style-src \'self\'; img-src \'self\' data: https:; connect-src \'self\'; font-src \'self\'; object-src \'none\'; base-uri \'self\'; form-action \'self\'; upgrade-insecure-requests">' +
+    '<title>' + esc(title) + '</title><meta name="description" content="' + esc(description) + '"><meta name="robots" content="index,follow"><link rel="canonical" href="' + url + '">' +
+    '<meta property="og:type" content="website"><meta property="og:site_name" content="' + BRAND + '"><meta property="og:locale" content="es_DO"><meta property="og:title" content="' + esc(title) + '"><meta property="og:description" content="' + esc(description) + '"><meta property="og:url" content="' + url + '"><meta property="og:image" content="' + SITE_URL + '/social-card.png">' +
+    '<meta name="theme-color" content="#14130f"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">' +
+    '<link rel="stylesheet" href="/tienda.css"><link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" href="/logo-oficial.webp" type="image/webp">' + jsonLd(breadcrumb) + '</head><body>' +
+    '<header class="header"><a class="brand" href="/"><img src="/logo-oficial.webp" width="48" height="48" alt="Logotipo de Elite Scents RD"><span>ELITE <em>SCENTS</em><small>REPÚBLICA DOMINICANA</small></span></a><a href="/#coleccion">← Volver a la tienda</a></header>' +
+    '<main class="collection directory"><nav class="breadcrumb" aria-label="Ruta"><a href="/">Inicio</a> › <span>Perfumes</span></nav>' +
+    '<h1 class="detail-title">Todos los perfumes</h1><p class="directory-intro">' + total + ' fragancias de ' + brands.length + ' marcas, ordenadas por marca. Toca un perfume para ver sus notas, su foto y pedirlo.</p>' +
+    '<nav class="directory-brands" aria-label="Marcas">' + brands.map(b => '<a href="#' + anchor(b) + '">' + esc(b) + '</a>').join('') + '</nav>' +
+    brands.map(b => '<section class="directory-group" id="' + anchor(b) + '"><h2 class="doc-h2">' + esc(b) + ' <small>(' + groups.get(b).length + ')</small></h2><ul class="directory-list">' +
+      groups.get(b).sort((x, y) => x.name.localeCompare(y.name, 'es', { sensitivity: 'base' })).map(item).join('') + '</ul></section>').join('') +
+    '</main><footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a></div><p class="copyright">© Elite Scents RD</p></footer>' +
+    '<script defer src="/frame-guard.js"></script><script src="/cookies.js"></script><script defer src="/pwa.js"></script></body></html>';
+}
