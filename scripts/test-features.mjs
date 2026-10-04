@@ -666,11 +666,20 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const links = [...adminHtml.matchAll(/<a href="#([a-z]+)" data-view-link="([a-z]+)"/g)].map(m => { assert.equal(m[1], m[2], 'Cada enlace del menú lleva a su sección'); return m[1]; });
   const views = [...adminHtml.matchAll(/<section class="admin-card[^"]*" id="([a-z-]+)" data-view="([a-z]+)"/g)].map(m => ({ id: m[1], view: m[2] }));
   assert.deepEqual([...new Set(views.map(v => v.view))].sort(), [...links].sort(), 'Cada sección del menú tiene contenido y todo el contenido está en el menú');
-  assert.deepEqual(links, ['inicio', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
+  assert.deepEqual(links, ['inicio', 'ventas', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'encuesta', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
+  // Inicio solo con lo importante («Hoy»); lo que comparte sección va en pestañas (una cosa por pantalla).
+  assert.deepEqual(views.filter(v => v.view === 'inicio').map(v => v.id), ['today-card'], 'Inicio muestra solo «Hoy»');
+  const tabs = [...adminHtml.matchAll(/id="([a-z-]+)" data-view="([a-z]+)" data-tab="([a-z]+)" data-tab-label="([^"]+)"/g)].map(m => m[2] + '/' + m[3]);
+  assert.deepEqual(tabs, ['pedidos/lista', 'pedidos/nuevo', 'perfumes/buscar', 'perfumes/editar', 'perfumes/fotos'], 'Pestañas en Pedidos y Perfumes');
+  for (const view of new Set(views.map(v => v.view))) {
+    const cards = views.filter(v => v.view === view), tabbed = tabs.filter(t => t.startsWith(view + '/')).length;
+    assert(cards.length === 1 || cards.length === tabbed, 'La sección «' + view + '» muestra una sola tarjeta a la vez');
+  }
+  assert(adminJs.includes("location.hash = '#perfumes/editar'") && adminJs.includes("copy.style.clipPath = 'inset(0 '"), 'Editar abre su pestaña; la píldora de la pestaña se desliza con clip-path');
   const area = adminHtml.slice(adminHtml.indexOf('<div class="admin-views" id="admin-views">'), adminHtml.indexOf('<div class="admin-scrim"'));
   assert.equal((area.match(/<section /g) || []).length, views.length, 'Todas las tarjetas del panel están en una sección del menú');
   for (const id of ['orders-card', 'receivables-card', 'costs-card', 'coupons-card', 'offers-card', 'stock-card', 'product-card', 'security-card']) assert(views.some(v => v.id === id), 'Sigue existiendo #' + id + ' (los enlaces de antes abren su sección)');
-  assert(adminJs.includes("window.addEventListener('hashchange', () => showView());") && adminJs.includes("old?.closest('[data-view]')?.dataset.view || 'inicio'"), 'Una sección a la vez según la dirección (#pedidos), y los enlaces viejos siguen sirviendo');
+  assert(adminJs.includes("window.addEventListener('hashchange', () => showView());") && adminJs.includes("old?.closest('#admin-views > [data-view]')"), 'Una sección a la vez según la dirección (#pedidos), y los enlaces viejos siguen sirviendo');
   assert(adminHtml.includes('id="today-card" data-view="inicio"') && adminJs.includes('function renderToday()') && adminJs.includes("setBadge('pedidos', pending"), '«Hoy» y los números del menú');
   const adminCss = await read('admin.css');
   assert(adminHtml.includes('id="admin-menu-toggle" aria-expanded="false" aria-controls="admin-side"') && adminCss.includes('@media(prefers-reduced-motion:reduce)'), 'En el celular el menú se abre con un botón; sin animaciones si el aparato lo pide');
@@ -693,8 +702,31 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(tiendaJs.includes("new Intl.Collator('es',{sensitivity:'base'}).compare") && !tiendaJs.includes("localeCompare(b,'es',{sensitivity:'base'})"), 'Orden alfabético con un solo comparador (rápido en el celular)');
   // Con «reducir movimiento» todo queda quieto, y movimiento.js no lee medidas que obliguen a recalcular la página al abrirla.
   assert(mov.includes("matchMedia?.('(prefers-reduced-motion: reduce)')") && /@media\(prefers-reduced-motion:reduce\)\{\s*\.marquee-track\{animation:none\}/.test(css), 'Con «reducir movimiento» todo queda quieto');
-  assert(!/getBoundingClientRect|offsetHeight|scrollWidth|innerHeight\s*\*/.test(mov) && (mov.match(/offsetWidth/g) || []).length === 1, 'movimiento.js no fuerza cálculos de la página (solo el salto del carrito, al agregar)');
+  assert(!/getBoundingClientRect|offsetHeight|offsetWidth|scrollWidth|innerHeight\s*\*/.test(mov), 'movimiento.js no fuerza cálculos de la página');
   assert(/\.reveal\{opacity:0;transform:translateY\(26px\)\}/.test(css) && css.includes('.perfume{transform:translateY(0)}'), 'Aparecer al bajar solo con opacidad y transform');
   console.log('Portada con movimiento: cinta de ' + brands.length + ' marcas, destacados, pausa y modo quieto correctos.');
+}
+// ---------------------------------------------------------------- Reglas de movimiento de Emil Kowalski (tienda y panel)
+{
+  const [shop, panel] = await Promise.all([read('tienda.css'), read('admin.css')]);
+  // Recorre el CSS y devuelve cada regla con las condiciones @media que la envuelven.
+  const rulesOf = css => { const out = [], stack = []; let buf = '';
+    for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, '')) {
+      if (ch === '{') { const head = buf.trim(); buf = ''; stack.push(head); }
+      else if (ch === '}') { const head = stack.pop(); if (head !== undefined && !head.startsWith('@')) out.push({ selector: head, media: stack.filter(h => h.startsWith('@')).join(' ') }); buf = ''; }
+      else if (ch === ';' && !stack.length) buf = ''; else buf += ch;
+    }
+    return out; };
+  for (const [name, css, allowed] of [['tienda.css', shop, ['.marquee:hover .marquee-track', '.suggestions li:hover']], ['admin.css', panel, ['.btn:hover', '.btn.btn-secondary:hover', 'body.admin-light .btn.btn-secondary:hover']]]) {
+    const loose = rulesOf(css).flatMap(r => r.selector.split(',').filter(sel => sel.includes(':hover') && !/hover:hover/.test(r.media) && !allowed.includes(sel.trim())).map(sel => sel.trim()));
+    assert.deepEqual(loose, [], name + ': todo :hover va con @media(hover:hover) and (pointer:fine) (en el celular un toque deja el hover pegado)');
+    const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert(code.includes('--ease-out:cubic-bezier(0.23,1,0.32,1)') && !/cubic-bezier\(\.2,\.7,\.2,1\)|ease-in[,;)\s}]|transition:all/.test(code), name + ': curvas de Emil, nunca ease-in ni transition:all');
+    assert(!/scale\(0\)/.test(code), name + ': nada entra desde scale(0)');
+  }
+  assert(/\.button:active[^{]*\{transform:scale\(\.97\)\}/.test(shop) && /\.btn:active:not\(\[disabled\]\)\{transform:scale\(\.97\)\}/.test(panel), 'Presionar responde con escala .97');
+  assert(shop.includes('@media(pointer:coarse){input,select,textarea{font-size:16px}') && panel.includes('@media(pointer:coarse){body.admin-light input,body.admin-light select,body.admin-light textarea{font-size:16px}}'), 'Campos de 16 px en el celular (el iPhone no acerca la página)');
+  assert(shop.includes('@starting-style{.product-dialog[open],.finder-dialog[open]{opacity:0;transform:scale(.96)}}') && panel.includes('@starting-style{.admin-dialog[open]{opacity:0;transform:scale(.96)}}'), 'Ventanas centradas que entran con escala .96 y fundido');
+  console.log('Reglas de Emil Kowalski: hover solo con ratón, curvas propias, presionar .97, ventanas y campos del celular correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');

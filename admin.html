@@ -2,12 +2,12 @@
 <html lang="es" class="guarded">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' https://ozowziumksrudrotulll.supabase.co; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <title>Panel | Elite Scents RD</title>
-  <meta name="theme-color" content="#ffffff">
+  <meta name="theme-color" content="#15130e">
   <meta name="apple-mobile-web-app-title" content="Panel Elite">
   <link rel="manifest" href="/admin.webmanifest">
   <link rel="icon" href="/img/app/panel-icon-192.png" type="image/png">
@@ -59,6 +59,7 @@
           <nav class="admin-nav" aria-label="Secciones del panel">
             <p class="nav-group">Ventas</p>
             <a href="#inicio" data-view-link="inicio"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5v-5h4v5"/></svg><span>Inicio</span></a>
+            <a href="#ventas" data-view-link="ventas"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19.5h16"/><path d="m5 15 4.2-4.2 3.2 3.2L18.5 8"/><path d="M14.8 8h3.7v3.7"/></svg><span>Resumen de ventas</span></a>
             <a href="#pedidos" data-view-link="pedidos"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg><span>Pedidos</span><b class="nav-badge" id="badge-pedidos" hidden></b></a>
             <a href="#cobros" data-view-link="cobros"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16.5" cy="14.5" r="1.2"/></svg><span>Cobros</span><b class="nav-badge" id="badge-cobros" hidden></b></a>
             <a href="#avisame" data-view-link="avisame"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15L6 16z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span>Avísame</span><b class="nav-badge" id="badge-avisame" hidden></b></a>
@@ -70,7 +71,8 @@
             <a href="#ofertas" data-view-link="ofertas"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg><span>Ofertas</span></a>
             <a href="#cupones" data-view-link="cupones"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18v3a2.5 2.5 0 0 0 0 5v3H3v-3a2.5 2.5 0 0 0 0-5V6z"/><path d="M14 6.5v11" stroke-dasharray="2 2"/></svg><span>Cupones</span></a>
             <p class="nav-group">Clientes</p>
-            <a href="#clientes" data-view-link="clientes"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3 3 0 0 1 0 6"/><path d="M18 14c2 .7 3 2.8 3 6"/></svg><span>Clientes y encuesta</span></a>
+            <a href="#clientes" data-view-link="clientes"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3 3 0 0 1 0 6"/><path d="M18 14c2 .7 3 2.8 3 6"/></svg><span>Clientes</span></a>
+            <a href="#encuesta" data-view-link="encuesta"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9.2 3h5.6v3.2H9.2z"/><path d="m9 13.2 2 2 4-4"/></svg><span>Encuesta</span></a>
             <p class="nav-group">Tienda</p>
             <a href="#estadisticas" data-view-link="estadisticas"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V11M10 20V5M16 20v-6M2 20h20"/></svg><span>Estadísticas</span></a>
             <a href="#catalogo" data-view-link="catalogo"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4z"/><path d="M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4z"/></svg><span>Catálogo</span></a>
@@ -78,11 +80,13 @@
           </nav>
         </aside>
         <div class="admin-views" id="admin-views">
+        <nav class="view-tabs" id="view-tabs" aria-label="Partes de esta sección" hidden></nav>
         <section class="admin-card today-card" id="today-card" data-view="inicio">
-          <div class="admin-head"><div><p class="eyebrow">Hoy</p><h2>Lo que tienes pendiente</h2><p class="muted" id="today-date"></p></div></div>
+          <div class="admin-head"><div><p class="eyebrow" id="today-greeting">Hoy</p><h2>Lo que tienes pendiente</h2><p class="muted" id="today-date"></p></div></div>
           <div class="today-grid" id="today-grid"></div>
+          <div class="today-actions"><a class="btn" href="#pedidos/nuevo">+ Registrar pedido</a><a class="btn btn-secondary" href="#perfumes/editar">+ Agregar perfume</a><a class="btn btn-secondary" href="#ventas">Ver resumen de ventas</a></div>
         </section>
-        <section class="admin-card" id="sales-card" data-view="inicio">
+        <section class="admin-card" id="sales-card" data-view="ventas">
           <div class="admin-head"><div><p class="eyebrow">Resumen</p><h2>Resumen de ventas</h2><p class="muted">Se calcula con los pedidos del panel. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados; los nuevos quedan "por confirmar" y los cancelados no suman.</p></div><label class="sales-period-label">Período<select id="sales-period"><option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="all">Todo el historial</option></select></label></div>
           <div class="sales-kpis" id="sales-kpis"></div>
           <div class="admin-actions sales-chart-head"><strong id="sales-chart-title">Pedidos por día</strong><button type="button" class="btn btn-secondary active" data-sales-metric="orders">Pedidos</button><button type="button" class="btn btn-secondary" data-sales-metric="sales">Ventas (RD$)</button></div>
@@ -93,12 +97,12 @@
           </div>
           <div class="profit-block"><h3>Ganancia por mes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Mes</th><th>Pedidos con costo</th><th>Ventas</th><th>Costo</th><th>Ganancia</th><th>Margen</th><th>Sin costo</th></tr></thead><tbody id="profit-body"></tbody></table></div><p class="muted" id="profit-note">Se calcula con los costos privados de cada perfume (sección «Costos y precios») y la logística por unidad. Los pedidos con algún perfume sin costo aparecen en «Sin costo».</p></div>
         </section>
-        <section class="admin-card" id="orders-card" data-view="pedidos">
+        <section class="admin-card" id="orders-card" data-view="pedidos" data-tab="lista" data-tab-label="Pedidos">
           <div class="admin-head"><div><p class="eyebrow">Solicitudes</p><h2>Pedidos</h2><p class="muted">El panel revisa cada 20 segundos si entran pedidos nuevos y suena un aviso. Déjalo abierto en una pestaña para enterarte al momento.</p><p id="pending-count" class="pending-count" aria-live="polite"></p></div><button id="enable-order-notifications" class="btn btn-secondary" type="button">Activar notificaciones</button></div>
           <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Contacto</th><th>Productos</th><th>Total</th><th>Estado / entrega</th><th>Acciones</th></tr></thead><tbody id="orders-body"></tbody></table></div>
         </section>
-        <section class="admin-card" id="new-order-card" data-view="pedidos">
-          <p class="eyebrow">Nuevo pedido</p><h2>Registrar pedido confirmado</h2>
+        <section class="admin-card" id="new-order-card" data-view="pedidos" data-tab="nuevo" data-tab-label="Registrar pedido">
+          <div class="admin-head"><div><p class="eyebrow">Nuevo pedido</p><h2>Registrar pedido confirmado</h2><p class="muted">Para ventas por WhatsApp o en persona: elige los perfumes de la lista y el total se suma solo.</p></div></div>
           <form method="post" id="order-form" class="admin-form">
             <label>Cliente<input name="customer_name" maxlength="150" required></label>
             <label>Teléfono<input name="phone" type="tel" maxlength="40" required></label>
@@ -156,11 +160,11 @@
           <p id="stock-count" class="muted"></p>
           <div class="admin-actions"><button id="stock-more" class="btn btn-secondary hidden" type="button">Mostrar más</button><button id="stock-csv" class="btn btn-secondary" type="button">Descargar inventario (Excel)</button><span id="stock-status" aria-live="polite"></span></div>
         </section>
-        <section class="admin-card" id="products-card" data-view="perfumes">
+        <section class="admin-card" id="products-card" data-view="perfumes" data-tab="buscar" data-tab-label="Buscar">
           <div class="admin-head"><div><p class="eyebrow">Perfumes</p><h2>Buscar y editar perfumes</h2><p class="muted">Busca el perfume que quieres editar. Se muestran máximo 6 resultados.</p></div></div><input id="admin-search" type="search" placeholder="Buscar perfume o marca" autocomplete="off" class="admin-search-input">
           <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Imagen</th><th>Producto</th><th>Marca</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="products-body"></tbody></table></div>
         </section>
-        <section class="admin-card" id="product-card" data-view="perfumes">
+        <section class="admin-card" id="product-card" data-view="perfumes" data-tab="editar" data-tab-label="Agregar o editar">
           <div class="admin-head"><div><p class="eyebrow">Producto</p><h2 id="form-title">Agregar perfume</h2></div><button id="cancel-edit" class="btn btn-secondary hidden" type="button">Cancelar edición</button></div>
           <form method="post" id="product-form" class="admin-form">
             <input name="id" type="hidden">
@@ -193,7 +197,7 @@
             <p class="span-4 muted" id="stock-help">Cantidad en casa (opcional): se descuenta sola al confirmar un pedido; en 0 el perfume pasa a “Agotado” y, cuando vuelves a tener, a “Disponible”. Con 3 o menos la tienda muestra “¡Quedan 2!”. Varios tamaños: una cantidad por tamaño, por ejemplo “2 / 1”.</p>
           </form>
         </section>
-        <section class="admin-card" id="batch-card" data-view="perfumes">
+        <section class="admin-card" id="batch-card" data-view="perfumes" data-tab="fotos" data-tab-label="Fotos">
           <div class="admin-head"><div><p class="eyebrow">Fotos</p><h2>Carga de fotos por lote</h2><p class="muted">Hasta 36 imágenes por lote. El nombre de cada archivo debe empezar con el ID del producto seguido de un guion, por ejemplo <code>0012-dior-sauvage.jpg</code>. Solo se actualiza la foto principal; precios y disponibilidad no se tocan.</p></div></div>
           <form method="post" id="batch-form" class="admin-form">
             <label class="span-2">Fotos (JPG, PNG o WebP; máx. 3 MB; mín. 500×500)<input id="batch-files" name="batch_files" type="file" multiple accept="image/jpeg,image/png,image/webp" required></label>
@@ -286,7 +290,7 @@
           <p id="customers-summary" class="muted"></p>
           <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Correo</th><th>Nombre</th><th>Teléfono</th><th>Creada</th><th>Último acceso</th><th>Correo confirmado</th><th>MFA</th><th>Pedidos</th><th>Origen del registro</th></tr></thead><tbody id="customers-body"></tbody></table></div>
         </section>
-        <section class="admin-card" id="survey-card" data-view="clientes">
+        <section class="admin-card" id="survey-card" data-view="encuesta">
           <div class="admin-head"><div><p class="eyebrow">Encuesta</p><h2>Encuesta de clientes</h2><p class="muted">Quien responde la encuesta recibe un cupón personal de un solo uso que solo funciona en su cuenta (una encuesta por cuenta). Comparte el enlace en Instagram y WhatsApp.</p></div><button id="survey-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
           <p id="survey-notice" class="muted hidden">Para usar la encuesta falta aplicar la migración "encuesta" en Supabase (SQL Editor).</p>
           <div class="admin-actions survey-link-row"><code id="survey-link">https://elitescentsrd.github.io/encuesta.html</code><button id="survey-copy" class="btn btn-secondary" type="button">Copiar enlace</button><a class="btn btn-secondary" href="/encuesta.html" target="_blank" rel="noopener noreferrer">Ver encuesta ↗</a></div>
