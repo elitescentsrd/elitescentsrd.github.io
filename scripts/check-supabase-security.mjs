@@ -176,6 +176,45 @@ for (const table of ['orders', 'admin_users', 'customer_profiles']) {
   else if (s.status === 400) record('AVISO', 'products.stock_left todavía no existe en Supabase', MIG);
   else record('FALLO', 'products.stock_left publica una cantidad mayor que 3', 'HTTP ' + s.status);
 }
+// 4i. Mensajes y reseñas (migración 20261007120000_mensajes_y_resenas.sql): la tienda manda mensajes y reseñas solo con
+//     las funciones (que validan); un visitante nunca lee los mensajes, ni el pedido o la conexión de una reseña, ni la
+//     lista del panel; de las reseñas solo ve las publicadas.
+{
+  const pending = r => r.status === 404 || r.json?.code === 'PGRST202' || r.json?.code === 'PGRST205';
+  const MIG = 'aplicar supabase/migrations/20261007120000_mensajes_y_resenas.sql';
+  const m = await call('POST', '/rest/v1/rpc/send_contact_message', { p_name: '', p_phone: '', p_topic: '', p_message: '' });
+  if (m.status === 200 && m.json && m.json.ok === false) record('OK', 'send_contact_message valida los datos (no guarda nada inválido)');
+  else if (pending(m)) record('AVISO', 'send_contact_message todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Respuesta inesperada de send_contact_message', 'HTTP ' + m.status + ' ' + m.text.slice(0, 100));
+  const inv = await call('POST', '/rest/v1/rpc/review_invite', { p_token: '0'.repeat(32) });
+  if (inv.status === 200 && inv.json && inv.json.ok === false && !inv.json.products) record('OK', 'review_invite no muestra nada sin un enlace válido');
+  else if (pending(inv)) record('AVISO', 'review_invite todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Respuesta inesperada de review_invite', 'HTTP ' + inv.status + ' ' + inv.text.slice(0, 100));
+  const sub = await call('POST', '/rest/v1/rpc/submit_review', { p_token: '0'.repeat(32), p_product_id: -1, p_rating: 5, p_comment: '', p_author: 'Prueba' });
+  if (sub.status === 200 && sub.json && sub.json.ok === false) record('OK', 'submit_review rechaza reseñas sin un enlace válido');
+  else if (pending(sub)) record('AVISO', 'submit_review todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Respuesta inesperada de submit_review', 'HTTP ' + sub.status + ' ' + sub.text.slice(0, 100));
+  const msgs = await call('GET', '/rest/v1/contact_messages?select=*&limit=1');
+  if (denied(msgs) || ((msgs.status === 200 || msgs.status === 206) && Array.isArray(msgs.json) && msgs.json.length === 0)) record('OK', 'Visitantes no leen contact_messages', 'HTTP ' + msgs.status);
+  else if (pending(msgs)) record('AVISO', 'La tabla contact_messages todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Un visitante puede leer los mensajes de contacto', 'HTTP ' + msgs.status);
+  const pub = await call('GET', '/rest/v1/product_reviews?select=id,product_id,author_name,rating,comment,created_at&limit=1');
+  if ((pub.status === 200 || pub.status === 206) && Array.isArray(pub.json)) record('OK', 'Las reseñas publicadas se leen con sus columnas públicas', pub.json.length + ' leída(s)');
+  else if (pending(pub)) record('AVISO', 'La tabla product_reviews todavía no existe en Supabase', MIG);
+  else record('FALLO', 'Respuesta inesperada al leer las reseñas publicadas', 'HTTP ' + pub.status + ' ' + pub.text.slice(0, 100));
+  for (const col of ['order_id', 'ip_hash', 'status']) {
+    const r = await call('GET', '/rest/v1/product_reviews?select=' + col + '&limit=1');
+    if (denied(r) || r.json?.code === '42501') record('OK', 'Visitantes no leen product_reviews.' + col, 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', 'La tabla product_reviews todavía no existe en Supabase', MIG);
+    else record('FALLO', 'Un visitante puede leer product_reviews.' + col, 'HTTP ' + r.status);
+  }
+  for (const [name, body] of [['admin_reviews', {}], ['admin_moderate_review', { p_id: -1, p_action: 'borrar' }], ['admin_review_link', { p_order_id: -1 }], ['my_review_link', { p_order_id: -1 }]]) {
+    const r = await call('POST', '/rest/v1/rpc/' + name, body);
+    if (denied(r)) record('OK', name + ': EXECUTE revocado para anon', 'HTTP ' + r.status);
+    else if (pending(r)) record('AVISO', name + ' todavía no existe en Supabase', MIG);
+    else record('FALLO', 'Un visitante puede ejecutar ' + name, 'HTTP ' + r.status + ' ' + r.text.slice(0, 100));
+  }
+}
 // 5. Storage: el listado público funciona, pero no se prueba escritura (crearía archivos si fallara la política).
 {
   const r = await call('POST', '/storage/v1/object/list/product-images', { prefix: '', limit: 1 });

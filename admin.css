@@ -241,3 +241,17 @@ body.admin-light .btn.btn-secondary:hover{background:#fffdf8}
   .admin-dialog[open]{transition:opacity 150ms ease}
   @starting-style{.admin-dialog[open]{opacity:0;transform:none}}
 }
+/* Mensajes y reseñas: tarjetas que se leen de un vistazo (lo nuevo lleva una franja dorada) */
+.inbox-list{display:grid;gap:12px;margin-top:16px}
+.inbox-item{background:var(--cream,#fffaf1);border:1px solid var(--line,#e6d3aa);border-radius:16px;padding:14px 16px;display:grid;gap:6px}
+.inbox-item.is-new{border-left:4px solid var(--gold,#c9a45c);box-shadow:0 10px 24px -18px rgba(122,90,34,.6)}
+.inbox-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.inbox-head strong{font-size:16px}
+.inbox-head time{margin-left:auto;color:var(--muted);font-size:13px}
+.inbox-meta{margin:0;color:var(--muted);font-size:13px}
+.inbox-text{margin:2px 0 6px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55}
+.inbox-empty{margin:18px 4px}
+.review-stars{color:#7a5a22;letter-spacing:2px;font-size:17px;line-height:1}
+.review-rule{margin:0 0 14px;padding:10px 14px;border-left:3px solid var(--gold,#c9a45c);background:rgba(243,226,184,.45);border-radius:0 12px 12px 0;font-size:14px}
+.review-ask{display:inline-flex;flex-wrap:wrap;gap:8px}
+#reviews-status{margin:10px 0 0;min-height:1.2em}

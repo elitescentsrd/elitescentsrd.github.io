@@ -124,7 +124,7 @@
     }
   }
 
-  // ---- Aparecer al bajar: títulos, ventajas, tarjetas y preguntas suben con un fundido la primera vez que se ven.
+  // ---- Aparecer al bajar: títulos, ventajas, tarjetas, opiniones y preguntas suben con un fundido la primera vez que se ven.
   // Solo se esconde lo que todavía está más abajo de la pantalla (nada de lo que ya se ve parpadea). La primera noticia
   // del IntersectionObserver dice dónde está cada cosa, sin forzar cálculos de la página.
   function revealOnScroll() {
@@ -160,7 +160,7 @@
     document.addEventListener('click', e => { if (e.target.closest?.('#more, [data-filter], #favoritesOnly, #clearFilters, [data-brand], [data-shelf-all], #suggestions, #finderCatalog')) touched(); }, true);
     const boxes = $$('#productGrid, .shelf-row');
     boxes.forEach(box => { box.dataset.revealCards = ''; box._seen = new Set(); });
-    $$('.benefits > div, .section-head, .shelf-head, .finder-callout, .story > div, .testimonial-empty, .faq details, .brand-strip, .footer > div').forEach(el => io.observe(el));
+    $$('.benefits > div, .section-head, .shelf-head, .finder-callout, .story > div, .testimonial-empty, .testimonials .review-summary, .testimonials .review-card, .faq details, .brand-strip, .footer > div').forEach(el => io.observe(el));
     boxes.forEach(box => box.querySelectorAll('.perfume[data-product-id]').forEach(card => io.observe(card)));
     for (const box of boxes) new MutationObserver(records => {
       for (const r of records) for (const node of r.removedNodes) if (node.nodeType === 1) io.unobserve(node);

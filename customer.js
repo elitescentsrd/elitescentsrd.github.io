@@ -322,13 +322,21 @@ async function placeOrder(){
  status.append(document.createElement('br'),link);
  removeCoupon();saveCart([]);await loadOrders();
 }
+// Pedido entregado: «Calificar mis perfumes» abre la página de la reseña con el enlace personal de ese pedido.
+function reviewButton(o){
+ const box=document.createElement('div');box.className='order-review';
+ const b=document.createElement('button');b.type='button';b.className='button outline';b.textContent='⭐ Calificar mis perfumes';
+ const note=document.createElement('p');note.className='order-review-note';note.setAttribute('aria-live','polite');
+ b.addEventListener('click',async()=>{b.disabled=true;note.textContent='Abriendo…';try{const r=await authFetch('/rest/v1/rpc/my_review_link',{method:'POST',body:JSON.stringify({p_order_id:o.id})});if(r&&r.ok===true&&/^[0-9a-f]{32}$/.test(r.token)){location.href='/resena.html#'+r.token;return}note.textContent=r?.message||'No se pudo abrir la reseña.'}catch{note.textContent='Pronto podrás calificar desde aquí. Mientras, cuéntanos por WhatsApp qué te pareció.'}b.disabled=false});
+ box.append(b,note);return box;
+}
 async function loadOrders(){
  if(!session?.user?.id)return;
  try{
   const rows=await authFetch('/rest/v1/orders?select=id,created_at,status,items,amount,estimated_delivery&user_id=eq.'+encodeURIComponent(session.user.id)+'&order=created_at.desc',{method:'GET'});
   const root=$('#myOrders');root.replaceChildren();
   if(!rows.length){root.innerHTML='<p class="muted">Todavía no tienes pedidos.</p>';return}
-  rows.forEach(o=>{const card=document.createElement('article');card.className='order-card';const h=document.createElement('strong');h.textContent='Pedido #'+o.id+' · '+String(o.status||'nuevo').toUpperCase();const date=document.createElement('p');date.textContent=new Date(o.created_at).toLocaleString('es-DO');const items=document.createElement('p');items.textContent=o.items;const total=document.createElement('p');total.textContent='Total: '+(o.amount||'Por confirmar');const eta=document.createElement('p');eta.textContent=o.estimated_delivery?'Entrega estimada: '+o.estimated_delivery:'Tiempo de entrega: pendiente de confirmación';card.append(h,date,items,total,eta);root.append(card)});
+  rows.forEach(o=>{const card=document.createElement('article');card.className='order-card';const h=document.createElement('strong');h.textContent='Pedido #'+o.id+' · '+String(o.status||'nuevo').toUpperCase();const date=document.createElement('p');date.textContent=new Date(o.created_at).toLocaleString('es-DO');const items=document.createElement('p');items.textContent=o.items;const total=document.createElement('p');total.textContent='Total: '+(o.amount||'Por confirmar');const eta=document.createElement('p');eta.textContent=o.estimated_delivery?'Entrega estimada: '+o.estimated_delivery:'Tiempo de entrega: pendiente de confirmación';card.append(h,date,items,total,eta);if(String(o.status)==='entregado')card.append(reviewButton(o));root.append(card)});
  }catch(err){$('#myOrders').textContent=err.message}
 }
 $('#loginTab').addEventListener('click',()=>setMode('login'));$('#signupTab').addEventListener('click',()=>setMode('signup'));

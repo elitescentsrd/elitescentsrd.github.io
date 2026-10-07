@@ -24,7 +24,14 @@ Un flujo de GitHub Actions repite estos pasos. En `main` publica `_site/` en Git
 
 ## Panel
 
-`admin.html` muestra una pantalla a la vez desde el menú lateral (en el celular, desde el botón de arriba): `#inicio` (solo «Hoy»: lo pendiente y accesos rápidos), `#ventas`, `#pedidos`, `#cobros`, `#avisame`, `#perfumes`, `#inventario`, `#compras`, `#costos`, `#ofertas`, `#cupones`, `#clientes`, `#encuesta`, `#estadisticas`, `#catalogo` y `#seguridad`. Lo que comparte sección va en pestañas: `#pedidos/lista` y `#pedidos/nuevo`; `#perfumes/buscar`, `#perfumes/editar` y `#perfumes/fotos`. Los enlaces viejos (`#orders-card`…) abren su sección.
+`admin.html` muestra una pantalla a la vez desde el menú lateral (en el celular, desde el botón de arriba): `#inicio` (solo «Hoy»: lo pendiente y accesos rápidos), `#ventas`, `#pedidos`, `#cobros`, `#avisame`, `#perfumes`, `#inventario`, `#compras`, `#costos`, `#ofertas`, `#cupones`, `#clientes`, `#mensajes`, `#resenas`, `#encuesta`, `#estadisticas`, `#catalogo` y `#seguridad`. Lo que comparte sección va en pestañas: `#pedidos/lista` y `#pedidos/nuevo`; `#perfumes/buscar`, `#perfumes/editar` y `#perfumes/fotos`. Los enlaces viejos (`#orders-card`…) abren su sección.
+
+## Contacto, reseñas y medición
+
+- **Contacto** (`contacto.html`, `contacto.js`): el mensaje va a la función `send_contact_message` (valida los datos y pone límites contra abusos) y aparece en la sección «Mensajes» del panel, con «Responder por WhatsApp». Si la base de datos no responde, el formulario ofrece mandar el mismo mensaje por WhatsApp.
+- **Reseñas verificadas**: solo califica quien recibió su pedido. En «Pedidos», cada pedido entregado tiene «⭐ Pedir reseña» (enlace personal `resena.html#clave`, que vence a los 90 días); los clientes con cuenta también lo tienen en «Mis pedidos». Nada se publica hasta aprobarlo en «Reseñas». `npm run build` lee solo las publicadas: pone el promedio en `perfumes.json` (estrellas en tarjetas y ficha), las muestra en la portada y escribe `data/resenas.json` (no se guarda en Git) para la página de cada perfume, con `AggregateRating` y `Review` para Google solo con esas reseñas reales.
+- **Google Analytics y píxel de Meta**: los números van en `TERCEROS` al principio de `cookies.js` (vacíos = apagados). Con números, el build agrega `medicion.js` a la portada, las páginas de perfume y la lista A–Z, y abre su política de seguridad solo para esos servidores; el aviso de cookies los nombra y vuelve a pedir el permiso. Solo se cargan con «Aceptar todas» y nunca en el carrito, el panel, la encuesta, contacto ni reseñas.
+- Base de datos: `supabase/migrations/20261007120000_mensajes_y_resenas.sql` (con «ensayar» primero), probado con `scripts/test-mensajes-resenas-sql.mjs`.
 
 ## Diseño y movimiento
 

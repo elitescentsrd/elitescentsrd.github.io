@@ -72,6 +72,8 @@
             <a href="#cupones" data-view-link="cupones"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18v3a2.5 2.5 0 0 0 0 5v3H3v-3a2.5 2.5 0 0 0 0-5V6z"/><path d="M14 6.5v11" stroke-dasharray="2 2"/></svg><span>Cupones</span></a>
             <p class="nav-group">Clientes</p>
             <a href="#clientes" data-view-link="clientes"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3 3 0 0 1 0 6"/><path d="M18 14c2 .7 3 2.8 3 6"/></svg><span>Clientes</span></a>
+            <a href="#mensajes" data-view-link="mensajes"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 5.5h16v10.5H9.5L5.5 19.5V16H4z"/><path d="M8 9.5h8M8 12.5h5"/></svg><span>Mensajes</span><b class="nav-badge" id="badge-mensajes" hidden></b></a>
+            <a href="#resenas" data-view-link="resenas"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m12 3.5 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg><span>Reseñas</span><b class="nav-badge" id="badge-resenas" hidden></b></a>
             <a href="#encuesta" data-view-link="encuesta"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="4.5" width="14" height="16.5" rx="2.2"/><path d="M9.2 3h5.6v3.2H9.2z"/><path d="m9 13.2 2 2 4-4"/></svg><span>Encuesta</span></a>
             <p class="nav-group">Tienda</p>
             <a href="#estadisticas" data-view-link="estadisticas"><svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20V11M10 20V5M16 20v-6M2 20h20"/></svg><span>Estadísticas</span></a>
@@ -289,6 +291,20 @@
           <input id="customers-search" type="search" placeholder="Buscar por correo, nombre o teléfono" autocomplete="off" class="admin-search-input">
           <p id="customers-summary" class="muted"></p>
           <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Correo</th><th>Nombre</th><th>Teléfono</th><th>Creada</th><th>Último acceso</th><th>Correo confirmado</th><th>MFA</th><th>Pedidos</th><th>Origen del registro</th></tr></thead><tbody id="customers-body"></tbody></table></div>
+        </section>
+        <section class="admin-card" id="messages-card" data-view="mensajes">
+          <div class="admin-head"><div><p class="eyebrow">Página «Contacto»</p><h2>Mensajes</h2><p class="muted">Lo que te escriben desde la página de contacto de la tienda. «Responder por WhatsApp» abre el chat con el saludo listo; cuando termines, márcalo como atendido.</p><p id="messages-summary" class="pending-count" aria-live="polite"></p></div><button id="messages-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+          <p id="messages-notice" class="muted hidden"></p>
+          <div class="offer-filters"><label>Mostrar<select id="messages-view"><option value="nuevo">Por atender</option><option value="atendido">Atendidos</option><option value="todos">Todos</option></select></label></div>
+          <div class="inbox-list" id="messages-list"></div>
+        </section>
+        <section class="admin-card" id="reviews-card" data-view="resenas">
+          <div class="admin-head"><div><p class="eyebrow">Opiniones verificadas</p><h2>Reseñas</h2><p class="muted">Solo opinan clientes con un pedido entregado: en «Pedidos», el botón «⭐ Pedir reseña» de cada pedido entregado te da el enlace para mandárselo por WhatsApp. Ninguna reseña sale en la tienda hasta que la publiques.</p><p id="reviews-summary" class="pending-count" aria-live="polite"></p></div><button id="reviews-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
+          <p class="review-rule">Oculta solo las que tengan insultos, datos personales o no hablen del perfume. Esconder las de pocas estrellas quita confianza, y Google puede dejar de mostrar tus estrellas si nota que solo publicas las buenas.</p>
+          <p id="reviews-notice" class="muted hidden"></p>
+          <div class="offer-filters"><label>Mostrar<select id="reviews-view"><option value="pendiente">Por revisar</option><option value="aprobada">Publicadas</option><option value="oculta">Ocultas</option></select></label></div>
+          <p id="reviews-status" aria-live="polite"></p>
+          <div class="inbox-list" id="reviews-list"></div>
         </section>
         <section class="admin-card" id="survey-card" data-view="encuesta">
           <div class="admin-head"><div><p class="eyebrow">Encuesta</p><h2>Encuesta de clientes</h2><p class="muted">Quien responde la encuesta recibe un cupón personal de un solo uso que solo funciona en su cuenta (una encuesta por cuenta). Comparte el enlace en Instagram y WhatsApp.</p></div><button id="survey-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>

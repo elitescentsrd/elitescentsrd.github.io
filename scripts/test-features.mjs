@@ -575,7 +575,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
     assert(r.sent.every(x => Object.keys(x.body).every(k => ['p_kind', 'p_product_id', 'p_term', 'p_source', 'p_device'].includes(k))), 'Solo los datos previstos (sin nombre, teléfono ni correo)');
     const again = runAnalytics('all'); assert.equal(again.sent.filter(x => x.body.p_kind === 'visita').length, 1, 'Una visita por sesión');
   }
-  assert(tiendaJs.includes("window.EliteStats?.track('perfume',{product_id:p.id})") && tiendaJs.includes("window.EliteStats?.track('carrito',{product_id:p.id})") && tiendaJs.includes("matches().length?'busqueda':'sin_resultado'"), 'La tienda cuenta fichas, carrito y búsquedas');
+  assert(tiendaJs.includes("window.EliteStats?.track('perfume',{product_id:p.id,value:numbers(p.price)[0]})") && tiendaJs.includes("window.EliteStats?.track('carrito',{product_id:p.id,value:unit})") && tiendaJs.includes("matches().length?'busqueda':'sin_resultado'"), 'La tienda cuenta fichas, carrito y búsquedas');
   assert(template.includes('<script defer src="/analytics.js"></script>') && productPage.includes('<script defer src="/supabase-config.js"></script><script defer src="/analytics.js"></script>') && productPage.includes('<body data-product-id="' + sample.id + '">') && directory.includes('/analytics.js'), 'Estadísticas en la portada, la lista y cada página de perfume');
   assert(buildSite.includes("'analytics.js'"), 'analytics.js se publica');
   assert(html['privacidad.html'].includes('id="estadisticas"') && /se borra a los 2 días/.test(html['privacidad.html']) && (await read('cookies.js')).includes('contaremos de forma anónima'), 'La privacidad y el aviso de cookies explican las estadísticas');
@@ -666,7 +666,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const links = [...adminHtml.matchAll(/<a href="#([a-z]+)" data-view-link="([a-z]+)"/g)].map(m => { assert.equal(m[1], m[2], 'Cada enlace del menú lleva a su sección'); return m[1]; });
   const views = [...adminHtml.matchAll(/<section class="admin-card[^"]*" id="([a-z-]+)" data-view="([a-z]+)"/g)].map(m => ({ id: m[1], view: m[2] }));
   assert.deepEqual([...new Set(views.map(v => v.view))].sort(), [...links].sort(), 'Cada sección del menú tiene contenido y todo el contenido está en el menú');
-  assert.deepEqual(links, ['inicio', 'ventas', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'encuesta', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
+  assert.deepEqual(links, ['inicio', 'ventas', 'pedidos', 'cobros', 'avisame', 'perfumes', 'inventario', 'compras', 'costos', 'ofertas', 'cupones', 'clientes', 'mensajes', 'resenas', 'encuesta', 'estadisticas', 'catalogo', 'seguridad'], 'Menú por segmentos: ventas, productos, clientes y tienda');
   // Inicio solo con lo importante («Hoy»); lo que comparte sección va en pestañas (una cosa por pantalla).
   assert.deepEqual(views.filter(v => v.view === 'inicio').map(v => v.id), ['today-card'], 'Inicio muestra solo «Hoy»');
   const tabs = [...adminHtml.matchAll(/id="([a-z-]+)" data-view="([a-z]+)" data-tab="([a-z]+)" data-tab-label="([^"]+)"/g)].map(m => m[2] + '/' + m[3]);
@@ -728,5 +728,110 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(shop.includes('@media(pointer:coarse){input,select,textarea{font-size:16px}') && panel.includes('@media(pointer:coarse){body.admin-light input,body.admin-light select,body.admin-light textarea{font-size:16px}}'), 'Campos de 16 px en el celular (el iPhone no acerca la página)');
   assert(shop.includes('@starting-style{.product-dialog[open],.finder-dialog[open]{opacity:0;transform:scale(.96)}}') && panel.includes('@starting-style{.admin-dialog[open]{opacity:0;transform:scale(.96)}}'), 'Ventanas centradas que entran con escala .96 y fundido');
   console.log('Reglas de Emil Kowalski: hover solo con ratón, curvas propias, presionar .97, ventanas y campos del celular correctos.');
+}
+// ---------------------------------------------------------------- Contacto, reseñas verificadas y medición de Google y Meta
+{
+  const [contactHtml, contactJs, reviewHtml, reviewJs, cookiesJs, medicionJs, analyticsSrc, privacy, buildCatalog, gitignore, respaldo] = await Promise.all(['contacto.html', 'contacto.js', 'resena.html', 'resena.js', 'cookies.js', 'medicion.js', 'analytics.js', 'privacidad.html', 'scripts/build-catalog.mjs', '.gitignore', '.github/workflows/respaldo.yml'].map(read));
+  // 1. Contacto: el mensaje llega al panel (sin terceros); si no se puede, se ofrece WhatsApp.
+  assert(/<form method="post" id="contactForm"/.test(contactHtml) && ['name="name"', 'name="phone"', 'name="topic"', 'name="message"', 'class="hp-field"'].every(x => contactHtml.includes(x)), 'Contacto: nombre, WhatsApp, tema, mensaje y trampa para robots');
+  assert(contactJs.includes("'/rest/v1/rpc/send_contact_message'") && contactJs.includes("'https://wa.me/18094333348?text='"), 'El mensaje va a la base de datos; si falla, se ofrece mandarlo por WhatsApp');
+  assert(contactHtml.includes("connect-src 'self' https://ozowziumksrudrotulll.supabase.co;") && contactHtml.includes('<script defer src="/contacto.js"></script>'), 'Contacto se conecta solo a Supabase');
+  for (const f of ['contacto.html', 'contacto.js', 'resena.html', 'resena.js', 'medicion.js']) assert(buildSite.includes("'" + f + "'"), f + ' se publica');
+  for (const f of ['index.html', 'pedidos-envios.html', 'canales-oficiales.html', 'privacidad.html', 'aviso-legal.html', 'encuesta.html', 'checkout.html', '404.html']) assert((await read(f)).includes('href="/contacto.html"'), f + ' enlaza a Contacto');
+  assert(renderProductPage(products[0], []).includes('href="/contacto.html"') && buildCatalog.includes("path: 'contacto.html'"), 'Contacto en las páginas de perfume y en el mapa del sitio');
+  // 2. Panel: mensajes, reseñas, «Pedir reseña» en pedidos entregados, «Hoy» y respaldos.
+  for (const id of ['messages-card', 'messages-list', 'messages-view', 'badge-mensajes', 'reviews-card', 'reviews-list', 'reviews-view', 'badge-resenas']) assert(adminHtml.includes('id="' + id + '"'), 'El panel tiene #' + id);
+  assert(["'/rest/v1/contact_messages?select=*&order=created_at.desc'", "'/rest/v1/rpc/admin_reviews'", "'/rest/v1/rpc/admin_moderate_review'", "'/rest/v1/rpc/admin_review_link'"].every(x => adminJs.includes(x)), 'El panel lee mensajes y reseñas, las revisa y crea enlaces de reseña');
+  assert(adminJs.includes("if((o.status||'nuevo')==='entregado'&&reviewsReady!==false)actions.append(reviewAsk(o));") && adminJs.includes("location.origin + '/resena.html#' + out.token"), '«Pedir reseña» solo en pedidos entregados, con la clave después de # (no viaja a ningún servidor)');
+  assert(adminJs.includes("setBadge('mensajes', newMessages") && adminJs.includes("setBadge('resenas', toReview") && adminJs.includes("['mensajes', String(newMessages)"), '«Hoy» y el menú cuentan mensajes y reseñas pendientes');
+  assert(adminJs.includes("['mensajes', '/rest/v1/contact_messages?select=*&order=id.asc']") && adminJs.includes("['resenas', '/rest/v1/rpc/admin_reviews?order=id.asc']") && / contact_messages product_reviews;/.test(respaldo), 'Los respaldos incluyen mensajes y reseñas');
+  assert(adminJs.includes('if(sig!==lastOrdersSig)'), 'La lista de pedidos solo se vuelve a dibujar si algo cambió (no borra lo que estás escribiendo)');
+  // 3. Reseñas: página privada, «Mis pedidos», build y Google.
+  assert(reviewHtml.includes('<meta name="robots" content="noindex,nofollow">') && reviewHtml.includes('<meta name="referrer" content="no-referrer">') && reviewJs.includes("rpc('review_invite'") && reviewJs.includes("rpc('submit_review'"), 'Página de reseña privada (ni Google ni referrer) que usa las funciones de la base de datos');
+  assert(customerJs.includes("'/rest/v1/rpc/my_review_link'") && customerJs.includes("String(o.status)==='entregado'"), '«Mis pedidos» ofrece calificar los pedidos entregados');
+  assert(buildCatalog.includes('/rest/v1/product_reviews?select=id,product_id,author_name,rating,comment,created_at') && gitignore.split('\n').includes('data/resenas.json'), 'El build lee solo las columnas públicas y las reseñas no se guardan en Git');
+  assert(template.includes('<!-- REVIEWS_HOME_START -->') && template.includes('<!-- REVIEWS_HOME_END -->') && template.includes('id="dialogRating"') && /<!-- REVIEWS_HOME_START -->[\s\S]*<!-- REVIEWS_HOME_END -->/.test(indexHtml), 'La portada y la ficha tienen lugar para las opiniones');
+  const fx = [{ product_id: products[0].id, author: 'María P.', rating: 5, comment: 'Excelente\n<b>dura</b>', date: '2026-10-06' }, { product_id: products[0].id, author: 'Luis', rating: 4, comment: '', date: '2026-10-05' }];
+  const withReviews = renderProductPage(products[0], [], fx), withoutReviews = renderProductPage(products[0], []);
+  const productLd = page => [...page.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(m => JSON.parse(m[1])).find(d => d['@type'] === 'Product');
+  assert(!('aggregateRating' in productLd(withoutReviews)) && !('review' in productLd(withoutReviews)) && !withoutReviews.includes('id="opiniones"'), 'Sin reseñas publicadas no hay estrellas (ni en la página ni para Google)');
+  assert.deepEqual(productLd(withReviews).aggregateRating, { '@type': 'AggregateRating', ratingValue: 4.5, reviewCount: 2, bestRating: 5, worstRating: 1 }, 'Estrellas para Google = las reseñas reales publicadas');
+  assert.deepEqual(productLd(withReviews).review.map(r => [r.author.name, r.reviewRating.ratingValue, r.reviewBody, r.datePublished]), [['María P.', 5, 'Excelente\n<b>dura</b>', '2026-10-06'], ['Luis', 4, undefined, '2026-10-05']], 'Cada reseña con su autor, estrellas, texto y fecha');
+  assert(withReviews.includes('id="opiniones"') && withReviews.includes('Excelente<br>&lt;b&gt;dura&lt;/b&gt;') && withReviews.includes('4.5 de 5 · 2 opiniones'), 'La página muestra esas mismas reseñas (lo que escribe el cliente nunca se vuelve código)');
+  assert(tiendaJs.includes("line.className='card-rating'") && buildCatalog.includes('<p class="card-rating"><span aria-hidden="true"><b>★</b> '), 'Estrellas en las tarjetas (build y tienda)');
+  assert(['id="mensajes"', 'id="resenas"', 'id="medicion"'].every(x => privacy.includes(x)), 'La privacidad explica los mensajes, las reseñas y la medición de Google y Meta');
+  // 4. Medición de Google y Meta: apagada sin números; con números, solo sus servidores y solo con «Aceptar todas».
+  const { measurementFor, cspWithMeasurement, MEDICION } = await import('./lib/seo.mjs');
+  assert(!measurementFor({}).active && !measurementFor({ ga4: 'UA-12345-1', metaPixel: 'abc' }).active, 'Sin números válidos la medición está apagada');
+  const strictCsp = "default-src 'self'; script-src 'self'; connect-src 'self' https://ozowziumksrudrotulll.supabase.co; img-src 'self'";
+  assert.equal(cspWithMeasurement(strictCsp, measurementFor({})), strictCsp, 'Apagada no cambia la política de seguridad');
+  assert.equal(cspWithMeasurement(strictCsp, measurementFor({ ga4: 'G-ABC1234' })), "default-src 'self'; script-src 'self' https://www.googletagmanager.com; connect-src 'self' https://ozowziumksrudrotulll.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; img-src 'self'", 'Solo Google: solo sus servidores');
+  assert.equal(cspWithMeasurement(strictCsp, measurementFor({ metaPixel: '1234567890' })), "default-src 'self'; script-src 'self' https://connect.facebook.net; connect-src 'self' https://ozowziumksrudrotulll.supabase.co https://www.facebook.com https://connect.facebook.net; img-src 'self'", 'Solo Meta: solo sus servidores');
+  for (const page of [indexHtml, renderProductPage(products[0], [])]) assert.equal(page.includes('<script defer src="/analytics.js"></script><script defer src="/medicion.js"></script>'), MEDICION.active, 'medicion.js (después de analytics.js) solo si la medición está activa');
+  for (const f of ['checkout.html', 'admin.html', 'encuesta.html', 'contacto.html', 'resena.html']) assert(!(await read(f)).includes('medicion.js'), f + ' nunca carga Google ni Meta');
+  assert(analyticsSrc.includes('window.EliteMedicion?.evento(kind, data);'), 'medicion.js recibe los mismos eventos que las estadísticas propias');
+  // medicion.js en un navegador simulado.
+  const runMedicion = (choice, ids, productId) => {
+    const added = [], on = {};
+    const ctx = { choice, document: { readyState: 'complete', body: { dataset: productId ? { productId: String(productId) } : {} }, head: { append: el => added.push(el.src) }, createElement: () => ({}), addEventListener() {} } };
+    ctx.window = ctx; ctx.addEventListener = (type, fn) => { on[type] = fn; };
+    ctx.EliteConsent = { choice: () => ctx.choice, terceros: () => ids };
+    vm.runInNewContext(medicionJs, ctx, { filename: 'medicion.js' });
+    const ga = () => plain((ctx.dataLayer || []).map(a => Array.from(a))), meta = () => plain((ctx.fbq?.queue || []).map(a => Array.from(a)));
+    return { ctx, added, on, ga, meta };
+  };
+  const ids = { ga4: 'G-ABC1234', metaPixel: '1234567890' };
+  for (const choice of [null, 'necessary']) {
+    const m = runMedicion(choice, ids, 7);
+    assert(!m.added.length && !m.ctx.dataLayer && !m.ctx.fbq, 'Sin «Aceptar todas» no se carga nada de Google ni Meta (' + choice + ')');
+    m.ctx.EliteMedicion.evento('carrito', { product_id: 5, value: 2450 });
+    assert(!m.ctx.dataLayer && !m.ctx.fbq, 'ni se envía ningún evento');
+  }
+  assert.equal(runMedicion('all', { ga4: '', metaPixel: '' }).ctx.EliteMedicion, undefined, 'Sin números no hace nada');
+  {
+    const m = runMedicion('all', ids, 7);
+    assert.deepEqual(m.added, ['https://www.googletagmanager.com/gtag/js?id=G-ABC1234', 'https://connect.facebook.net/en_US/fbevents.js'], 'Con permiso se cargan Google Analytics y el píxel de Meta');
+    assert.deepEqual(m.ga()[1], ['config', 'G-ABC1234', { allow_google_signals: false, allow_ad_personalization_signals: false }], 'Google sin señales para anuncios');
+    assert.deepEqual(m.meta().slice(0, 3), [['set', 'autoConfig', false, '1234567890'], ['init', '1234567890'], ['track', 'PageView']], 'Meta sin configuración automática (no lee formularios)');
+    assert.deepEqual(m.ga().at(-1), ['event', 'view_item', { items: [{ item_id: '7' }] }], 'La página del perfume cuenta como perfume visto (Google)');
+    assert.deepEqual(m.meta().at(-1), ['track', 'ViewContent', { content_ids: ['7'], content_type: 'product' }], 'y en Meta, con el mismo número del catálogo de productos');
+    m.ctx.EliteMedicion.evento('carrito', { product_id: 5, value: 2450 });
+    assert.deepEqual([m.ga().at(-1), m.meta().at(-1)], [['event', 'add_to_cart', { items: [{ item_id: '5' }], value: 2450, currency: 'DOP' }], ['track', 'AddToCart', { content_ids: ['5'], content_type: 'product', value: 2450, currency: 'DOP' }]], 'Agregar al carrito, con el precio en pesos');
+    const before = [m.ga().length, m.meta().length];
+    m.ctx.EliteMedicion.evento('busqueda', { term: 'ana@correo.com' }); m.ctx.EliteMedicion.evento('sin_resultado', { term: '8095551234' });
+    assert.deepEqual([m.ga().length, m.meta().length], before, 'Una búsqueda que parece correo o teléfono no se envía');
+    m.ctx.EliteMedicion.evento('busqueda', { term: 'aventus' }); m.ctx.EliteMedicion.evento('whatsapp', {});
+    assert.deepEqual(m.meta().slice(-2), [['track', 'Search', { search_string: 'aventus' }], ['track', 'Contact', {}]], 'Búsqueda y clic a WhatsApp');
+    m.ctx.choice = 'necessary'; m.on['elite-consent']({ detail: { choice: 'necessary' } });
+    assert.deepEqual([m.ga().at(-1)[0], m.meta().at(-1)], ['consent', ['consent', 'revoke']], 'Al retirar el permiso, Google y Meta dejan de medir');
+    const after = [m.ga().length, m.meta().length];
+    m.ctx.EliteMedicion.evento('carrito', { product_id: 5 });
+    assert.deepEqual([m.ga().length, m.meta().length], after, 'y ya no se envía nada');
+  }
+  {
+    const m = runMedicion(null, ids);
+    assert.equal(m.added.length, 0);
+    m.ctx.choice = 'all'; m.on['elite-consent']({ detail: { choice: 'all' } });
+    assert.equal(m.added.length, 2, 'Si acepta después, se carga en ese momento');
+  }
+  // cookies.js: un «Aceptar todas» de antes de Google y Meta no vale para ellos (se pregunta otra vez); un «no», sí.
+  const runCookies = (configured, stored) => {
+    const source = cookiesJs.replace(/const TERCEROS = \{[^}]*\};/, configured ? "const TERCEROS = { ga4: 'G-TEST1234', metaPixel: '1234567890' };" : "const TERCEROS = { ga4: '', metaPixel: '' };");
+    const store = { 'elite-cookie-consent-v1': stored ? JSON.stringify(stored) : null }, texts = [];
+    const el = () => ({ append: (...xs) => texts.push(...xs.filter(x => typeof x === 'string')), addEventListener() {}, setAttribute() {}, remove() {}, classList: { add() {}, remove() {} }, dataset: {} });
+    const ctx = { localStorage: { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = v; }, removeItem: k => { delete store[k]; } }, location: { search: '', pathname: '/', hostname: 'elitescentsrd.github.io' },
+      document: { readyState: 'complete', referrer: '', cookie: '', createElement: el, body: { append() {} }, documentElement: { classList: { add() {}, remove() {} } }, querySelectorAll: () => [], addEventListener() {} } };
+    ctx.window = ctx;
+    vm.runInNewContext(source, ctx, { filename: 'cookies.js' });
+    return { choice: ctx.EliteConsent.choice(), ids: plain(ctx.EliteConsent.terceros()), text: texts.join('') };
+  };
+  assert.deepEqual(runCookies(false, { v: 1, choice: 'all' }).choice, 'all', 'Sin Google ni Meta, el permiso de siempre sigue valiendo');
+  const asked = runCookies(true, { v: 1, choice: 'all' });
+  assert(asked.choice === null && asked.text.includes('Google Analytics y el píxel de Meta (Facebook e Instagram)'), 'Con Google y Meta se vuelve a preguntar, nombrándolos');
+  assert.equal(runCookies(true, { v: 2, choice: 'all' }).choice, 'all', 'El permiso nuevo vale');
+  assert.equal(runCookies(true, { v: 1, choice: 'necessary' }).choice, 'necessary', '«Solo necesarias» se respeta siempre');
+  assert.deepEqual(runCookies(true, null).ids, { ga4: 'G-TEST1234', metaPixel: '1234567890' });
+  assert(cookiesJs.includes("document.cookie = name + '=; Max-Age=0; path=/' + domain") && cookiesJs.includes("window.dispatchEvent(new CustomEvent('elite-consent'"), 'Al elegir «Solo necesarias» se borran las cookies de Google y Meta y se avisa al instante');
+  console.log('Contacto, reseñas verificadas (estrellas reales para Google) y medición de Google y Meta con permiso: correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');
