@@ -7,8 +7,29 @@ export const INSTAGRAM = 'https://www.instagram.com/elite.scentsrd/';
 // Dirección de Supabase (pública, la misma de supabase-config.js): las páginas solo pueden conectarse ahí (estadísticas).
 const SUPABASE_ORIGIN = (readFileSync('supabase-config.js', 'utf8').match(/url:\s*['"](https:\/\/[a-z0-9-]+\.supabase\.co)['"]/) || [])[1];
 if (!SUPABASE_ORIGIN) throw new Error('supabase-config.js no trae la dirección de Supabase.');
-const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' " + SUPABASE_ORIGIN + "; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests";
-const STATS_SCRIPTS = '<script defer src="/supabase-config.js"></script><script defer src="/analytics.js"></script>';
+// Medición de Google y Meta: los números están en cookies.js (vacíos = apagada). Activa, las páginas de la tienda
+// (portada, perfumes y lista A–Z) cargan medicion.js y su política de seguridad permite SOLO los servidores de las
+// herramientas que estén puestas (los de Google, como indica su guía de seguridad para Analytics 4). Apagada, no cambia nada.
+export function measurementFor(ids = {}) {
+  const ga4 = /^G-[A-Z0-9]{4,15}$/.test(ids.ga4 || ''), meta = /^\d{8,20}$/.test(ids.metaPixel || '');
+  return {
+    active: ga4 || meta,
+    scripts: [...(ga4 ? ['https://www.googletagmanager.com'] : []), ...(meta ? ['https://connect.facebook.net'] : [])],
+    connect: [...(ga4 ? ['https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://*.googletagmanager.com'] : []), ...(meta ? ['https://www.facebook.com', 'https://connect.facebook.net'] : [])],
+    tag: ga4 || meta ? '<script defer src="/medicion.js"></script>' : '',
+  };
+}
+const TERCEROS = (() => {
+  const block = (readFileSync('cookies.js', 'utf8').match(/const TERCEROS = \{([^}]*)\}/) || [])[1];
+  if (block === undefined) throw new Error('cookies.js no trae la configuración de medición (TERCEROS).');
+  return { ga4: (block.match(/ga4:\s*'([^']*)'/) || [])[1] || '', metaPixel: (block.match(/metaPixel:\s*'([^']*)'/) || [])[1] || '' };
+})();
+export const MEDICION = measurementFor(TERCEROS);
+export const cspWithMeasurement = (csp, m = MEDICION) => !m.active ? csp
+  : csp.replace("script-src 'self'", "script-src 'self' " + m.scripts.join(' ')).replace(/connect-src ([^;]*)/, (all, list) => 'connect-src ' + list + ' ' + m.connect.join(' '));
+const CSP = cspWithMeasurement("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https:; connect-src 'self' " + SUPABASE_ORIGIN + "; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests");
+// medicion.js va después de analytics.js (así el aviso de «perfume visto» de la página no se cuenta dos veces).
+const STATS_SCRIPTS = '<script defer src="/supabase-config.js"></script><script defer src="/analytics.js"></script>' + MEDICION.tag;
 // Botón flotante de WhatsApp (el mismo de todas las páginas públicas).
 const WA_FLOAT = '<a class="wa-float" href="https://wa.me/18094333348?text=Hola%20Elite%20Scents%20RD%2C%20quiero%20informaci%C3%B3n%20de%20un%20perfume" target="_blank" rel="noopener noreferrer" aria-label="Escríbenos por WhatsApp" title="Escríbenos por WhatsApp"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg></a>';
 
@@ -28,7 +49,37 @@ export const stockText = p => { const n = Number(p.stock_left); return p.availab
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
 const listNotes = items => (items || []).join(', ');
 
-export function productSchema(p) {
+// ---------------------------------------------------------------- Reseñas verificadas (solo las que la tienda publicó)
+// Cada reseña llega del build como { product_id, author, rating (1 a 5), comment, date (AAAA-MM-DD) }.
+export const ratingOf = reviews => reviews.length ? Math.round(reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length * 10) / 10 : 0;
+export const ratingText = value => { const v = Math.round(Number(value) * 10) / 10; return Number.isInteger(v) ? String(v) : v.toFixed(1); };
+// Estrellas dibujadas con texto (sin estilos en línea: la política de seguridad no los permite); la media estrella se
+// pinta con CSS. Con hidden, el lector de pantalla las salta porque el número va escrito al lado.
+export function starsHtml(value, hidden = false) {
+  const v = Math.round(Number(value) * 2) / 2;
+  let icons = '';
+  for (let i = 1; i <= 5; i++) icons += '<i class="' + (v >= i ? 'on' : v >= i - 0.5 ? 'half' : 'off') + '">★</i>';
+  return '<span class="stars"' + (hidden ? ' aria-hidden="true"' : ' role="img" aria-label="' + esc(ratingText(value) + ' de 5 estrellas') + '"') + '>' + icons + '</span>';
+}
+const monthText = date => { const d = new Date(String(date).slice(0, 10) + 'T12:00:00Z'); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-DO', { month: 'long', year: 'numeric', timeZone: 'UTC' }); };
+export function reviewCardHtml(r, product = null) {
+  const when = monthText(r.date);
+  return '<li class="review-card">' + starsHtml(r.rating) + (r.comment ? '<p class="review-text">' + esc(r.comment).replace(/\n/g, '<br>') + '</p>' : '') +
+    '<p class="review-by"><strong>' + esc(r.author) + '</strong>' + (product ? ' · <a href="' + esc(productPath(product)) + '">' + esc(product.name) + '</a>' : '') +
+    (when ? ' · <time datetime="' + esc(String(r.date).slice(0, 10)) + '">' + esc(when) + '</time>' : '') + ' · <span class="review-verified">Compra verificada</span></p></li>';
+}
+export const reviewSummaryHtml = (reviews, what) => '<p class="review-summary">' + starsHtml(ratingOf(reviews)) + '<strong>' + ratingText(ratingOf(reviews)) + ' de 5</strong><span>' +
+  reviews.length + (reviews.length === 1 ? ' opinión' : ' opiniones') + ' ' + what + '</span></p>';
+const REVIEWS_ON_PAGE = 20;
+function reviewsSection(reviews) {
+  if (!reviews.length) return '';
+  return '<section class="reviews" id="opiniones" aria-labelledby="opiniones-titulo"><h2 class="doc-h2" id="opiniones-titulo">Opiniones de clientes</h2>' +
+    reviewSummaryHtml(reviews, 'de compras verificadas') + '<ul class="review-list">' + reviews.slice(0, REVIEWS_ON_PAGE).map(r => reviewCardHtml(r)).join('') + '</ul>' +
+    (reviews.length > REVIEWS_ON_PAGE ? '<p class="review-more">Se muestran las ' + REVIEWS_ON_PAGE + ' más recientes.</p>' : '') +
+    '<p class="review-note">Solo pueden opinar clientes que recibieron su pedido.</p></section>';
+}
+
+export function productSchema(p, reviews = []) {
   const price = nums(p.price)[0];
   const images = [p.image_url, ...(p.gallery_urls || [])].filter(Boolean).map(absoluteUrl).slice(0, 3);
   const data = {
@@ -43,12 +94,20 @@ export function productSchema(p) {
     },
   };
   if (images.length) data.image = images;
+  // Estrellas para Google: solo con reseñas reales y publicadas, las mismas que se ven en la página.
+  if (reviews.length) {
+    data.aggregateRating = { '@type': 'AggregateRating', ratingValue: ratingOf(reviews), reviewCount: reviews.length, bestRating: 5, worstRating: 1 };
+    data.review = reviews.slice(0, 10).map(r => ({
+      '@type': 'Review', author: { '@type': 'Person', name: r.author }, datePublished: String(r.date).slice(0, 10),
+      reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5, worstRating: 1 }, reviewBody: r.comment || undefined,
+    }));
+  }
   return data;
 }
 
 const jsonLd = data => '<script type="application/ld+json">' + JSON.stringify(data).replace(/</g, '\\u003c') + '</script>';
 
-export function renderProductPage(p, related = []) {
+export function renderProductPage(p, related = [], reviews = []) {
   const url = productUrl(p), image = absoluteUrl(p.image_url);
   const availability = statusLabel[p.availability] ? p.availability : 'disponible';
   const onOffer = Boolean(p.original_price), price = p.price || 'Precio a confirmar';
@@ -80,11 +139,12 @@ export function renderProductPage(p, related = []) {
     '<meta property="og:type" content="product"><meta property="og:site_name" content="' + BRAND + '"><meta property="og:locale" content="es_DO"><meta property="og:title" content="' + esc(title) + '"><meta property="og:description" content="' + esc(metaShort) + '"><meta property="og:url" content="' + esc(url) + '">' +
     '<meta property="og:image" content="' + esc(image || SITE_URL + '/social-card.png') + '"><meta name="twitter:card" content="summary_large_image">' +
     '<meta name="theme-color" content="#14130f"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png">' +
-    '<link rel="stylesheet" href="/tienda.css"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/img/app/icon-192.png" sizes="192x192" type="image/png">' + jsonLd(productSchema(p)) + jsonLd(breadcrumb) + '</head><body data-product-id="' + esc(p.id) + '">' +
+    '<link rel="stylesheet" href="/tienda.css"><link rel="icon" href="/favicon.ico" sizes="48x48"><link rel="icon" href="/img/app/icon-192.png" sizes="192x192" type="image/png">' + jsonLd(productSchema(p, reviews)) + jsonLd(breadcrumb) + '</head><body data-product-id="' + esc(p.id) + '">' +
     '<header class="header"><a class="brand" href="/"><img src="/logo-oficial.webp" width="48" height="48" alt="Logotipo de Elite Scents RD"><span>ELITE <em>SCENTS</em><small>REPÚBLICA DOMINICANA</small></span></a><a href="/#coleccion">← Ver todos los perfumes</a></header>' +
     '<main class="collection product-page"><nav class="breadcrumb" aria-label="Ruta"><a href="/">Inicio</a> › <a href="/perfumes/">Perfumes</a> › <span>' + esc(p.name) + '</span></nav>' +
     '<article class="product-detail"><div class="product-detail-photo">' + photo + '</div><div class="product-detail-info">' +
     '<p class="eyebrow">' + esc(p.brand || BRAND) + '</p><h1 class="detail-title">' + esc(p.name) + '</h1>' +
+    (reviews.length ? '<a class="detail-rating" href="#opiniones">' + starsHtml(ratingOf(reviews), true) + '<span>' + ratingText(ratingOf(reviews)) + ' de 5 · ' + reviews.length + (reviews.length === 1 ? ' opinión' : ' opiniones') + '</span></a>' : '') +
     (onOffer ? '<span class="offer-badge detail-offer">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<p class="detail-price' + (onOffer ? ' price-offer' : '') + '">' + (onOffer ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small> ' : '') + '<strong>' + (onOffer ? 'Ahora ' : '') + esc(price) + '</strong></p>' +
     '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + (stockText(p) ? ' · <strong class="stock-low-text">' + stockText(p) + '</strong>' : '') + '</dd></div>' +
@@ -93,8 +153,8 @@ export function renderProductPage(p, related = []) {
     '<p class="dialog-description">' + esc(p.description || '') + '</p>' +
     '<div class="dialog-order-actions"><a class="button gold" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer">Pedir por WhatsApp ↗</a><a class="button outline" href="/#producto-' + esc(p.id) + '">Ver en la tienda y agregar al carrito</a>' +
     (availability === 'agotado' || availability === 'encargo' ? '<a class="button outline" href="/#avisame-' + esc(p.id) + '">🔔 Avísame cuando llegue</a>' : '') + '</div>' +
-    '</div></article>' + relatedHtml + '</main>' +
-    '<footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a><a href="/aviso-legal.html">Aviso legal</a></div><p class="copyright">© Elite Scents RD</p></footer>' + WA_FLOAT + '<script defer src="/frame-guard.js"></script><script src="/cookies.js"></script>' + STATS_SCRIPTS + '<script defer src="/pwa.js"></script></body></html>';
+    '</div></article>' + reviewsSection(reviews) + relatedHtml + '</main>' +
+    '<footer class="footer"><div><a href="/">Inicio</a><a href="/contacto.html">Contacto</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a><a href="/aviso-legal.html">Aviso legal</a></div><p class="copyright">© Elite Scents RD</p></footer>' + WA_FLOAT + '<script defer src="/frame-guard.js"></script><script src="/cookies.js"></script>' + STATS_SCRIPTS + '<script defer src="/pwa.js"></script></body></html>';
 }
 
 // Datos de la marca para el buscador: nombre, variantes de escritura, logotipo, redes y contacto.
@@ -153,6 +213,6 @@ export function renderDirectory(products) {
     '<nav class="directory-brands" aria-label="Marcas">' + brands.map(b => '<a href="#' + anchor(b) + '">' + esc(b) + '</a>').join('') + '</nav>' +
     brands.map(b => '<section class="directory-group" id="' + anchor(b) + '"><h2 class="doc-h2">' + esc(b) + ' <small>(' + groups.get(b).length + ')</small></h2><ul class="directory-list">' +
       groups.get(b).sort((x, y) => x.name.localeCompare(y.name, 'es', { sensitivity: 'base' })).map(item).join('') + '</ul></section>').join('') +
-    '</main><footer class="footer"><div><a href="/">Inicio</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a><a href="/aviso-legal.html">Aviso legal</a></div><p class="copyright">© Elite Scents RD</p></footer>' + WA_FLOAT + '' +
+    '</main><footer class="footer"><div><a href="/">Inicio</a><a href="/contacto.html">Contacto</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a><a href="/aviso-legal.html">Aviso legal</a></div><p class="copyright">© Elite Scents RD</p></footer>' + WA_FLOAT + '' +
     '<script defer src="/frame-guard.js"></script><script src="/cookies.js"></script>' + STATS_SCRIPTS + '<script defer src="/pwa.js"></script></body></html>';
 }

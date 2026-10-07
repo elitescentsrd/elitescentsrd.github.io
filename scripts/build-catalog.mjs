@@ -2,7 +2,7 @@ import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
-import { SITE_URL, productPath, productUrl, absoluteUrl, brandSchemaScript } from './lib/seo.mjs';
+import { SITE_URL, productPath, productUrl, absoluteUrl, brandSchemaScript, ratingOf, ratingText, reviewCardHtml, reviewSummaryHtml, MEDICION, cspWithMeasurement } from './lib/seo.mjs';
 const USD_RATE_DOP = 63;
 // Se pide select=* (funciona aunque una migración de columnas aún no se haya aplicado) y se publican solo estos campos.
 const PUBLIC_FIELDS = ['id', 'name', 'price', 'size', 'gender', 'image_url', 'sort_order', 'availability', 'brand', 'notes_top', 'notes_heart', 'notes_base', 'gallery_urls', 'description', 'original_price', 'offer_label', 'offer_ends_at', 'inspired_by', 'stock_left'];
@@ -107,6 +107,32 @@ for (const p of products) {
   const webp = webpOf(p.image_url);
   if (webp) p.image_webp = webp; else delete p.image_webp;
 }
+// Reseñas verificadas publicadas (script «MENSAJES Y RESEÑAS» del 7 de octubre). La base de datos solo deja leer las que
+// la tienda publicó y solo nombre, estrellas, comentario y fecha (nunca el pedido ni el cliente). Sin la tabla, no hay
+// reseñas y todo funciona igual. El promedio y la cantidad van en perfumes.json (tarjetas y ficha); las reseñas completas,
+// en data/resenas.json para las páginas de cada perfume (ese archivo no se guarda en Git: las reseñas son de los clientes).
+async function publishedReviews() {
+  try {
+    const res = await fetch(url.replace(/\/$/, '') + '/rest/v1/product_reviews?select=id,product_id,author_name,rating,comment,created_at&order=created_at.desc,id.desc&limit=5000', { headers: { apikey: key }, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return [];
+    const rows = await res.json();
+    return Array.isArray(rows) ? rows : [];
+  } catch { return []; }
+}
+const reviewsById = new Map();
+for (const r of await publishedReviews()) {
+  const id = Number(r.product_id), rating = Number(r.rating), author = String(r.author_name || '').trim();
+  if (!visibleIds.has(id) || !Number.isInteger(rating) || rating < 1 || rating > 5 || author.length < 2) continue;
+  if (!reviewsById.has(id)) reviewsById.set(id, []);
+  reviewsById.get(id).push({ product_id: id, author: author.slice(0, 40), rating, comment: String(r.comment || '').trim().slice(0, 600), date: String(r.created_at || '').slice(0, 10) });
+}
+for (const p of products) {
+  const list = reviewsById.get(Number(p.id));
+  if (list) { p.rating_avg = ratingOf(list); p.rating_count = list.length; } else { delete p.rating_avg; delete p.rating_count; }
+}
+await writeFile('data/resenas.json', JSON.stringify(Object.fromEntries(reviewsById)) + '\n');
+const allReviews = [...reviewsById.values()].flat().sort((a, b) => b.date.localeCompare(a.date));
+const ratingLine = p => p.rating_count ? '<p class="card-rating"><span aria-hidden="true"><b>★</b> ' + ratingText(p.rating_avg) + ' <small>(' + p.rating_count + ')</small></span><span class="sr-only">' + ratingText(p.rating_avg) + ' de 5 estrellas en ' + p.rating_count + (p.rating_count === 1 ? ' opinión' : ' opiniones') + '</span></p>' : '';
 const usdPrice = p => {
   const value = nums(p.price)[0];
   return value ? 'US$' + Math.round(value / USD_RATE_DOP) + ' aprox.' : '';
@@ -133,7 +159,7 @@ function card(p, shelf = false) {
   return '<article class="perfume"' + (shelf ? ' role="listitem"' : ' id="producto-' + esc(p.id) + '"') + ' data-product-id="' + esc(p.id) + '">' +
     visual(p) + '<span class="stock stock-' + availability + (stockText(p) ? ' stock-low' : '') + '">' + (stockText(p) || status[availability]) + '</span>' + (p.original_price ? '<span class="offer-badge">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<div class="meta"><span>' + esc(p.brand || gender[p.gender] || 'Perfume') + '</span><span>' + esc(p.size || '') + '</span></div>' +
-    '<h3><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a></h3>' + (p.inspired_by ? '<p class="inspired">Inspirado en <span>' + esc(p.inspired_by) + '</span></p>' : '') + '<div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
+    '<h3><a href="' + esc(productPath(p)) + '">' + esc(p.name) + '</a></h3>' + ratingLine(p) + (p.inspired_by ? '<p class="inspired">Inspirado en <span>' + esc(p.inspired_by) + '</span></p>' : '') + '<div class="size">' + esc(notes) + '</div><div class="price' + (p.original_price ? ' price-offer' : '') + '">' + (p.original_price ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small>' : '') + '<strong>' + (p.original_price ? 'Ahora ' : '') + esc(p.price || 'Precio a confirmar') + '</strong><small>' + esc(usdPrice(p)) + '</small></div>' +
     (availability === 'agotado' || availability === 'encargo' ? '<button type="button" class="notify-link" data-notify-product="' + esc(p.id) + '">🔔 Avísame cuando llegue</button>' : '') +
     '<div class="card-actions"><button type="button" data-open-product="' + esc(p.id) + '">Ver detalles</button><a href="' + esc(whatsapp(p)) + '" target="_blank" rel="noopener noreferrer">WhatsApp ↗</a></div></article>';
 }
@@ -173,10 +199,23 @@ const brandItem = (brand, copy) => '<li><button type="button" data-brand="' + es
 if (!html.includes('<!-- BRAND_MARQUEE -->') || !html.includes('<!-- BRAND_MARQUEE_COPY -->')) throw new Error('Falta la cinta de marcas en la plantilla.');
 html = html.replace('<!-- BRAND_MARQUEE -->', topBrands.map(brand => brandItem(brand)).join('')).replace('<!-- BRAND_MARQUEE_COPY -->', topBrands.map(brand => brandItem(brand, true)).join(''));
 if (topBrands.length < 4) html = html.replace('<section class="brand-strip" id="marcas"', '<section class="brand-strip" id="marcas" hidden');
+// Opiniones de la portada: el promedio de todas las reseñas publicadas y las 6 más recientes que traen comentario (sean
+// de las estrellas que sean). Sin reseñas, queda el aviso de siempre.
+if (!/<!-- REVIEWS_HOME_START -->[\s\S]*<!-- REVIEWS_HOME_END -->/.test(html)) throw new Error('Falta la sección de opiniones en la plantilla.');
+const homeReviews = allReviews.filter(r => r.comment).slice(0, 6);
+if (allReviews.length) html = html.replace(/<!-- REVIEWS_HOME_START -->[\s\S]*<!-- REVIEWS_HOME_END -->/, '<!-- REVIEWS_HOME_START -->' + reviewSummaryHtml(allReviews, 'de clientes que recibieron su pedido') +
+  (homeReviews.length ? '<ul class="review-list review-grid">' + homeReviews.map(r => reviewCardHtml(r, byId.get(r.product_id))).join('') + '</ul>' : '') + '<!-- REVIEWS_HOME_END -->');
 
 const catalog = '<!-- PRODUCT_CATALOG_START -->\n<div id="productGrid" class="grid" aria-busy="false">\n' + products.slice(0, FIRST_CARDS).map(p => card(p)).join('\n') + '\n</div>\n' +
   '<script type="application/json" id="catalogInfo">' + JSON.stringify({ src: catalogSrc, total: products.length, ...(stockTracked ? { stock: true } : {}) }) + '<\/script>\n' +
   '<script type="application/json" id="homeSections">' + JSON.stringify(homeSections) + '<\/script>\n<!-- PRODUCT_CATALOG_END -->';
+// Medición de Google y Meta (solo si está activa en cookies.js): medicion.js y su política de seguridad.
+if (MEDICION.active) {
+  const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/;
+  if (!csp.test(html) || !html.includes('<script defer src="/analytics.js"></script>')) throw new Error('La plantilla perdió la política de seguridad o analytics.js.');
+  html = html.replace(csp, (all, policy) => '<meta http-equiv="Content-Security-Policy" content="' + cspWithMeasurement(policy) + '">')
+    .replace('<script defer src="/analytics.js"></script>', '<script defer src="/analytics.js"></script>' + MEDICION.tag);
+}
 const output = html
   .replace(/<!-- PRODUCT_CATALOG_START -->[\s\S]*?<!-- PRODUCT_CATALOG_END -->/, catalog)
   .replace('<!-- CATALOG_PRELOAD -->', '<link rel="preload" href="' + catalogSrc + '" as="fetch" type="application/json" crossorigin="anonymous">')
@@ -190,8 +229,9 @@ await writeFile('index.html', output);
 const today = new Date().toISOString().slice(0, 10);
 const STATIC_PAGES = [
   { path: 'pedidos-envios.html', lastmod: '2026-10-03', changefreq: 'monthly', priority: '0.6' },
-  { path: 'privacidad.html', lastmod: '2026-10-03', changefreq: 'yearly', priority: '0.3' },
-  { path: 'canales-oficiales.html', lastmod: '2026-10-03', changefreq: 'yearly', priority: '0.4' },
+  { path: 'privacidad.html', lastmod: '2026-10-07', changefreq: 'yearly', priority: '0.3' },
+  { path: 'canales-oficiales.html', lastmod: '2026-10-07', changefreq: 'yearly', priority: '0.4' },
+  { path: 'contacto.html', lastmod: '2026-10-07', changefreq: 'yearly', priority: '0.5' },
   { path: 'aviso-legal.html', lastmod: '2026-10-03', changefreq: 'yearly', priority: '0.3' },
 ];
 const sitemapUrl = (loc, lastmod, changefreq, priority) =>
@@ -209,4 +249,5 @@ await writeFile('sitemap.xml', sitemap);
 
 console.log('Catálogo: ' + products.length + ' perfumes en perfumes.json; portada con ' + Math.min(FIRST_CARDS, products.length) + ' tarjetas y ' + shelvesShown + ' secciones destacadas.');
 console.log('Portada: ' + homeSections.vendidos.length + ' más vendidos, ' + homeSections.nuevos.length + ' nuevos.');
+console.log('Reseñas publicadas: ' + allReviews.length + ' de ' + reviewsById.size + ' perfumes.');
 console.log('sitemap.xml actualizado (lastmod de portada: ' + today + ').');

@@ -23,6 +23,10 @@ const FILES = [
   'aviso-legal.html',
   'pedidos-envios.html',
   'canales-oficiales.html',
+  'contacto.html',
+  'contacto.js',
+  'resena.html',
+  'resena.js',
   'encuesta.html',
   '404.html',
   'tienda.css',
@@ -30,6 +34,7 @@ const FILES = [
   'movimiento.js',
   'cookies.js',
   'analytics.js',
+  'medicion.js',
   'frame-guard.js',
   'aroma.js',
   'sales.js',
@@ -113,13 +118,15 @@ async function listAll(base, prefix = '') {
   if (!existsSync('perfumes.json')) throw new Error('Falta perfumes.json; ejecuta npm run build antes de npm run site.');
   const products = JSON.parse(await readFile('perfumes.json', 'utf8'));
   if (!Array.isArray(products) || !products.length) throw new Error('perfumes.json está vacío.');
+  // Reseñas verificadas publicadas (las escribe npm run build en data/resenas.json; sin ese archivo no hay reseñas).
+  const reviews = existsSync('data/resenas.json') ? JSON.parse(await readFile('data/resenas.json', 'utf8')) : {};
   await mkdir(OUT + '/perfumes', { recursive: true });
   await writeFile(OUT + '/perfumes/index.html', renderDirectory(products));
   for (const p of products) {
     const related = p.brand ? products.filter(x => x.brand === p.brand && x.id !== p.id).slice(0, 6) : [];
-    await writeFile(OUT + productPath(p), renderProductPage(p, related));
+    await writeFile(OUT + productPath(p), renderProductPage(p, related, reviews[String(p.id)] || []));
   }
-  console.log('Páginas de perfume generadas: ' + products.length + ' (y la lista completa /perfumes/).');
+  console.log('Páginas de perfume generadas: ' + products.length + ' (y la lista completa /perfumes/), ' + Object.keys(reviews).length + ' con reseñas.');
   // Archivo de productos para Google Merchant Center e Instagram/Facebook: /feeds/productos.xml
   const feed = merchantFeed(products);
   await mkdir(OUT + '/feeds', { recursive: true });

@@ -120,7 +120,7 @@
   function showAdmin() {
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
     loginCard.classList.add('hidden'); content.classList.remove('hidden'); logout.classList.remove('hidden'); showView(false);
-    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));loadFinanzas();loadStats();});
+    loadAll().then(()=>{knownOrderIds=new Set(orders.map(o=>String(o.id)));loadFinanzas();loadStats();loadInbox();});
     loadCustomers(); loadCoupons(); loadStoreSettings(); loadSurvey();
     if(!orderPoll) orderPoll=setInterval(checkNewOrders,20000);
   }
@@ -212,6 +212,7 @@
       setTimeout(()=>ctx.close(),1000);
     }catch{}
   }
+  let lastOrdersSig='',pollTick=0;
   async function checkNewOrders(){
     if(!session)return;
     try{
@@ -220,7 +221,11 @@
       latest.forEach(o=>knownOrderIds.add(String(o.id)));
       // Se conservan los pedidos más antiguos ya cargados; los 20 recientes se actualizan (estado, entrega).
       const recent=new Set(latest.map(o=>String(o.id)));
-      orders=[...latest,...orders.filter(o=>!recent.has(String(o.id)))];renderOrders();
+      // Solo se vuelve a dibujar la lista si algo cambió (así no se pierde lo que estás escribiendo en un pedido).
+      const sig=JSON.stringify(latest);
+      if(sig!==lastOrdersSig){lastOrdersSig=sig;orders=[...latest,...orders.filter(o=>!recent.has(String(o.id)))];renderOrders();}
+      // Mensajes nuevos de la página «Contacto»: se revisan cada minuto.
+      if(messagesReady===true&&++pollTick%3===0){try{const fresh=await fetchAll('/rest/v1/contact_messages?select=*&order=created_at.desc');if(JSON.stringify(fresh)!==JSON.stringify(messages)){const before=messages.filter(m=>m.status==='nuevo').length;messages=fresh;renderMessages();renderToday();if(messages.filter(m=>m.status==='nuevo').length>before)beep();}}catch{}}
       if(fresh.length){
         beep();
         if('Notification' in window && Notification.permission==='granted'){
@@ -321,6 +326,7 @@
       const del=document.createElement('button');del.type='button';del.className='btn btn-secondary';del.textContent='Eliminar';
       del.addEventListener('click',async()=>{if(!confirm('¿Eliminar este pedido?'))return;try{await api('/rest/v1/orders?id=eq.'+encodeURIComponent(o.id),{method:'DELETE',headers:{Prefer:'return=minimal'}});orders=orders.filter(x=>x.id!==o.id);renderOrders()}catch(err){alert(err.message)}});
       actions.append(wa,del);
+      if((o.status||'nuevo')==='entregado'&&reviewsReady!==false)actions.append(reviewAsk(o));
       tr.append(date,customer,phone,items,total,manage,actions);return tr;
     }));
   }
@@ -819,6 +825,7 @@
     ['ajustes_tienda', '/rest/v1/store_settings?select=*'], ['encuesta_respuestas', '/rest/v1/survey_responses?select=*&order=id.asc'],
     ['abonos', '/rest/v1/order_payments?select=*&order=id.asc'], ['avisos_reposicion', '/rest/v1/restock_alerts?select=*&order=id.asc'], ['costos_privados', '/rest/v1/product_costs?select=*&order=product_id.asc'],
     ['cantidad_en_casa', '/rest/v1/product_stock?select=*&order=product_id.asc,size_index.asc'], ['lineas_de_pedido', '/rest/v1/order_items?select=*&order=order_id.asc,position.asc'],
+    ['mensajes', '/rest/v1/contact_messages?select=*&order=id.asc'], ['resenas', '/rest/v1/rpc/admin_reviews?order=id.asc'],
   ];
   $('#backup-download').addEventListener('click', async () => {
     const st = $('#backup-status'), button = $('#backup-download');
@@ -922,6 +929,7 @@
   // --- Cobros, «Avísame cuando llegue», lista de compra, costos privados y ganancia (los cálculos viven en finanzas.js) ---
   const F = window.EliteFinanzas;
   let payments = [], paymentsReady = null, alerts = [], alertsReady = null, costRows = new Map(), costsReady = null, pricingParams = null;
+  let messages = [], messagesReady = null, reviews = [], reviewsReady = null;
   const MIGRATION_NOTE = 'falta aplicar la migración "funciones y perfumes nuevos" en Supabase (SQL Editor).';
   // Solo «no existe» (tabla, columna o función sin la migración); un error de validación («violates check constraint») se muestra tal cual.
   const missing = err => /schema cache|could not find the|does not exist|42P01|42703|PGRST20[2-5]/i.test(String(err?.message || err));
@@ -1213,6 +1221,131 @@
   $('#restock-view').addEventListener('change', renderRestock);
   $('#restock-refresh').addEventListener('click', async () => { await loadAlerts(); renderRestock(); renderPurchase(); });
 
+  // ---------------- Mensajes de la página «Contacto» y reseñas verificadas (script «MENSAJES Y RESEÑAS»)
+  const NOTE_MR = 'falta aplicar en Supabase el script «MENSAJES Y RESEÑAS» (supabase/migrations/20261007120000_mensajes_y_resenas.sql).';
+  const topicText = { perfume: 'Un perfume', pedido: 'Un pedido', envio: 'Envíos y pagos', otro: 'Otra cosa' };
+  const whenText = v => new Date(v).toLocaleString('es-DO', { dateStyle: 'medium', timeStyle: 'short' });
+  const phoneText = p => /^\d{10}$/.test(String(p)) ? String(p).replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3') : String(p || '');
+  const firstName = n => String(n || '').trim().split(/\s+/)[0] || '';
+  const shortText = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; };
+  function inboxItem(isNew, headParts, metaText, bodyText, actionList) {
+    const item = document.createElement('article'); item.className = 'inbox-item' + (isNew ? ' is-new' : '');
+    const head = document.createElement('div'); head.className = 'inbox-head'; head.append(...headParts);
+    const meta = document.createElement('p'); meta.className = 'inbox-meta'; meta.textContent = metaText;
+    const body = document.createElement('p'); body.className = 'inbox-text'; body.textContent = bodyText;
+    const actions = document.createElement('div'); actions.className = 'admin-actions'; actions.append(...actionList);
+    item.append(head, meta, body, actions); return item;
+  }
+  const inboxEmpty = text => { const p = document.createElement('p'); p.className = 'muted inbox-empty'; p.textContent = text; return p; };
+  const timeEl = v => { const t = document.createElement('time'); t.dateTime = v; t.textContent = whenText(v); return t; };
+
+  async function loadMessages() {
+    const notice = $('#messages-notice');
+    try { messages = await fetchAll('/rest/v1/contact_messages?select=*&order=created_at.desc'); messagesReady = true; notice.classList.add('hidden'); }
+    catch (err) { messages = []; messagesReady = false; notice.classList.remove('hidden'); notice.textContent = missing(err) ? 'Para recibir los mensajes de la página «Contacto» ' + NOTE_MR : 'No se pudieron cargar los mensajes: ' + err.message; }
+  }
+  const replyText = m => 'Hola' + (firstName(m.name) ? ' ' + firstName(m.name) : '') + ', te escribe Elite Scents RD. Recibimos tu mensaje en la página: «' + shortText(m.message, 140) + '». ';
+  async function markMessage(m, next) {
+    const at = next === 'atendido' ? new Date().toISOString() : null;
+    await api('/rest/v1/contact_messages?id=eq.' + encodeURIComponent(m.id), { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ status: next, attended_at: at }) });
+    m.status = next; m.attended_at = at; renderMessages(); renderToday();
+  }
+  function renderMessages() {
+    const list = $('#messages-list'); if (!list) return;
+    const view = $('#messages-view').value, waiting = messages.filter(m => m.status === 'nuevo'), summary = $('#messages-summary');
+    summary.textContent = messagesReady !== true ? '' : waiting.length ? waiting.length + (waiting.length === 1 ? ' mensaje por atender' : ' mensajes por atender') : 'Estás al día: no hay mensajes por atender.';
+    summary.classList.toggle('has-pending', waiting.length > 0);
+    const shown = view === 'todos' ? messages : messages.filter(m => m.status === view);
+    list.replaceChildren(...(shown.length ? shown.map(m => {
+      const who = document.createElement('strong'); who.textContent = m.name;
+      const wa = document.createElement('a'); wa.className = 'btn'; wa.target = '_blank'; wa.rel = 'noopener noreferrer'; wa.textContent = 'Responder por WhatsApp ↗';
+      wa.href = F ? F.waLink(m.phone, replyText(m)) : 'https://wa.me/' + String(m.phone).replace(/\D/g, '');
+      // Al abrir el chat queda como atendido (si hace falta seguir, se vuelve a «por atender»).
+      if (m.status === 'nuevo') wa.addEventListener('click', () => markMessage(m, 'atendido').catch(err => alert(err.message)));
+      const toggle = button(m.status === 'nuevo' ? 'Marcar atendido' : 'Volver a «por atender»', () => markMessage(m, m.status === 'nuevo' ? 'atendido' : 'nuevo').catch(err => alert(err.message)));
+      const del = button('Borrar', async () => {
+        if (!confirm('¿Borrar el mensaje de ' + m.name + '?')) return;
+        try { await api('/rest/v1/contact_messages?id=eq.' + encodeURIComponent(m.id), { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); messages = messages.filter(x => x.id !== m.id); renderMessages(); renderToday(); }
+        catch (err) { alert(err.message); }
+      });
+      return inboxItem(m.status === 'nuevo', [who, tag(topicText[m.topic] || 'Otra cosa', 'plain'), timeEl(m.created_at)],
+        'WhatsApp ' + phoneText(m.phone) + (m.status === 'atendido' ? ' · atendido' + (m.attended_at ? ' el ' + dayText(m.attended_at) : '') : ''), m.message, [wa, toggle, del]);
+    }) : [inboxEmpty(messagesReady === false ? '' : view === 'nuevo' ? 'No hay mensajes por atender.' : 'No hay mensajes en esta vista.')]));
+  }
+  $('#messages-view').addEventListener('change', renderMessages);
+  $('#messages-refresh').addEventListener('click', async () => { await loadMessages(); renderMessages(); renderToday(); });
+
+  async function loadReviews() {
+    const notice = $('#reviews-notice');
+    try { reviews = await fetchAll('/rest/v1/rpc/admin_reviews'); reviewsReady = true; notice.classList.add('hidden'); }
+    catch (err) { reviews = []; reviewsReady = false; notice.classList.remove('hidden'); notice.textContent = missing(err) ? 'Para recibir reseñas ' + NOTE_MR : 'No se pudieron cargar las reseñas: ' + err.message; }
+  }
+  const starsText = n => { const s = document.createElement('span'); s.className = 'review-stars'; s.setAttribute('role', 'img'); s.setAttribute('aria-label', n + ' de 5 estrellas'); s.textContent = '★'.repeat(n) + '☆'.repeat(5 - n); return s; };
+  const REVIEW_STATE = { publicar: 'aprobada', ocultar: 'oculta', revisar: 'pendiente' };
+  async function moderate(r, action) {
+    const st = $('#reviews-status');
+    try {
+      const out = await api('/rest/v1/rpc/admin_moderate_review', { method: 'POST', body: JSON.stringify({ p_id: r.id, p_action: action }) });
+      if (out && out.ok === false) throw new Error(out.message);
+      if (action === 'borrar') reviews = reviews.filter(x => x.id !== r.id); else r.status = REVIEW_STATE[action];
+      status(st, action === 'publicar' ? 'Publicada: se verá en la tienda cuando termine la próxima publicación (unos minutos).' : action === 'ocultar' ? 'Oculta: ya no se verá en la tienda.' : action === 'borrar' ? 'Reseña borrada.' : 'Vuelve a «por revisar».', 'success');
+      renderReviews(); renderToday();
+    } catch (err) { status(st, err.message, 'error'); }
+  }
+  function renderReviews() {
+    const list = $('#reviews-list'); if (!list) return;
+    const view = $('#reviews-view').value, pending = reviews.filter(r => r.status === 'pendiente'), published = reviews.filter(r => r.status === 'aprobada');
+    const avg = published.length ? published.reduce((s, r) => s + Number(r.rating), 0) / published.length : 0, summary = $('#reviews-summary');
+    summary.textContent = reviewsReady !== true ? '' : (pending.length ? pending.length + ' por revisar · ' : '') + published.length + (published.length === 1 ? ' publicada' : ' publicadas') + (published.length ? ' · promedio ' + avg.toFixed(1) + ' de 5' : '');
+    summary.classList.toggle('has-pending', pending.length > 0);
+    const shown = reviews.filter(r => r.status === view);
+    list.replaceChildren(...(shown.length ? shown.map(r => {
+      const name = document.createElement('strong'); name.textContent = r.product_name || 'Perfume #' + r.product_id;
+      const acts = r.status === 'pendiente' ? [button('Publicar', () => moderate(r, 'publicar'), false), button('Ocultar', () => moderate(r, 'ocultar'))]
+        : r.status === 'aprobada' ? [button('Ocultar', () => moderate(r, 'ocultar'))] : [button('Publicar', () => moderate(r, 'publicar'), false), button('Volver a «por revisar»', () => moderate(r, 'revisar'))];
+      acts.push(button('Borrar', () => { if (confirm('¿Borrar la reseña de ' + r.author_name + '? No se puede deshacer.')) moderate(r, 'borrar'); }));
+      return inboxItem(r.status === 'pendiente', [starsText(Number(r.rating)), name, timeEl(r.created_at)],
+        'Firma: «' + r.author_name + '»' + (r.order_id ? ' · pedido #' + r.order_id + (r.customer_name ? ' de ' + r.customer_name : '') : ' · pedido borrado'), r.comment || '(Sin comentario: solo las estrellas.)', acts);
+    }) : [inboxEmpty(reviewsReady === false ? '' : view === 'pendiente' ? 'No hay reseñas por revisar.' : view === 'aprobada' ? 'Todavía no hay reseñas publicadas. En «Pedidos», pídele su opinión a quien ya recibió su perfume.' : 'No hay reseñas ocultas.')]));
+  }
+  $('#reviews-view').addEventListener('change', renderReviews);
+  $('#reviews-refresh').addEventListener('click', async () => { await loadReviews(); renderReviews(); renderToday(); });
+  async function loadInbox() {
+    await Promise.all([loadMessages(), loadReviews()]);
+    renderMessages(); renderReviews(); renderToday(); renderOrders();
+  }
+
+  // «⭐ Pedir reseña» (pedidos entregados): enlace personal del pedido, listo para mandarlo por WhatsApp o copiarlo. El
+  // enlace se recuerda mientras el panel está abierto (la lista de pedidos se vuelve a dibujar sola cada rato).
+  const reviewLinks = new Map();
+  function reviewAsk(o) {
+    const box = document.createElement('span'); box.className = 'review-ask';
+    const ready = link => {
+      const parts = [];
+      if (String(o.phone || '').replace(/\D/g, '').length >= 10) {
+        const text = 'Hola' + (firstName(o.customer_name) ? ' ' + firstName(o.customer_name) : '') + ', gracias por tu compra en Elite Scents RD. ¿Nos regalas tu opinión del perfume? Solo toma un minuto: ' + link;
+        const send = document.createElement('a'); send.className = 'btn'; send.target = '_blank'; send.rel = 'noopener noreferrer'; send.textContent = 'Enviar reseña por WhatsApp ↗';
+        send.href = F ? F.waLink(o.phone, text) : 'https://wa.me/?text=' + encodeURIComponent(text); parts.push(send);
+      }
+      const copy = button('Copiar enlace', async () => {
+        try { await navigator.clipboard.writeText(link); copy.textContent = 'Copiado ✓'; setTimeout(() => { copy.textContent = 'Copiar enlace'; }, 1600); }
+        catch { prompt('Copia este enlace y mándaselo al cliente:', link); }
+      });
+      parts.push(copy); box.replaceChildren(...parts); return parts[0];
+    };
+    if (reviewLinks.has(o.id)) { ready(reviewLinks.get(o.id)); return box; }
+    const ask = button('⭐ Pedir reseña', async () => {
+      ask.disabled = true;
+      try {
+        const out = await api('/rest/v1/rpc/admin_review_link', { method: 'POST', body: JSON.stringify({ p_order_id: o.id }) });
+        if (!out || out.ok !== true) throw new Error(out?.message || 'No se pudo crear el enlace.');
+        const link = location.origin + '/resena.html#' + out.token;
+        reviewLinks.set(o.id, link); ready(link).focus();
+      } catch (err) { ask.disabled = false; alert(missing(err) ? 'Para pedir reseñas ' + NOTE_MR : err.message); }
+    });
+    box.append(ask); return box;
+  }
+
   // ---------------- Lista de compra para La Grada
   const purchaseEdits = new Map();
   let purchaseRows = [];
@@ -1241,12 +1374,15 @@
     const tracked = products.filter(p => stockRows.has(Number(p.id)));
     const low = tracked.filter(p => { const t = stockTotal(p.id); return t >= 1 && t <= 3; }).length, zero = tracked.filter(p => stockTotal(p.id) === 0).length;
     const toBuy = purchaseRows.filter(r => r.buy > 0), units = toBuy.reduce((sum, r) => sum + r.buy, 0);
+    const newMessages = messages.filter(m => m.status === 'nuevo').length, toReview = reviews.filter(r => r.status === 'pendiente').length, publishedReviews = reviews.filter(r => r.status === 'aprobada').length;
     const tiles = [
       ['pedidos', String(pending), pending === 1 ? 'pedido nuevo por confirmar' : 'pedidos nuevos por confirmar', pending ? 'warn' : 'ok', pending ? 'Confirmar →' : 'Al día'],
       owed ? ['cobros', rd(owed.due), owed.open ? 'por cobrar en ' + owed.open + (owed.open === 1 ? ' pedido' : ' pedidos') : 'por cobrar', owed.due > 0 ? 'warn' : 'ok', owed.due > 0 ? 'Ver cobros →' : 'Nadie te debe'] : null,
       ['avisame', String(ready), ready === 1 ? 'cliente para avisar: ya llegó su perfume' : 'clientes para avisar: ya llegó su perfume', ready ? 'warn' : 'ok', waiting.length + ' esperando en total'],
       ['compras', String(units), units === 1 ? 'perfume por comprar' : 'perfumes por comprar', units ? 'warn' : 'ok', toBuy.length ? 'Lista para La Grada →' : 'Nada pendiente'],
       stockReady === true ? ['inventario', String(low + zero), 'con pocas unidades o en 0', low + zero ? 'warn' : 'ok', tracked.length ? tracked.length + ' con cantidad en casa' : 'Escribe cuántos tienes →'] : null,
+      messagesReady === true ? ['mensajes', String(newMessages), newMessages === 1 ? 'mensaje nuevo de la página de contacto' : 'mensajes nuevos de la página de contacto', newMessages ? 'warn' : 'ok', newMessages ? 'Responder →' : 'Al día'] : null,
+      reviewsReady === true ? ['resenas', String(toReview), toReview === 1 ? 'reseña por revisar' : 'reseñas por revisar', toReview ? 'warn' : 'ok', toReview ? 'Revisar →' : publishedReviews ? publishedReviews + (publishedReviews === 1 ? ' publicada' : ' publicadas') : 'Pide reseñas en Pedidos →'] : null,
     ].filter(Boolean);
     // Si son los mismos cuadros, solo se cambian los números (no se vuelven a dibujar ni a animar).
     const key = tiles.map(t => t[0]).join(',');
@@ -1271,6 +1407,8 @@
     setBadge('avisame', ready, 'para avisar');
     setBadge('compras', toBuy.length, 'por comprar');
     setBadge('inventario', low + zero, 'con pocas unidades');
+    setBadge('mensajes', newMessages, 'por atender');
+    setBadge('resenas', toReview, 'por revisar');
   }
   function renderPurchase() {
     if (!F || !$('#purchase-body')) return;
