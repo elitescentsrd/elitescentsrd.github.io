@@ -1,0 +1,613 @@
+{
+ "descripcion": "Perfumes del catálogo de La Grada del 11 de octubre de 2026 que no estaban en la tienda, y los precios que cambian porque cambió lo que cuestan en La Grada (fórmula de ganancia; sin costos en este archivo). Los aplica supabase/migrations/20261016120000_catalogo_la_grada_octubre.sql.",
+ "aplicar_con": "supabase/migrations/20261016120000_catalogo_la_grada_octubre.sql",
+ "primer_id": 497,
+ "ultimo_id": 538,
+ "notas_pendientes": [
+  510,
+  523,
+  529,
+  530,
+  531,
+  537
+ ],
+ "perfumes": {
+  "497": {
+   "name": "Armani Power of You EDP Women",
+   "brand": "Giorgio Armani",
+   "gender": "mujer",
+   "size": "90 ML",
+   "price": "RD$9,350",
+   "foto": "img/productos/0497-armani-power-of-you-edp-women.jpg"
+  },
+  "498": {
+   "name": "Armani Stronger With You Spices EDP",
+   "brand": "Giorgio Armani",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$10,050",
+   "foto": "img/productos/0498-armani-stronger-with-you-spices-edp.jpg"
+  },
+  "499": {
+   "name": "Azzaro Wanted Girl EDP",
+   "brand": "Azzaro",
+   "gender": "mujer",
+   "size": "80 ML",
+   "price": "RD$6,050",
+   "foto": "img/productos/0499-azzaro-wanted-girl-edp.jpg"
+  },
+  "500": {
+   "name": "Dolce & Gabbana Devotion EDP Intense",
+   "brand": "Dolce & Gabbana",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$6,450",
+   "foto": "img/productos/0500-dolce-y-gabbana-devotion-edp-intense.jpg"
+  },
+  "501": {
+   "name": "Dolce & Gabbana Light Blue Capri in Love",
+   "brand": "Dolce & Gabbana",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$5,750",
+   "foto": "img/productos/0501-dolce-y-gabbana-light-blue-capri-in-love.jpg"
+  },
+  "502": {
+   "name": "Hugo Boss Dark Blue EDT",
+   "brand": "Hugo",
+   "gender": "hombre",
+   "size": "75 ML",
+   "price": "RD$3,950",
+   "foto": "img/productos/0502-hugo-boss-dark-blue-edt.jpg"
+  },
+  "503": {
+   "name": "JPG Divine Collector Edition",
+   "brand": "Jean Paul Gaultier",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$8,350",
+   "foto": "img/productos/0503-jpg-divine-collector-edition.jpg"
+  },
+  "504": {
+   "name": "JPG La Belle Rosea EDP",
+   "brand": "Jean Paul Gaultier",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$10,050",
+   "foto": "img/productos/0504-jpg-la-belle-rosea-edp.jpg"
+  },
+  "505": {
+   "name": "JPG Scandal Intense EDP Women",
+   "brand": "Jean Paul Gaultier",
+   "gender": "mujer",
+   "size": "80 ML",
+   "price": "RD$7,950",
+   "foto": "img/productos/0505-jpg-scandal-intense-edp-women.jpg"
+  },
+  "506": {
+   "name": "JPG Scandal Pour Homme Intense EDP Men",
+   "brand": "Jean Paul Gaultier",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$7,550",
+   "foto": "img/productos/0506-jpg-scandal-pour-homme-intense-edp-men.jpg"
+  },
+  "507": {
+   "name": "Jimmy Choo I Want Choo Forever EDP",
+   "brand": "Jimmy Choo",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$6,550",
+   "foto": "img/productos/0507-jimmy-choo-i-want-choo-forever-edp.jpg"
+  },
+  "508": {
+   "name": "Moschino Toy 2 Gummy",
+   "brand": "Moschino",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$6,550",
+   "foto": "img/productos/0508-moschino-toy-2-gummy.jpg"
+  },
+  "509": {
+   "name": "Moschino Toy 2 Yummy",
+   "brand": "Moschino",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$6,150",
+   "foto": "img/productos/0509-moschino-toy-2-yummy.jpg"
+  },
+  "510": {
+   "name": "Rabanne Fame The Couture Edition EDP",
+   "brand": "Paco Rabanne",
+   "gender": "mujer",
+   "size": "80 ML",
+   "price": "RD$7,750",
+   "foto": "img/productos/0510-rabanne-fame-the-couture-edition-edp.jpg"
+  },
+  "511": {
+   "name": "Rabanne 1 Million Black EDP Men",
+   "brand": "Paco Rabanne",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$7,750",
+   "foto": "img/productos/0511-rabanne-1-million-black-edp-men.jpg"
+  },
+  "512": {
+   "name": "Paco Lady Million EDP Women",
+   "brand": "Paco Rabanne",
+   "gender": "mujer",
+   "size": "80 ML",
+   "price": "RD$6,650",
+   "foto": "img/productos/0512-paco-lady-million-edp-women.jpg"
+  },
+  "513": {
+   "name": "Paco One Million Lucky EDT Men",
+   "brand": "Paco Rabanne",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$7,450",
+   "foto": "img/productos/0513-paco-one-million-lucky-edt-men.jpg"
+  },
+  "514": {
+   "name": "Valentino Donna Vendetta EDP Women",
+   "brand": "Valentino",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$12,050",
+   "foto": "img/productos/0514-valentino-donna-vendetta-edp-women.jpg"
+  },
+  "515": {
+   "name": "Valentino Uomo Born In Roma Yellow Dream EDT",
+   "brand": "Valentino",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$8,450",
+   "foto": "img/productos/0515-valentino-uomo-born-in-roma-yellow-dream-edt.jpg"
+  },
+  "516": {
+   "name": "YSL MYSLF Le Parfum Men",
+   "brand": "Yves Saint Laurent",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$9,750",
+   "foto": "img/productos/0516-ysl-myslf-le-parfum-men.jpg"
+  },
+  "517": {
+   "name": "Armaf Club de Nuit Intenso Fuego",
+   "brand": "Armaf",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$5,050",
+   "foto": "img/productos/0517-armaf-club-de-nuit-intenso-fuego.jpg"
+  },
+  "518": {
+   "name": "Armaf Club de Nuit Maleka",
+   "brand": "Armaf",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$4,150",
+   "foto": "img/productos/0518-armaf-club-de-nuit-maleka.jpg"
+  },
+  "519": {
+   "name": "Armaf Club de Nuit Oud",
+   "brand": "Armaf",
+   "gender": "unisex",
+   "size": "105 ML",
+   "price": "RD$3,250",
+   "foto": "img/productos/0519-armaf-club-de-nuit-oud.jpg"
+  },
+  "520": {
+   "name": "French Avenue Vulcan Baie",
+   "brand": "French Avenue",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,350",
+   "foto": "img/productos/0520-french-avenue-vulcan-baie.jpg"
+  },
+  "521": {
+   "name": "Game of Spades Bluff",
+   "brand": "Game of Spades",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,950",
+   "foto": "img/productos/0521-game-of-spades-bluff.jpg"
+  },
+  "522": {
+   "name": "Game of Spades Full-House Refresh",
+   "brand": "Game of Spades",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$5,350",
+   "foto": "img/productos/0522-game-of-spades-full-house-refresh.jpg"
+  },
+  "523": {
+   "name": "Game of Spades Trick",
+   "brand": "Game of Spades",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,950",
+   "foto": "img/productos/0523-game-of-spades-trick.jpg"
+  },
+  "524": {
+   "name": "Lattafa Fakhar Platin",
+   "brand": "Lattafa",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$2,750",
+   "foto": "img/productos/0524-lattafa-fakhar-platin.jpg"
+  },
+  "525": {
+   "name": "Acqua di Parma Fico di Amalfi EDT",
+   "brand": "Acqua di Parma",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$11,150",
+   "foto": "img/productos/0525-acqua-di-parma-fico-di-amalfi-edt.jpg"
+  },
+  "526": {
+   "name": "Acqua di Parma Fico di Amalfi La Riserva EDP",
+   "brand": "Acqua di Parma",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$11,550",
+   "foto": "img/productos/0526-acqua-di-parma-fico-di-amalfi-la-riserva-edp.jpg"
+  },
+  "527": {
+   "name": "Creed Aventus Cologne",
+   "brand": "Creed",
+   "gender": "hombre",
+   "size": "100 ML",
+   "price": "RD$28,450",
+   "foto": "img/productos/0527-creed-aventus-cologne.jpg"
+  },
+  "528": {
+   "name": "Creed Original Santal",
+   "brand": "Creed",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$24,650",
+   "foto": "img/productos/0528-creed-original-santal.jpg"
+  },
+  "529": {
+   "name": "Elivi Exotic Extrait de Parfum",
+   "brand": "Elivi",
+   "gender": "unisex",
+   "size": "50 ML",
+   "price": "RD$11,750",
+   "foto": "img/productos/0529-elivi-exotic-extrait-de-parfum.jpg"
+  },
+  "530": {
+   "name": "Elivi Mor Extrait de Parfum",
+   "brand": "Elivi",
+   "gender": "unisex",
+   "size": "50 ML",
+   "price": "RD$12,550",
+   "foto": "img/productos/0530-elivi-mor-extrait-de-parfum.jpg"
+  },
+  "531": {
+   "name": "Elivi Unstoppable Hong Kong",
+   "brand": "Elivi",
+   "gender": "unisex",
+   "size": "50 ML",
+   "price": "RD$11,250",
+   "foto": "img/productos/0531-elivi-unstoppable-hong-kong.jpg"
+  },
+  "532": {
+   "name": "Parfums de Marly Perseus",
+   "brand": "Parfums de Marly",
+   "gender": "hombre",
+   "size": "125 ML",
+   "price": "RD$15,850",
+   "foto": "img/productos/0532-parfums-de-marly-perseus.jpg"
+  },
+  "533": {
+   "name": "Tom Ford Eau de Soleil Blanc EDT",
+   "brand": "Tom Ford",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$11,650",
+   "foto": "img/productos/0533-tom-ford-eau-de-soleil-blanc-edt.jpg"
+  },
+  "534": {
+   "name": "Tom Ford F***ing Fabulous EDP",
+   "brand": "Tom Ford",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$29,850",
+   "foto": "img/productos/0534-tom-ford-f-ing-fabulous-edp.jpg"
+  },
+  "535": {
+   "name": "Set Afnan 9 AM Pour Femme",
+   "brand": "Sets",
+   "gender": "mujer",
+   "size": "100 ML",
+   "price": "RD$3,950",
+   "foto": "img/productos/0535-set-afnan-9-am-pour-femme.jpg"
+  },
+  "536": {
+   "name": "Set Calvin Klein CK One 3PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$4,850",
+   "foto": "img/productos/0536-set-calvin-klein-ck-one-3pcs.jpg"
+  },
+  "537": {
+   "name": "Set Jean Paul Gaultier Miniatures 4PCS",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "4 x 7 ML",
+   "price": "RD$5,750",
+   "foto": "img/productos/0537-set-jean-paul-gaultier-miniatures-4pcs.jpg"
+  },
+  "538": {
+   "name": "Set Lattafa Pride Vintage Radio",
+   "brand": "Sets",
+   "gender": "unisex",
+   "size": "100 ML",
+   "price": "RD$3,050",
+   "foto": "img/productos/0538-set-lattafa-pride-vintage-radio.jpg"
+  }
+ },
+ "precios": {
+  "17": {
+   "nombre": "Afeef EDP Unisex",
+   "antes": "RD$3,350",
+   "oferta_antes": null,
+   "ahora": "RD$3,750",
+   "reactivar": false
+  },
+  "47": {
+   "nombre": "Armaf Club de Nuit Women",
+   "antes": "RD$2,850",
+   "oferta_antes": null,
+   "ahora": "RD$2,950",
+   "reactivar": false
+  },
+  "49": {
+   "nombre": "Armaf Club de Nuit Impériale",
+   "antes": "RD$3,450",
+   "oferta_antes": null,
+   "ahora": "RD$3,650",
+   "reactivar": false
+  },
+  "55": {
+   "nombre": "Armaf Club de Nuit Urban Elixir",
+   "antes": "RD$3,450",
+   "oferta_antes": null,
+   "ahora": "RD$3,650",
+   "reactivar": false
+  },
+  "64": {
+   "nombre": "Armaf Odyssey Aqua",
+   "antes": "RD$2,850",
+   "oferta_antes": null,
+   "ahora": "RD$3,050",
+   "reactivar": false
+  },
+  "68": {
+   "nombre": "Armaf Odyssey Candee Woman",
+   "antes": "RD$2,850",
+   "oferta_antes": null,
+   "ahora": "RD$3,050",
+   "reactivar": false
+  },
+  "70": {
+   "nombre": "Armaf Odyssey Homme",
+   "antes": "RD$2,850",
+   "oferta_antes": null,
+   "ahora": "RD$3,050",
+   "reactivar": false
+  },
+  "71": {
+   "nombre": "Armaf Odyssey Homme White",
+   "antes": "RD$2,850 / RD$3,250",
+   "oferta_antes": null,
+   "ahora": "RD$3,050 / RD$3,650",
+   "reactivar": false
+  },
+  "74": {
+   "nombre": "Armaf Odyssey Mega",
+   "antes": "RD$2,850",
+   "oferta_antes": null,
+   "ahora": "RD$3,050",
+   "reactivar": false
+  },
+  "79": {
+   "nombre": "Armaf Odyssey Tyrant",
+   "antes": "RD$2,850",
+   "oferta_antes": null,
+   "ahora": "RD$3,050",
+   "reactivar": false
+  },
+  "89": {
+   "nombre": "Lattafa Atlas",
+   "antes": "RD$3,050",
+   "oferta_antes": null,
+   "ahora": "RD$3,250",
+   "reactivar": false
+  },
+  "95": {
+   "nombre": "Lattafa Bade'e Al Oud Honor & Glory",
+   "antes": "RD$2,750",
+   "oferta_antes": null,
+   "ahora": "RD$2,850",
+   "reactivar": false
+  },
+  "111": {
+   "nombre": "Bond No. 9 Greenwich Village",
+   "antes": "RD$15,200",
+   "oferta_antes": null,
+   "ahora": "RD$16,750",
+   "reactivar": true
+  },
+  "114": {
+   "nombre": "Calvin Klein Eternity Women",
+   "antes": "RD$3,950",
+   "oferta_antes": null,
+   "ahora": "RD$4,350",
+   "reactivar": false
+  },
+  "142": {
+   "nombre": "Dumont Nitro Red",
+   "antes": "RD$3,350",
+   "oferta_antes": null,
+   "ahora": "RD$3,550",
+   "reactivar": false
+  },
+  "156": {
+   "nombre": "French Avenue Liquid Brun",
+   "antes": "RD$3,050",
+   "oferta_antes": null,
+   "ahora": "RD$3,150",
+   "reactivar": false
+  },
+  "221": {
+   "nombre": "Lattafa Asad Bourbon",
+   "antes": "RD$2,550",
+   "oferta_antes": "RD$2,750",
+   "ahora": "RD$2,750",
+   "reactivar": false
+  },
+  "229": {
+   "nombre": "Lattafa Fakhar Men",
+   "antes": "RD$2,450",
+   "oferta_antes": null,
+   "ahora": "RD$2,550",
+   "reactivar": false
+  },
+  "230": {
+   "nombre": "Lattafa Fakhar Women",
+   "antes": "RD$2,450",
+   "oferta_antes": null,
+   "ahora": "RD$2,550",
+   "reactivar": false
+  },
+  "231": {
+   "nombre": "Lattafa Fakhar Gold Extrait",
+   "antes": "RD$2,550",
+   "oferta_antes": null,
+   "ahora": "RD$2,750",
+   "reactivar": false
+  },
+  "257": {
+   "nombre": "Lattafa Pride Art Of Universe",
+   "antes": "RD$3,400",
+   "oferta_antes": null,
+   "ahora": "RD$3,550",
+   "reactivar": false
+  },
+  "286": {
+   "nombre": "Mont Blanc Explorer EDP",
+   "antes": "RD$4,350",
+   "oferta_antes": null,
+   "ahora": "RD$5,050",
+   "reactivar": false
+  },
+  "294": {
+   "nombre": "Moschino Toy 2 Pearl",
+   "antes": "RD$4,450",
+   "oferta_antes": null,
+   "ahora": "RD$4,950",
+   "reactivar": false
+  },
+  "323": {
+   "nombre": "Rasasi Hawas Elixir Men",
+   "antes": "RD$3,550",
+   "oferta_antes": null,
+   "ahora": "RD$3,950",
+   "reactivar": false
+  },
+  "324": {
+   "nombre": "Rasasi Hawas Fire Men",
+   "antes": "RD$3,550",
+   "oferta_antes": null,
+   "ahora": "RD$3,950",
+   "reactivar": false
+  },
+  "402": {
+   "nombre": "Blue Chanel",
+   "antes": "RD$12,350",
+   "oferta_antes": "RD$12,700",
+   "ahora": "RD$15,150",
+   "reactivar": false
+  },
+  "404": {
+   "nombre": "Yara Candy EDP Women",
+   "antes": "RD$2,750",
+   "oferta_antes": null,
+   "ahora": "RD$2,950",
+   "reactivar": false
+  },
+  "405": {
+   "nombre": "Yara Elixir EDP",
+   "antes": "RD$3,050",
+   "oferta_antes": "RD$3,450",
+   "ahora": "RD$3,550",
+   "reactivar": false
+  },
+  "426": {
+   "nombre": "Dumont Nitro Elixir Men",
+   "antes": "RD$4,750",
+   "oferta_antes": null,
+   "ahora": "RD$3,950",
+   "reactivar": false
+  },
+  "427": {
+   "nombre": "Dumont Nitro Gold",
+   "antes": "RD$4,550",
+   "oferta_antes": null,
+   "ahora": "RD$3,950",
+   "reactivar": false
+  },
+  "433": {
+   "nombre": "French Avenue Liquid Brun Limited Edition",
+   "antes": "RD$5,450",
+   "oferta_antes": null,
+   "ahora": "RD$4,850",
+   "reactivar": false
+  },
+  "436": {
+   "nombre": "Lattafa Al Noble Ameer",
+   "antes": "RD$2,750",
+   "oferta_antes": null,
+   "ahora": "RD$2,850",
+   "reactivar": false
+  },
+  "437": {
+   "nombre": "Lattafa Al Noble Safeer",
+   "antes": "RD$2,750",
+   "oferta_antes": null,
+   "ahora": "RD$2,850",
+   "reactivar": false
+  },
+  "438": {
+   "nombre": "Lattafa Al Noble Wazeer",
+   "antes": "RD$2,750",
+   "oferta_antes": null,
+   "ahora": "RD$2,850",
+   "reactivar": false
+  },
+  "443": {
+   "nombre": "Lattafa Khamrah Waha",
+   "antes": "RD$4,150",
+   "oferta_antes": null,
+   "ahora": "RD$3,050",
+   "reactivar": false
+  },
+  "455": {
+   "nombre": "Rayhaan Pacific Aloha",
+   "antes": "RD$3,050",
+   "oferta_antes": null,
+   "ahora": "RD$3,550",
+   "reactivar": false
+  },
+  "480": {
+   "nombre": "Parfums de Marly Layton",
+   "antes": "RD$15,050",
+   "oferta_antes": null,
+   "ahora": "RD$17,250",
+   "reactivar": false
+  }
+ }
+}

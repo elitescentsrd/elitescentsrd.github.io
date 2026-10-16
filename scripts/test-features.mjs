@@ -15,7 +15,8 @@ const [indexHtml, template, tiendaJs, adminHtml, adminJs, checkoutHtml, customer
 const products = JSON.parse(await read('perfumes.json'));
 // 420 perfumes + los nuevos de La Grada (cuando se aplica su script); algunos pueden estar ocultos (data/precios-2026-09.json).
 const ocultables = JSON.parse(await read('data/precios-2026-09.json')).ocultos.length;
-const nuevosTotal = Object.keys(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).perfumes).length;
+const tandasNuevos = await Promise.all(['data/perfumes-nuevos-2026-09.json', 'data/perfumes-nuevos-2026-10.json'].map(async f => JSON.parse(await read(f))));
+const nuevosTotal = tandasNuevos.reduce((n, t) => n + Object.keys(t.perfumes).length, 0);
 assert(products.length >= 420 - ocultables && products.length <= 420 + nuevosTotal, 'Productos visibles fuera de rango: ' + products.length);
 const runUmd = async file => { const ctx = { module: { exports: {} } }; vm.runInNewContext(await read(file), ctx, { filename: file }); return ctx.module.exports; };
 const plain = value => JSON.parse(JSON.stringify(value)); // los objetos creados dentro de vm tienen otro prototipo
@@ -136,8 +137,8 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const expected = { 'Pimienta rosa': 'especiado', 'Toronja rosada': 'fresco', 'Water Peony': 'floral', 'Manzana verde': 'frutal', 'Flor de azahar': 'floral', 'Ámbar gris': 'amaderado', 'Haba tonka': 'dulce', 'Notas marinas': 'fresco', 'Musgo de roble': 'amaderado', 'Cuero': 'especiado', 'Coconut Water': 'frutal', 'Té verde': 'fresco', 'Vainilla': 'dulce', 'Bergamota': 'fresco', 'Oud': 'amaderado', 'Jazmín': 'floral', 'Canela': 'especiado', 'Piña': 'frutal', 'Almizcle': null };
   for (const [note, family] of Object.entries(expected)) assert.equal(A.familyOf(note), family, 'Familia de "' + note + '"');
   const withFamily = products.filter(p => A.familiesOf(p).length);
-  // Los perfumes nuevos sin notas verificadas todavía (data/perfumes-nuevos-2026-09.json → notas_pendientes) no tienen familia.
-  const pendientes = new Set(JSON.parse(await read('data/perfumes-nuevos-2026-09.json')).notas_pendientes.map(Number));
+  // Los perfumes nuevos sin notas verificadas todavía (data/perfumes-nuevos-2026-*.json → notas_pendientes) no tienen familia.
+  const pendientes = new Set(tandasNuevos.flatMap(t => t.notas_pendientes.map(Number)));
   assert.equal(withFamily.length, products.filter(p => !pendientes.has(Number(p.id))).length, 'Todos los perfumes con notas deben tener al menos una familia de aroma');
   const perFamily = {}; for (const p of products) for (const f of A.familiesOf(p)) perFamily[f] = (perFamily[f] || 0) + 1;
   for (const family of Object.keys(A.FAMILIES)) assert((perFamily[family] || 0) >= 100, 'La familia ' + family + ' debe tener perfumes suficientes (' + (perFamily[family] || 0) + ')');
