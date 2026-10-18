@@ -318,3 +318,64 @@ a:not(.button):not(.wa-float):not(.brand):active{opacity:.7}
 .benefits strong{color:var(--gold-text)}
 .section-head .eyebrow::before,.shelf-head .eyebrow::before,.story .eyebrow::before{content:"";display:inline-block;width:26px;height:1px;margin:0 10px 0 0;background:currentColor;vertical-align:middle}
 .home-shelves{background:linear-gradient(180deg,transparent,rgba(201,164,92,.07) 40%,transparent)}
+/* ===================== Contacto, reseñas verificadas y estrellas ===================== */
+.text-underline{text-decoration:underline;text-underline-offset:2px}
+.contact-form,.review-form{display:grid;gap:14px;margin:24px 0 18px}
+.contact-form{padding:22px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--gold)}
+.contact-form[hidden],.review-form[hidden],.contact-done[hidden],.dialog-rating[hidden]{display:none}
+.contact-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.contact-form label,.review-author,.review-comment{display:grid;gap:6px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.contact-form input,.contact-form select,.contact-form textarea,.review-author input,.review-form textarea{width:100%;padding:12px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font:16px/1.5 Arial,Helvetica,sans-serif;text-transform:none;letter-spacing:0}
+.contact-form textarea{min-height:130px;resize:vertical}.review-form textarea{min-height:84px;resize:vertical}
+.contact-form [aria-invalid="true"],.review-form [aria-invalid="true"]{border-color:var(--status-bad);box-shadow:0 0 0 1px var(--status-bad)}
+.contact-form select:focus-visible,.contact-form textarea:focus-visible,.review-form textarea:focus-visible{outline:3px solid #c6a35e;outline-offset:2px}
+.contact-help{margin:-6px 0 0;font-size:13px;color:var(--muted)}.contact-count{text-align:right}
+.contact-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.contact-status{min-height:1.4em;margin:0;font-size:14px}.contact-status.error{color:var(--status-bad);font-weight:700}.contact-status a{font-weight:700}
+.contact-privacy{font-size:13px;color:var(--muted);margin:10px 0 0}
+.contact-done{display:grid;gap:12px;justify-items:start;margin:24px 0;padding:26px 22px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--status-ok);animation:done-in 300ms var(--ease-out) both}
+.contact-done:focus{outline:none}.contact-done:focus-visible{outline:3px solid #c6a35e;outline-offset:3px}
+.contact-done p{margin:0;font:20px/1.5 Georgia,serif;color:var(--ink)}
+.contact-done-mark{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--status-ok);color:var(--paper);font-size:22px;font-weight:700;animation:mark-in 360ms var(--ease-out) 80ms both}
+@keyframes done-in{from{opacity:0;transform:translateY(8px)}}
+@keyframes mark-in{from{opacity:0;transform:scale(.6)}}
+@media(max-width:600px){.contact-row{grid-template-columns:1fr}.contact-form{padding:16px}}
+/* Calificar: estrellas grandes que se tocan fácil (44 px), con el número también escrito */
+.review-item{margin:0;padding:16px 18px 18px;border:1px solid var(--line);background:var(--surface);display:grid;gap:10px;min-width:0}
+.review-item legend{font:600 18px/1.35 Georgia,serif;padding:0 6px;color:var(--ink)}
+.review-item.missing{border-color:var(--status-bad);box-shadow:0 0 0 1px var(--status-bad)}
+.review-item.is-done{border-left:3px solid var(--status-ok)}
+.review-photo:empty{display:none}.review-photo img{width:72px;height:72px;object-fit:contain;background:var(--surface-soft);border-radius:12px}
+.star-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px}
+.star-input{display:inline-flex}
+.star{display:block;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.star-icon{display:block;padding:3px 4px;font-size:36px;line-height:1;color:var(--line);transition:color 150ms var(--ease-out),transform 160ms var(--ease-out)}
+.star input:focus-visible+.star-icon{outline:3px solid #c6a35e;outline-offset:1px;border-radius:8px}
+.star:active .star-icon{transform:scale(.9)}
+.star-input[data-value="1"] .star:nth-child(-n+1) .star-icon,.star-input[data-value="2"] .star:nth-child(-n+2) .star-icon,.star-input[data-value="3"] .star:nth-child(-n+3) .star-icon,
+.star-input[data-value="4"] .star:nth-child(-n+4) .star-icon,.star-input[data-value="5"] .star .star-icon{color:var(--gold-display)}
+@media(hover:hover) and (pointer:fine){.star-input:hover .star .star-icon{color:var(--gold-display)}.star-input .star:hover~.star .star-icon{color:var(--line)}}
+.star-word{min-width:6em;font-weight:700;color:var(--gold-text)}
+.review-item-status{margin:0;font-size:14px;color:var(--ink)}.review-item-status:empty{display:none}.review-item.is-done .review-item-status{color:var(--status-ok);font-weight:700}
+/* Reseñas publicadas: página de cada perfume, ficha, tarjetas y portada */
+.stars{display:inline-flex;gap:1px;font-size:18px;line-height:1}
+.stars i{font-style:normal;color:var(--line)}.stars i.on{color:var(--gold-display)}
+.stars i.half{background:linear-gradient(90deg,var(--gold-display) 50%,var(--line) 50%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.reviews{margin:52px 0 0}
+.review-summary{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin:8px 0 18px;font-size:15px}
+.review-summary strong{font:600 22px Georgia,serif;color:var(--ink)}.review-summary>span:last-child{color:var(--muted)}
+.review-list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.review-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.review-card{display:grid;gap:8px;align-content:start;padding:16px 18px;background:var(--surface);border:1px solid var(--line)}
+.review-text{margin:0;font:17px/1.55 Georgia,serif;color:var(--ink);overflow-wrap:anywhere}
+.review-by{margin:0;font-size:13px;color:var(--muted)}.review-by strong{color:var(--ink)}.review-by a{text-decoration:underline;text-underline-offset:2px}
+.review-verified{color:var(--status-ok);font-weight:700}.review-verified::before{content:"✓ "}
+.review-note,.review-more{font-size:13px;color:var(--muted)}
+.detail-rating{display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px;margin:-8px 0 14px;font-size:14px;text-decoration:underline;text-underline-offset:3px}
+.card-rating{margin:-4px 16px 6px;font-size:12px;color:var(--muted)}.card-rating b{font-weight:400;color:var(--gold-display)}
+.dialog-rating{display:inline-block;margin:-2px 0 10px;font-size:14px;text-decoration:underline;text-underline-offset:3px}.dialog-rating span{color:var(--gold-display)}
+.testimonials .review-summary{margin-top:28px}
+.order-review{display:grid;gap:6px;justify-items:start;margin-top:10px}.order-review-note{margin:0;font-size:13px;color:var(--muted)}.order-review-note:empty{display:none}
+@media(max-width:420px){.card-rating{margin-left:10px;margin-right:10px}}
+@media(prefers-reduced-motion:reduce){.contact-done{animation:fade-in 150ms ease both}.contact-done-mark{animation:none}.star-icon{transition:color 150ms ease}.star:active .star-icon{transform:none}}
+@keyframes fade-in{from{opacity:0}}

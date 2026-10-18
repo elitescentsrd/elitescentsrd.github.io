@@ -20,8 +20,13 @@ const referencia = JSON.parse(referenciaText).precios;
 // Precios públicos después del catálogo de La Grada de sept. 2026 (sin costos) y perfumes que se pueden ocultar mientras se confirman.
 const precios2609 = JSON.parse(await readFile('data/precios-2026-09.json', 'utf8'));
 // Perfumes nuevos del catálogo de La Grada (números 421 en adelante): existen en la tienda cuando se aplica su script SQL.
+// Cada catálogo de La Grada trae su archivo (septiembre: 421-496; octubre: 497 en adelante) y su script SQL; los perfumes de
+// un archivo llegan todos juntos a la tienda cuando se aplica su script.
 const nuevos2609 = JSON.parse(await readFile('data/perfumes-nuevos-2026-09.json', 'utf8'));
-const idsNuevos = new Set(Object.keys(nuevos2609.perfumes).map(Number)), notasPendientes = new Set(nuevos2609.notas_pendientes.map(Number));
+const nuevos2610 = JSON.parse(await readFile('data/perfumes-nuevos-2026-10.json', 'utf8'));
+const tandasNuevos = [nuevos2609, nuevos2610];
+const perfumesNuevos = Object.assign({}, ...tandasNuevos.map(t => t.perfumes));
+const idsNuevos = new Set(Object.keys(perfumesNuevos).map(Number)), notasPendientes = new Set(tandasNuevos.flatMap(t => t.notas_pendientes.map(Number)));
 const inspirado = JSON.parse(await readFile('data/inspirado-en.json', 'utf8')).perfumes;
 new Script(js,{filename:'tienda.js'});
 
@@ -43,11 +48,14 @@ assert(N >= BASE - ocultables.size && N <= TOTAL, 'Deben pre-renderizarse entre 
   const visibles = new Set(products.map(p => Number(p.id)));
   const faltan = [...Object.keys(enrichment).map(Number), ...idsNuevos].filter(id => !visibles.has(id) && !ocultables.has(id) && !idsNuevos.has(id));
   assert.deepEqual(faltan, [], 'Solo pueden faltar perfumes de la lista de ocultos (data/precios-2026-09.json) o nuevos sin aplicar');
-  const nuevosVisibles = [...idsNuevos].filter(id => visibles.has(id)).length;
-  assert(nuevosVisibles === 0 || nuevosVisibles === idsNuevos.size, 'Los perfumes nuevos llegan todos juntos (hay ' + nuevosVisibles + ' de ' + idsNuevos.size + ')');
-  assert.equal(Math.min(...idsNuevos), nuevos2609.primer_id); assert.equal(Math.max(...idsNuevos), nuevos2609.ultimo_id);
+  for (const tanda of tandasNuevos) {
+    const ids = Object.keys(tanda.perfumes).map(Number), nuevosVisibles = ids.filter(id => visibles.has(id)).length;
+    assert(nuevosVisibles === 0 || nuevosVisibles === ids.length, 'Los perfumes nuevos de ' + tanda.aplicar_con + ' llegan todos juntos (hay ' + nuevosVisibles + ' de ' + ids.length + ')');
+    assert.equal(Math.min(...ids), tanda.primer_id); assert.equal(Math.max(...ids), tanda.ultimo_id);
+  }
+  assert.equal(nuevos2610.primer_id, nuevos2609.ultimo_id + 1, 'Los números de octubre siguen a los de septiembre');
   for (const p of products.filter(x => idsNuevos.has(Number(x.id)))) {
-    const n = nuevos2609.perfumes[String(p.id)];
+    const n = perfumesNuevos[String(p.id)];
     assert.equal(p.name, n.name, 'Nombre del perfume nuevo #' + p.id);
     assert(p.image_url && p.image_url.endsWith(n.foto.replace('img/productos/', '')), 'Foto del perfume nuevo #' + p.id);
   }
@@ -106,13 +114,36 @@ assert(Object.values(enrichment).every(item => /^https:\/\//.test(item.source)),
   const filasInspirados = [...bloque('inspirados').matchAll(/^\s+\((\d+), '((?:[^']|'')*)'\)[,;]/gm)].map(m => [m[1], m[2].replace(/''/g, "'")]);
   assert.deepEqual(Object.fromEntries(filasInspirados), Object.fromEntries(Object.entries(inspirado).filter(([id]) => Number(id) <= BASE).map(([id, v]) => [id, v.referencia])), 'El script escribe las referencias de data/inspirado-en.json');
   const filasNuevos = [...bloque('nuevos').matchAll(/^\s+\((\d+), '((?:[^']|'')*)', '((?:[^']|'')*)', '((?:[^']|'')*)'/gm)];
-  assert.equal(filasNuevos.length, idsNuevos.size, 'El script agrega todos los perfumes nuevos');
+  assert.equal(filasNuevos.length, Object.keys(nuevos2609.perfumes).length, 'El script agrega todos los perfumes nuevos');
   for (const [, id, name, brand, price] of filasNuevos) {
     const n = nuevos2609.perfumes[id];
     assert(n && n.name === name.replace(/''/g, "'") && n.brand === brand.replace(/''/g, "'") && n.price === price, 'Perfume nuevo #' + id + ' igual en el script y en el archivo de datos');
     assert(/^RD\$[0-9,]+$/.test(price), 'Precio público del perfume nuevo #' + id);
   }
   assert(!/costo|margen|ganancia/i.test(JSON.stringify(nuevos2609.perfumes)) && !/"cost/i.test(JSON.stringify(nuevos2609)), 'El archivo público de perfumes nuevos no tiene costos');
+}
+{
+  // Catálogo de octubre: el script SQL agrega exactamente los perfumes de data/perfumes-nuevos-2026-10.json y cambia
+  // exactamente sus precios (sin costos: solo precios públicos).
+  const sql = await readFile(nuevos2610.aplicar_con, 'utf8');
+  const bloque = nombre => sql.slice(sql.indexOf('insert into ' + nombre + ' ('), sql.indexOf('\n\n', sql.indexOf('insert into ' + nombre + ' (')));
+  const filasNuevos = [...bloque('nuevos').matchAll(/^\s+\((\d+), '((?:[^']|'')*)', '((?:[^']|'')*)', '((?:[^']|'')*)', '((?:[^']|'')*)', '(hombre|mujer|unisex)'/gm)];
+  assert.equal(filasNuevos.length, Object.keys(nuevos2610.perfumes).length, 'El script de octubre agrega todos los perfumes nuevos');
+  for (const [, id, name, brand, price, size, gender] of filasNuevos) {
+    const n = nuevos2610.perfumes[id], un = v => v.replace(/''/g, "'");
+    assert(n && n.name === un(name) && n.brand === un(brand) && n.price === price && n.size === un(size) && n.gender === gender, 'Perfume nuevo #' + id + ' igual en el script y en el archivo de datos');
+    assert(/^RD\$[0-9,]+$/.test(price), 'Precio público del perfume nuevo #' + id);
+    assert(existsSync(n.foto) && existsSync(n.foto.replace('img/productos/', 'img/productos/thumbs/').replace(/\.jpg$/, '.webp')) && existsSync(n.foto.replace('img/productos/', 'img/productos/webp/').replace(/\.jpg$/, '.webp')), 'Foto, miniatura y WebP del perfume nuevo #' + id);
+  }
+  const filasPrecios = [...bloque('cambios').matchAll(/^\s+\((\d+), '((?:[^']|'')*)', '([^']*)', (null|'[^']*'), '([^']*)', (true|false)\)/gm)]
+    .map(([, id, nombre, antes, oferta, ahora, reactivar]) => [id, { nombre: nombre.replace(/''/g, "'"), antes, oferta_antes: oferta === 'null' ? null : oferta.slice(1, -1), ahora, reactivar: reactivar === 'true' }]);
+  assert.deepEqual(Object.fromEntries(filasPrecios), nuevos2610.precios, 'El script cambia exactamente los precios de data/perfumes-nuevos-2026-10.json');
+  for (const [id, c] of Object.entries(nuevos2610.precios)) {
+    assert.equal(numericPrices(c.antes).length, numericPrices(c.ahora).length, 'Mismas presentaciones en #' + id);
+    assert(!c.oferta_antes || numericPrices(c.antes).every((v, i) => v < numericPrices(c.oferta_antes)[i]), 'La oferta de antes de #' + id + ' era menor que su precio tachado');
+  }
+  assert(!/costo|margen|ganancia|"cost/i.test(JSON.stringify({ p: nuevos2610.perfumes, c: nuevos2610.precios })), 'El archivo público de octubre no tiene costos');
+  assert(!Object.keys(nuevos2610.precios).some(id => nuevos2610.perfumes[id]), 'Un perfume nuevo no aparece también como cambio de precio');
 }
 
 console.log('Pruebas superadas: ' + N + ' productos visibles (de ' + TOTAL + ') con notas y fuentes, JSON-LD, USD, temas y recorte limpio.');
@@ -133,7 +164,7 @@ assert(!existsSync('data/la-grada-pricing-2026.json'),'Los costos del catálogo 
 const fueraDeRango=[];
 for(const p of products){
   if(idsNuevos.has(Number(p.id))){
-    const esperado=numericPrices(nuevos2609.perfumes[String(p.id)].price),sells=numericPrices(p.original_price||p.price);
+    const esperado=numericPrices(perfumesNuevos[String(p.id)].price),sells=numericPrices(p.original_price||p.price);
     assert.equal(sells.length,esperado.length,'Presentaciones del perfume nuevo '+p.name);
     sells.forEach((v,i)=>{if(!(v>=esperado[i]/2&&v<=esperado[i]*2))fueraDeRango.push(p.name+': RD$'+v+' (esperado cerca de RD$'+esperado[i]+')')});
     continue;

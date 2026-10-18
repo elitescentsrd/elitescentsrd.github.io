@@ -9,7 +9,7 @@ const REPO = process.cwd();
 const TMP = (await import('node:os')).tmpdir() + '/elite-render-test';
 await mkdir(TMP + '/scripts', { recursive: true }); await mkdir(TMP + '/src', { recursive: true }); await mkdir(TMP + '/data', { recursive: true });
 await cp(REPO + '/src', TMP + '/src', { recursive: true }); await cp(REPO + '/data', TMP + '/data', { recursive: true });
-await cp(REPO + '/supabase-config.js', TMP + '/supabase-config.js');
+await cp(REPO + '/supabase-config.js', TMP + '/supabase-config.js'); await cp(REPO + '/cookies.js', TMP + '/cookies.js'); // cookies.js: números de la medición
 await cp(REPO + '/scripts/lib', TMP + '/scripts/lib', { recursive: true });
 const cfg = await readFile(REPO + '/supabase-config.js', 'utf8');
 const base = cfg.match(/url:\s*'([^']+)'/)[1], key = cfg.match(/publishableKey:\s*'([^']+)'/)[1];

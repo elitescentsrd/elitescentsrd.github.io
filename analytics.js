@@ -1,4 +1,5 @@
-// Estadísticas propias de Elite Scents RD (sin Google Analytics ni terceros). Solo cuentan si el visitante eligió
+// Estadísticas propias de Elite Scents RD (en nuestra base de datos; si la tienda activa Google Analytics o el píxel de
+// Meta, medicion.js recibe los mismos eventos con su propio permiso). Solo cuentan si el visitante eligió
 // «Aceptar todas» en el aviso de cookies. Se envía a la base de datos el tipo de evento (visita, perfume visto,
 // búsqueda, búsqueda sin resultado, clic a WhatsApp, agregar al carrito), el número del perfume o el texto buscado,
 // y en la visita el sitio de origen y si es celular o computadora. Nunca nombre, teléfono ni correo.
@@ -11,6 +12,8 @@
   const kinds = ['visita', 'perfume', 'busqueda', 'sin_resultado', 'whatsapp', 'carrito'];
 
   function send(kind, data = {}) {
+    // Si la tienda activó Google Analytics o el píxel de Meta (medicion.js), reciben el mismo evento (con su propio permiso).
+    window.EliteMedicion?.evento(kind, data);
     if (!kinds.includes(kind) || !allowed()) return;
     const body = { p_kind: kind, p_product_id: Number(data.product_id) > 0 ? Number(data.product_id) : null, p_term: data.term ? String(data.term).slice(0, 60) : null, p_source: data.source || null, p_device: data.device || null };
     try {

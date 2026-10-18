@@ -23,13 +23,19 @@ for (const [name, html] of pages) {
   const csp = cspOf(html);
   assert(csp, name + ': debe tener política de seguridad de contenido (CSP)');
   const directives = Object.fromEntries(csp.split(';').map(d => d.trim()).filter(Boolean).map(d => { const [k, ...v] = d.split(/\s+/); return [k, v]; }));
-  assert.deepEqual(directives['script-src'], ["'self'"], name + ': solo se permiten scripts propios (script-src \'self\')');
+  // Medición de Google y Meta (medicion.js, solo si la tienda la activa): únicamente sus servidores, en las páginas que la cargan.
+  const measured = html.includes('src="/medicion.js"');
+  const MEASURE_SCRIPTS = ['https://www.googletagmanager.com', 'https://connect.facebook.net'];
+  const MEASURE_CONNECT = ['https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://*.googletagmanager.com', 'https://www.facebook.com', 'https://connect.facebook.net'];
+  if (measured) assert(directives['script-src'][0] === "'self'" && directives['script-src'].length > 1 && directives['script-src'].slice(1).every(v => MEASURE_SCRIPTS.includes(v)), name + ': con medición, solo scripts propios y de Google o Meta');
+  else assert.deepEqual(directives['script-src'], ["'self'"], name + ': solo se permiten scripts propios (script-src \'self\')');
   assert.deepEqual(directives['default-src'], ["'self'"], name + ': default-src \'self\'');
   assert.deepEqual(directives['object-src'], ["'none'"], name + ': object-src \'none\'');
   assert.deepEqual(directives['base-uri'], ["'self'"], name + ': base-uri \'self\'');
   assert.deepEqual(directives['form-action'], ["'self'"], name + ': form-action \'self\'');
-  assert(!/unsafe-eval|\*/.test(csp), name + ': la CSP no permite eval ni comodines');
-  for (const origin of (directives['connect-src'] || []).filter(v => v.startsWith('https://'))) assert.equal(origin, 'https://ozowziumksrudrotulll.supabase.co', name + ': solo se conecta a Supabase');
+  assert(!/unsafe-eval/.test(csp) && !/\*/.test(csp.replace(measured ? /https:\/\/\*\.(google-analytics\.com|analytics\.google\.com|googletagmanager\.com)/g : /^$/, '')), name + ': la CSP no permite eval ni comodines (salvo los de Google Analytics, con medición)');
+  for (const origin of (directives['connect-src'] || []).filter(v => v.startsWith('https://'))) assert(origin === 'https://ozowziumksrudrotulll.supabase.co' || (measured && MEASURE_CONNECT.includes(origin)), name + ': solo se conecta a Supabase' + (measured ? ' y a Google o Meta' : '') + ': ' + origin);
+  for (const f of ['checkout.html', 'admin.html', 'encuesta.html', 'contacto.html', 'resena.html']) if (name === f) assert(!measured, f + ': nunca carga Google ni Meta (ahí hay datos de clientes)');
   const withoutScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, tag => tag.replace(/>[\s\S]*<\/script>$/, '></script>'));
   for (const [tag, type] of [...html.matchAll(/<script\b([^>]*)>(?!<\/script>)/g)].map(m => [m[0], m[1]])) {
     if (/\bsrc=/.test(type)) continue;
