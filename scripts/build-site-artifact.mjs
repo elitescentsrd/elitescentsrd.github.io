@@ -31,6 +31,7 @@ const FILES = [
   '404.html',
   'tienda.css',
   'tienda.js',
+  'ficha.js',
   'movimiento.js',
   'cookies.js',
   'analytics.js',
