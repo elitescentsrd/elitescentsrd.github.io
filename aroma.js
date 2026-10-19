@@ -17,6 +17,17 @@
     especiado: { label: 'Especiado e intenso', hint: 'pimienta, canela, azafrán, cuero, tabaco' },
   };
 
+  // Icono de cada familia (trazos SVG de 24×24, constantes): la pirámide de notas de la ficha y de la página del perfume.
+  const ICONS = {
+    fresco: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6"/>',
+    dulce: '<path d="M12 3.5c3.2 4.6 6 7.6 6 11a6 6 0 0 1-12 0c0-3.4 2.8-6.4 6-11z"/><path d="M9.5 15.5a2.6 2.6 0 0 0 2.5 2"/>',
+    frutal: '<path d="M12 7.5c-2.2-1.6-6.4-1-6.9 3.6C4.6 15.6 7.6 20.5 9.8 20.5c1 0 1.4-.6 2.2-.6s1.2.6 2.2.6c2.2 0 5.2-4.9 4.7-9.4C18.4 6.5 14.2 5.9 12 7.5z"/><path d="M12 7.5c0-2 1-3.6 3.2-4.2"/>',
+    floral: '<circle cx="12" cy="12" r="2.2"/><path d="M12 9.8C10 6 10.5 3.5 12 3.5s2 2.5 0 6.3zM14.2 12c3.8-2 6.3-1.5 6.3 0s-2.5 2-6.3 0zM12 14.2c2 3.8 1.5 6.3 0 6.3s-2-2.5 0-6.3zM9.8 12C6 14 3.5 13.5 3.5 12s2.5-2 6.3 0z"/>',
+    amaderado: '<path d="M12 3 6 14h12z"/><path d="M12 14v7M9 21h6"/>',
+    especiado: '<path d="M12 21a6 6 0 0 0 6-6c0-4.2-3-6.2-4.2-10.5C12.4 6.6 12 8.2 12 9.8c-1-.9-1.6-2-1.7-3.2C7.9 8.9 6 11.6 6 15a6 6 0 0 0 6 6z"/>',
+    otra: '<circle cx="12" cy="12" r="3.2"/>',
+  };
+
   // El orden importa: la primera regla que coincide decide la familia de la nota ("pimienta rosa" es especiada, no floral).
   const RULES = [
     ['especiado', /\b(?:pimienta|pepper|paprika|pimiento|canela|cinnamon|cardamom|cardamon|jengibre|ginger|azafran|saffron|nuez moscada|nutmeg|clavo|clove|comino|cumin|anis|anise|curcuma|turmeric|especia|spice|regaliz|licorice|alcaravea|caraway|tabaco|tobacco|cuero|leather|gamuza|suede|humo|smoke|ron\b|rum\b|whisk|conac|cognac|licor|liquor|vodka|sake\b|absenta|absinthe|oriental)/],
@@ -132,5 +143,5 @@
     return parts.join(', ');
   }
 
-  return { FAMILIES, RULES, STEPS, OCCASION, familyOf, profile, familiesOf, recommend, describeAnswers, minPrice };
+  return { FAMILIES, ICONS, RULES, STEPS, OCCASION, familyOf, profile, familiesOf, recommend, describeAnswers, minPrice };
 });

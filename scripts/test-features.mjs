@@ -835,4 +835,31 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(cookiesJs.includes("document.cookie = name + '=; Max-Age=0; path=/' + domain") && cookiesJs.includes("window.dispatchEvent(new CustomEvent('elite-consent'"), 'Al elegir «Solo necesarias» se borran las cookies de Google y Meta y se avisa al instante');
   console.log('Contacto, reseñas verificadas (estrellas reales para Google) y medición de Google y Meta con permiso: correctos.');
 }
+// Ficha del perfume (19-oct): pirámide de notas con iconos por familia, lo que la tienda promete junto al botón de comprar
+// (solo lo que ya dicen «Pedidos y envíos» y «Canales oficiales») y fotos con lupa y visor (ficha.js).
+{
+  const { TRUST_HTML, notePyramidHtml, NOTE_SPRITE } = await import('./lib/seo.mjs');
+  const A = await runUmd('aroma.js'), ficha = await read('ficha.js'), buildSite = await read('scripts/build-site-artifact.mjs');
+  for (const fam of [...Object.keys(A.FAMILIES), 'otra']) assert(/^<[a-z]/.test(A.ICONS[fam]) && !/[<]script|on[a-z]+=/i.test(A.ICONS[fam]), 'Icono de la familia ' + fam);
+  for (const [name, html] of [['plantilla', template], ['portada', indexHtml]]) {
+    assert(html.includes(TRUST_HTML), 'La ficha de la ' + name + ' trae el bloque de confianza');
+    assert(html.includes(NOTE_SPRITE) && Object.keys(A.ICONS).every(f => html.includes('<symbol id="note-ic-' + f + '"')), 'Los iconos de las notas están en la ' + name);
+    assert(/<section class="note-pyramid" id="dialogNotes"[^>]*>/.test(html) && ['dialogTop', 'dialogHeart', 'dialogBase'].every(id => html.includes('<ul class="note-chips" id="' + id + '">')), 'Pirámide de notas en la ficha de la ' + name);
+    assert(html.includes('id="dialogZoom"') && html.indexOf('src="/ficha.js"') > 0 && html.indexOf('src="/ficha.js"') < html.indexOf('src="/tienda.js"'), 'Zoom en la ficha de la ' + name + ' (ficha.js antes de tienda.js)');
+  }
+  assert(!/original garantizad|100% original|aut[eé]ntic/i.test(TRUST_HTML), 'El bloque de confianza no promete lo que la tienda no dice en otra parte');
+  assert(TRUST_HTML.includes('809-433-3348') && TRUST_HTML.includes('@elite.scentsrd') && TRUST_HTML.includes('href="/canales-oficiales.html"'), 'Canales oficiales en el bloque de confianza');
+  const sample = { ...products.find(p => p.notes_top?.length && p.image_url), gallery_urls: ['/img/productos/0001-x.jpg'] };
+  const page = renderProductPage(sample, []);
+  assert(page.includes(TRUST_HTML) && page.includes(notePyramidHtml(sample)) && page.includes('<script defer src="/ficha.js"></script>'), 'Página del perfume: confianza, pirámide y ficha.js');
+  assert(page.includes('class="zoomable"') && page.includes('class="zoom-open-button"') && (page.match(/<button type="button" aria-label="Ver foto/g) || []).length === 2, 'Página del perfume: lupa, «Ver en grande» y miniaturas de la galería');
+  const chips = notePyramidHtml(sample).match(/<li class="note-chip fam-[a-z]+"/g) || [];
+  assert.equal(chips.length, sample.notes_top.length + sample.notes_heart.length + sample.notes_base.length, 'Una etiqueta por nota');
+  assert.equal(notePyramidHtml({ notes_top: [], notes_heart: [], notes_base: [] }), '', 'Sin notas no hay pirámide');
+  assert(!renderProductPage({ ...sample, image_url: null, image_webp: null }, []).includes('detail-thumbs'), 'Sin foto no hay miniaturas');
+  assert(buildSite.includes("'ficha.js'"), 'ficha.js se publica en _site');
+  new Script(ficha, { filename: 'ficha.js' });
+  assert(/prefers-reduced-motion/.test(ficha) && /Escape|close\(\)/.test(ficha) && ficha.includes("showModal()"), 'Visor: respeta menos movimiento y se cierra');
+  console.log('Ficha: pirámide de notas, bloque de confianza y zoom de fotos correctos.');
+}
 console.log('Pruebas de funciones nuevas superadas.');

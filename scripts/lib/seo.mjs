@@ -47,7 +47,29 @@ const statusLabel = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'So
 // «¡Quedan 2!» (solo si el dueño lleva la cantidad en casa y quedan de 1 a 3).
 export const stockText = p => { const n = Number(p.stock_left); return p.availability === 'disponible' && Number.isInteger(n) && n >= 1 && n <= 3 ? (n === 1 ? '¡Queda 1!' : '¡Quedan ' + n + '!') : ''; };
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
-const listNotes = items => (items || []).join(', ');
+// Familias de aroma (aroma.js, el mismo código que usa la tienda): cada nota de la pirámide lleva el icono de su familia.
+const AROMA = (() => { const ctx = {}; new Function('self', readFileSync(new URL('../../aroma.js', import.meta.url), 'utf8'))(ctx); return ctx.EliteAroma; })();
+const noteIcon = family => '<svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + AROMA.ICONS[family || 'otra'] + '</svg>';
+// Los mismos iconos como «sprite» para la portada: tienda.js los usa con <use> (sin armar HTML con texto).
+export const NOTE_SPRITE = '<svg class="icon-sprite" aria-hidden="true" focusable="false">' + Object.entries(AROMA.ICONS).map(([family, d]) => '<symbol id="note-ic-' + family + '" viewBox="0 0 24 24">' + d + '</symbol>').join('') + '</svg>';
+export const NOTE_TIERS = [['top', 'Salida', 'los primeros minutos'], ['heart', 'Corazón', 'las primeras horas'], ['base', 'Fondo', 'lo que queda en la piel']];
+// Pirámide de notas: salida arriba (angosta), corazón y fondo abajo (ancho); cada nota con el icono de su familia.
+export function notePyramidHtml(p) {
+  const tiers = NOTE_TIERS.map(([key, label, hint]) => [key, label, hint, p['notes_' + key] || []]).filter(([, , , list]) => list.length);
+  if (!tiers.length) return '';
+  return '<section class="note-pyramid" aria-label="Pirámide de notas">' + tiers.map(([key, label, hint, list]) =>
+    '<div class="tier tier-' + key + '"><p class="tier-label"><strong>' + label + '</strong><span>' + hint + '</span></p><ul class="note-chips">' +
+    list.map(note => { const family = AROMA.familyOf(note); return '<li class="note-chip fam-' + (family || 'otra') + '"' + (family ? ' title="' + esc(AROMA.FAMILIES[family].label) + '"' : '') + '>' + noteIcon(family) + esc(note) + '</li>'; }).join('') +
+    '</ul></div>').join('') + '</section>';
+}
+// Lo que la tienda promete (lo mismo que dicen «Pedidos y envíos» y «Canales oficiales»), junto al botón de comprar.
+const trustIcon = d => '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + d + '</svg>';
+export const TRUST_HTML = '<ul class="trust-list" aria-label="Cómo compras en Elite Scents RD">' +
+  '<li>' + trustIcon('<path d="M4 5h16v11H9l-5 4z"/><path d="M8 10.5h8"/>') + '<span><strong>Te confirmamos por WhatsApp</strong> la disponibilidad y el precio final antes de cerrar tu pedido.</span></li>' +
+  '<li>' + trustIcon('<path d="M3 6h11v9H3zM14 9h4l3 3v3h-7z"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>') + '<span><strong>Entrega coordinada</strong> en todo el país.</span></li>' +
+  '<li>' + trustIcon('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>') + '<span><strong>No pagas nada en la página:</strong> el pago lo acuerdas directamente con nosotros.</span></li>' +
+  '<li>' + trustIcon('<path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/>') + '<span><strong>Solo por nuestros <a href="/canales-oficiales.html">canales oficiales</a>:</strong> WhatsApp 809-433-3348 e Instagram @elite.scentsrd.</span></li>' +
+  '</ul>';
 
 // ---------------------------------------------------------------- Reseñas verificadas (solo las que la tienda publicó)
 // Cada reseña llega del build como { product_id, author, rating (1 a 5), comment, date (AAAA-MM-DD) }.
@@ -124,11 +146,16 @@ export function renderProductPage(p, related = [], reviews = []) {
     { '@type': 'ListItem', position: 2, name: 'Perfumes', item: SITE_URL + '/perfumes/' },
     { '@type': 'ListItem', position: 3, name: p.name, item: url },
   ] };
-  const notes = [['Salida', p.notes_top], ['Corazón', p.notes_heart], ['Fondo', p.notes_base]].filter(([, list]) => (list || []).length)
-    .map(([label, list]) => '<div><dt>' + label + '</dt><dd>' + esc(listNotes(list)) + '</dd></div>').join('');
-  const img = '<img src="' + esc(p.image_url) + '" alt="' + esc('Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '')) + '" width="900" height="900" fetchpriority="high">';
+  const alt = 'Frasco de ' + p.name + (p.brand ? ' de ' + p.brand : '');
+  const img = '<img src="' + esc(p.image_url) + '" alt="' + esc(alt) + '" width="900" height="900" fetchpriority="high">';
+  // Fotos: la principal con lupa y «Ver en grande» (ficha.js); si hay fotos extra (galería del panel), miniaturas debajo.
+  const extra = image ? [...new Set(p.gallery_urls || [])].filter(u => u && u !== p.image_url).slice(0, 4) : [];
+  const shots = image ? [{ src: p.image_webp || p.image_url, alt }, ...extra.map((u, i) => ({ src: u, alt: 'Vista ' + (i + 2) + ' de ' + p.name }))] : [];
+  const thumbs = shots.length > 1 ? '<div class="detail-thumbs" aria-label="Más fotos">' + shots.map((s, i) =>
+    '<button type="button" aria-label="' + esc('Ver foto ' + (i + 1) + ' de ' + shots.length) + '" aria-pressed="' + (i === 0) + '" data-full="' + esc(s.src) + '" data-alt="' + esc(s.alt) + '"><img src="' + esc(s.src) + '" alt="" width="84" height="84" loading="lazy" decoding="async"></button>').join('') + '</div>' : '';
   const photo = image
-    ? (p.image_webp ? '<picture><source srcset="' + esc(p.image_webp) + '" type="image/webp">' + img + '</picture>' : img)
+    ? '<div class="zoomable" title="Ver la foto en grande">' + (p.image_webp ? '<picture><source srcset="' + esc(p.image_webp) + '" type="image/webp">' + img + '</picture>' : img) + '</div>' +
+      '<button type="button" class="zoom-open-button"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5M10.5 8v5M8 10.5h5"/></svg>Ver en grande</button>' + thumbs
     : '<div class="photo placeholder" role="img" aria-label="' + esc('Foto próximamente de ' + p.name) + '"></div>';
   const relatedHtml = related.length
     ? '<section class="related"><h2 class="doc-h2">Más perfumes de ' + esc(p.brand) + '</h2><ul class="related-list">' + related.map(r => '<li><a href="' + esc(productPath(r)) + '">' + esc(r.name) + '</a> <span>' + esc(r.price || '') + '</span></li>').join('') + '</ul></section>'
@@ -148,13 +175,13 @@ export function renderProductPage(p, related = [], reviews = []) {
     (onOffer ? '<span class="offer-badge detail-offer">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
     '<p class="detail-price' + (onOffer ? ' price-offer' : '') + '">' + (onOffer ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small> ' : '') + '<strong>' + (onOffer ? 'Ahora ' : '') + esc(price) + '</strong></p>' +
     '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + (stockText(p) ? ' · <strong class="stock-low-text">' + stockText(p) + '</strong>' : '') + '</dd></div>' +
-    (p.inspired_by ? '<div class="inspired-fact"><dt>Inspirado en</dt><dd>' + esc(p.inspired_by) + '</dd></div>' : '') + notes + '</dl>' +
+    (p.inspired_by ? '<div class="inspired-fact"><dt>Inspirado en</dt><dd>' + esc(p.inspired_by) + '</dd></div>' : '') + '</dl>' +
     (p.inspired_by ? '<p class="inspired-note">Referencia de estilo del aroma: no es el perfume original. Las marcas mencionadas pertenecen a sus dueños.</p>' : '') +
-    '<p class="dialog-description">' + esc(p.description || '') + '</p>' +
+    '<p class="dialog-description">' + esc(p.description || '') + '</p>' + notePyramidHtml(p) +
     '<div class="dialog-order-actions"><a class="button gold" href="' + esc(whatsapp) + '" target="_blank" rel="noopener noreferrer">Pedir por WhatsApp ↗</a><a class="button outline" href="/#producto-' + esc(p.id) + '">Ver en la tienda y agregar al carrito</a>' +
-    (availability === 'agotado' || availability === 'encargo' ? '<a class="button outline" href="/#avisame-' + esc(p.id) + '">🔔 Avísame cuando llegue</a>' : '') + '</div>' +
+    (availability === 'agotado' || availability === 'encargo' ? '<a class="button outline" href="/#avisame-' + esc(p.id) + '">🔔 Avísame cuando llegue</a>' : '') + '</div>' + TRUST_HTML +
     '</div></article>' + reviewsSection(reviews) + relatedHtml + '</main>' +
-    '<footer class="footer"><div><a href="/">Inicio</a><a href="/contacto.html">Contacto</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a><a href="/aviso-legal.html">Aviso legal</a></div><p class="copyright">© Elite Scents RD</p></footer>' + WA_FLOAT + '<script defer src="/frame-guard.js"></script><script src="/cookies.js"></script>' + STATS_SCRIPTS + '<script defer src="/pwa.js"></script></body></html>';
+    '<footer class="footer"><div><a href="/">Inicio</a><a href="/contacto.html">Contacto</a><a href="/pedidos-envios.html">Pedidos y envíos</a><a href="/canales-oficiales.html">Canales oficiales</a><a href="/privacidad.html">Privacidad</a><a href="/aviso-legal.html">Aviso legal</a></div><p class="copyright">© Elite Scents RD</p></footer>' + WA_FLOAT + '<script defer src="/frame-guard.js"></script><script defer src="/ficha.js"></script><script src="/cookies.js"></script>' + STATS_SCRIPTS + '<script defer src="/pwa.js"></script></body></html>';
 }
 
 // Datos de la marca para el buscador: nombre, variantes de escritura, logotipo, redes y contacto.
