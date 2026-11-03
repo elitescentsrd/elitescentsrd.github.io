@@ -88,7 +88,7 @@
           <div class="today-grid" id="today-grid"></div>
           <div class="today-actions"><a class="btn" href="#pedidos/nuevo">+ Registrar pedido</a><a class="btn btn-secondary" href="#perfumes/editar">+ Agregar perfume</a><a class="btn btn-secondary" href="#ventas">Ver resumen de ventas</a></div>
         </section>
-        <section class="admin-card" id="sales-card" data-view="ventas">
+        <section class="admin-card" id="sales-card" data-view="ventas" data-tab="resumen" data-tab-label="Resumen">
           <div class="admin-head"><div><p class="eyebrow">Resumen</p><h2>Resumen de ventas</h2><p class="muted">Se calcula con los pedidos del panel. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados; los nuevos quedan "por confirmar" y los cancelados no suman.</p></div><label class="sales-period-label">Período<select id="sales-period"><option value="today">Hoy</option><option value="7">Últimos 7 días</option><option value="30" selected>Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="all">Todo el historial</option></select></label></div>
           <div class="sales-kpis" id="sales-kpis"></div>
           <div class="admin-actions sales-chart-head"><strong id="sales-chart-title">Pedidos por día</strong><button type="button" class="btn btn-secondary active" data-sales-metric="orders">Pedidos</button><button type="button" class="btn btn-secondary" data-sales-metric="sales">Ventas (RD$)</button></div>
@@ -98,6 +98,20 @@
             <div><h3>De dónde llegan tus clientes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Origen</th><th>Cuentas</th><th>Compraron</th><th>Pedidos</th></tr></thead><tbody id="sales-origins"></tbody></table></div><p class="muted">Según cómo llegó cada persona al crear su cuenta (todas las cuentas, sin importar el período).</p></div>
           </div>
           <div class="profit-block"><h3>Ganancia por mes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Mes</th><th>Pedidos con costo</th><th>Ventas</th><th>Costo</th><th>Ganancia</th><th>Margen</th><th>Sin costo</th></tr></thead><tbody id="profit-body"></tbody></table></div><p class="muted" id="profit-note">Se calcula con los costos privados de cada perfume (sección «Costos y precios») y la logística por unidad. Los pedidos con algún perfume sin costo aparecen en «Sin costo».</p></div>
+        </section>
+        <section class="admin-card" id="month-card" data-view="ventas" data-tab="mes" data-tab-label="Consulta por mes">
+          <div class="admin-head"><div><p class="eyebrow">Consulta</p><h2>Ventas por mes</h2><p class="muted">Elige un mes y mira cuánto vendiste, qué perfumes salieron y cada pedido. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados.</p></div>
+            <div class="month-picker"><button type="button" class="btn btn-secondary" id="month-prev" aria-label="Mes anterior">‹</button><label class="sales-period-label">Mes<select id="month-select"></select></label><button type="button" class="btn btn-secondary" id="month-next" aria-label="Mes siguiente">›</button></div></div>
+          <div class="sales-kpis" id="month-kpis"></div>
+          <div class="admin-actions sales-chart-head"><strong id="month-chart-title">Ventas confirmadas por día (RD$)</strong></div>
+          <div id="month-chart" class="sales-chart" role="img" aria-label="Gráfico: ventas confirmadas por día del mes"></div>
+          <div class="sales-columns">
+            <div><h3>Perfumes vendidos en el mes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Perfume</th><th>Unidades</th><th>Pedidos</th></tr></thead><tbody id="month-products"></tbody></table></div><p class="muted">Solo pedidos confirmados, en preparación, enviados o entregados.</p></div>
+            <div><h3>Mes por mes</h3><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Mes</th><th>Pedidos vendidos</th><th>Ventas</th><th>Ticket promedio</th></tr></thead><tbody id="month-table"></tbody></table></div><p class="muted">Hasta 12 meses, desde tu primer pedido. Toca un mes para verlo completo.</p></div>
+          </div>
+          <div class="month-orders-head"><h3>Pedidos del mes</h3><div class="admin-actions"><label class="sales-period-label">Mostrar<select id="month-status"><option value="all">Todos</option><option value="sold" selected>Vendidos</option><option value="nuevo">Por confirmar</option><option value="cancelado">Cancelados</option></select></label><button type="button" class="btn" id="month-csv">Descargar el mes (Excel)</button></div></div>
+          <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Perfumes</th><th>Total</th><th>Estado</th><th>Ganancia</th></tr></thead><tbody id="month-orders"></tbody></table></div>
+          <p class="muted" id="month-note"></p>
         </section>
         <section class="admin-card" id="orders-card" data-view="pedidos" data-tab="lista" data-tab-label="Pedidos">
           <div class="admin-head"><div><p class="eyebrow">Solicitudes</p><h2>Pedidos</h2><p class="muted">El panel revisa cada 20 segundos si entran pedidos nuevos y suena un aviso. Déjalo abierto en una pestaña para enterarte al momento.</p><p id="pending-count" class="pending-count" aria-live="polite"></p></div><button id="enable-order-notifications" class="btn btn-secondary" type="button">Activar notificaciones</button></div>

@@ -229,6 +229,36 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(adminHtml.includes('data-sales-metric="orders"') && adminHtml.includes('data-sales-metric="sales"'));
   assert(!/style="/.test(adminHtml), 'El panel no usa estilos en línea (su política de seguridad los bloquea)');
   console.log('Resumen de ventas: totales, comparación, gráfico, más pedidos y orígenes correctos.');
+  // Consulta por mes: meses desde el primer pedido, cifras del mes, comparación con el anterior, días, perfumes vendidos
+  // (solo pedidos confirmados) y la lista de pedidos.
+  const local = (y, m, d, h = 12) => new Date(y, m - 1, d, h).toISOString();
+  const mo = [
+    { id: 11, created_at: local(2026, 8, 30), status: 'entregado', amount: 'RD$3,000', items: '1x Lattafa Asad' },
+    { id: 12, created_at: local(2026, 9, 1, 0), status: 'entregado', amount: 'RD$5,500', items: '2x Lattafa Asad (100 ML)' },
+    { id: 13, created_at: local(2026, 9, 15), status: 'confirmado', amount: 'RD$4,150', items: '1x Club de Nuit Maleka' },
+    { id: 14, created_at: local(2026, 9, 30, 23), status: 'nuevo', amount: 'RD$2,850', items: '1x Nitro Gold' },
+    { id: 15, created_at: local(2026, 9, 20), status: 'cancelado', amount: 'RD$9,000', items: '3x Nitro Gold' },
+    { id: 16, created_at: local(2026, 10, 2), status: 'enviado', amount: 'RD$2,750', items: '1x Winsome' },
+    { id: 17, created_at: 'fecha mala', status: 'entregado', amount: 'RD$1,000', items: '1x X' },
+  ];
+  const hoy = new Date(2026, 9, 20, 10);
+  assert.deepEqual(plain(S.monthOptions(mo, hoy)), ['2026-10', '2026-09', '2026-08'], 'Meses desde el primer pedido');
+  assert.deepEqual(plain(S.monthOptions([], hoy)), ['2026-10'], 'Sin pedidos: el mes de hoy');
+  assert.equal(S.monthLabel('2026-09'), 'Septiembre de 2026'); assert.throws(() => S.monthRange('2026-13'));
+  const sep = S.monthSummary(mo, '2026-09');
+  assert.deepEqual([sep.totals.received, sep.totals.soldCount, sep.totals.sales, sep.totals.average, sep.totals.pendingCount, sep.totals.pendingAmount, sep.totals.cancelled], [4, 2, 9650, 4825, 1, 2850, 1], 'Cifras de septiembre (el 1 a medianoche y el 30 a las 11 p. m. cuentan)');
+  assert.deepEqual([sep.previous.soldCount, sep.previous.sales], [1, 3000], 'Agosto para comparar');
+  assert.equal(sep.days.length, 30); assert.equal(sep.days[0].sales, 5500); assert.equal(sep.days[29].orders, 1); assert.equal(sep.days[19].orders, 0, 'Los cancelados no cuentan en el gráfico');
+  assert.deepEqual(plain(sep.products.map(p => [p.name, p.units, p.orders])), [['Lattafa Asad', 2, 1], ['Club de Nuit Maleka', 1, 1]], 'Perfumes vendidos: sin los nuevos ni los cancelados');
+  assert.equal(sep.units, 3); assert.deepEqual(plain(sep.orders.map(o => o.id)), [14, 15, 13, 12], 'Pedidos del mes, el más reciente primero');
+  const tabla = S.monthsTable(mo, 3, hoy);
+  assert.deepEqual(plain(tabla.map(r => [r.month, r.soldCount, r.sales])), [['2026-10', 1, 2750], ['2026-09', 2, 9650], ['2026-08', 1, 3000]], 'Mes por mes');
+  assert.equal(S.statusName({ status: 'nuevo' }), 'Por confirmar'); assert.equal(S.statusName({}), 'Por confirmar');
+  const mesIds = idsUsed(adminJs, /\$\('#(month-[a-z-]+)'\)/g);
+  assert(mesIds.length >= 10); for (const id of mesIds) assert(adminHtml.includes('id="' + id + '"'), 'Falta #' + id + ' en admin.html');
+  assert(/id="sales-card" data-view="ventas" data-tab="resumen"/.test(adminHtml) && /id="month-card" data-view="ventas" data-tab="mes" data-tab-label="Consulta por mes"/.test(adminHtml), 'Ventas: «Resumen» y «Consulta por mes»');
+  assert(adminJs.includes("'ventas-' + monthSelected + '-elite-scents.csv'") && adminJs.includes('F.toCsv(rows)'), 'El mes se descarga para Excel (con BOM, como los demás archivos)');
+  console.log('Ventas por mes: meses, cifras, comparación, días, perfumes, pedidos y tabla correctos.');
 }
 
 // ---------------------------------------------------------------- Cupones de descuento
@@ -671,7 +701,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   // Inicio solo con lo importante («Hoy»); lo que comparte sección va en pestañas (una cosa por pantalla).
   assert.deepEqual(views.filter(v => v.view === 'inicio').map(v => v.id), ['today-card'], 'Inicio muestra solo «Hoy»');
   const tabs = [...adminHtml.matchAll(/id="([a-z-]+)" data-view="([a-z]+)" data-tab="([a-z]+)" data-tab-label="([^"]+)"/g)].map(m => m[2] + '/' + m[3]);
-  assert.deepEqual(tabs, ['pedidos/lista', 'pedidos/nuevo', 'perfumes/buscar', 'perfumes/editar', 'perfumes/fotos'], 'Pestañas en Pedidos y Perfumes');
+  assert.deepEqual(tabs, ['ventas/resumen', 'ventas/mes', 'pedidos/lista', 'pedidos/nuevo', 'perfumes/buscar', 'perfumes/editar', 'perfumes/fotos'], 'Pestañas en Ventas, Pedidos y Perfumes');
   for (const view of new Set(views.map(v => v.view))) {
     const cards = views.filter(v => v.view === view), tabbed = tabs.filter(t => t.startsWith(view + '/')).length;
     assert(cards.length === 1 || cards.length === tabbed, 'La sección «' + view + '» muestra una sola tarjeta a la vez');

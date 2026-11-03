@@ -132,8 +132,61 @@
     return { period, range, totals: totals(current), previous: previous ? totals(previous) : null, days: byDay(current, range, now), top: topProducts(current, 10, { lines: options.lines, products: options.products }), origins: origins(customers) };
   }
 
+  // ---- Consulta por mes ----
+  const monthKey = date => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+  // Mes «2026-10» → desde el día 1 hasta el día 1 del mes siguiente, y el mes anterior para comparar.
+  function monthRange(key) {
+    const [y, m] = String(key).split('-').map(Number);
+    if (!y || !m || m < 1 || m > 12) throw new Error('Mes no válido: ' + key);
+    const start = new Date(y, m - 1, 1), end = new Date(y, m, 1);
+    return { start, end, prevStart: new Date(y, m - 2, 1), prevEnd: start, days: Math.round((end - start) / 86400000) };
+  }
+  const monthLabel = key => { const { start } = monthRange(key); const t = start.toLocaleDateString('es-DO', { month: 'long', year: 'numeric' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+  // Meses que se pueden consultar: desde el mes del primer pedido hasta el de hoy (el más reciente primero, máximo 5 años).
+  function monthOptions(orders, now = new Date()) {
+    const times = (orders || []).map(o => Date.parse(o.created_at)).filter(t => !Number.isNaN(t) && t <= now.getTime() + 86400000);
+    const first = times.length ? new Date(Math.min(...times)) : now, keys = [];
+    for (let d = new Date(now.getFullYear(), now.getMonth(), 1); d >= new Date(first.getFullYear(), first.getMonth(), 1) && keys.length < 60; d = new Date(d.getFullYear(), d.getMonth() - 1, 1)) keys.push(monthKey(d));
+    return keys;
+  }
+  // Cada día del mes: pedidos recibidos (sin cancelados) y ventas confirmadas.
+  function monthDays(orders, range) {
+    const days = [], index = new Map();
+    for (let d = range.start; d < range.end; d = addDays(d, 1)) { index.set(dayKey(d), days.length); days.push({ date: dayKey(d), label: String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0'), orders: 0, sales: 0 }); }
+    for (const order of orders) {
+      if (statusOf(order) === 'cancelado') continue;
+      const slot = index.get(dayKey(new Date(Date.parse(order.created_at)))); if (slot === undefined) continue;
+      days[slot].orders += 1;
+      if (SOLD.includes(statusOf(order))) days[slot].sales += amountOf(order);
+    }
+    return days;
+  }
+  // Resumen de un mes: cifras, comparación con el mes anterior, ventas por día, perfumes vendidos (solo pedidos
+  // confirmados) y la lista de pedidos del mes (del más reciente al más viejo).
+  function monthSummary(orders, key, options = {}) {
+    const range = monthRange(key), list = orders || [];
+    const current = list.filter(o => inRange(o, range.start, range.end)), previous = list.filter(o => inRange(o, range.prevStart, range.prevEnd));
+    const sold = current.filter(o => SOLD.includes(statusOf(o)));
+    const products = topProducts(sold, 1000, { lines: options.lines, products: options.products });
+    return {
+      month: key, label: monthLabel(key), range, totals: totals(current), previous: totals(previous), days: monthDays(current, range),
+      products, units: products.reduce((sum, p) => sum + p.units, 0),
+      orders: [...current].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || Number(b.id) - Number(a.id)),
+    };
+  }
+  // Los últimos meses uno al lado del otro (el más reciente primero).
+  function monthsTable(orders, count = 12, now = new Date()) {
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const key = monthKey(new Date(now.getFullYear(), now.getMonth() - i, 1)), range = monthRange(key);
+      out.push({ month: key, label: monthLabel(key), ...totals((orders || []).filter(o => inRange(o, range.start, range.end))) });
+    }
+    return out;
+  }
+  const statusName = order => ({ nuevo: 'Por confirmar', confirmado: 'Confirmado', preparando: 'En preparación', enviado: 'Enviado', entregado: 'Entregado', cancelado: 'Cancelado' })[statusOf(order)] || statusOf(order);
+
   // Variación porcentual respecto al período anterior; null si no hay con qué comparar.
   const change = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
 
-  return { SOLD, amountOf, periodRange, totals, parseItems, topProducts, byDay, originName, origins, summarize, change };
+  return { SOLD, amountOf, periodRange, totals, parseItems, topProducts, byDay, originName, origins, summarize, change, monthKey, monthRange, monthLabel, monthOptions, monthDays, monthSummary, monthsTable, statusName };
 });

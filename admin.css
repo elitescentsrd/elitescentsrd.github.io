@@ -255,3 +255,12 @@ body.admin-light .btn.btn-secondary:hover{background:#fffdf8}
 .review-rule{margin:0 0 14px;padding:10px 14px;border-left:3px solid var(--gold,#c9a45c);background:rgba(243,226,184,.45);border-radius:0 12px 12px 0;font-size:14px}
 .review-ask{display:inline-flex;flex-wrap:wrap;gap:8px}
 #reviews-status{margin:10px 0 0;min-height:1.2em}
+/* Ventas por mes */
+.month-picker{display:flex;align-items:flex-end;gap:8px}
+.month-picker .btn{min-width:44px;padding-left:0;padding-right:0;font-size:20px;line-height:1}
+.month-picker .btn:disabled{opacity:.4;cursor:default}
+.month-orders-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin:26px 0 10px}
+.month-orders-head h3{margin:0}
+.month-orders-head .admin-actions{margin:0;align-items:flex-end}
+.link-button{border:0;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
+.admin-table tr.is-current td{background:#fbf5e7;font-weight:700}
