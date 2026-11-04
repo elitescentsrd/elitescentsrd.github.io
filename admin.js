@@ -653,9 +653,9 @@
   }
   function versus(now, before) { const c = window.EliteSales.change(now, before); return c === null ? '' : (c > 0 ? '+' : '') + c + '% frente al período anterior'; }
   function emptyRow(cols, text) { const tr = document.createElement('tr'), td = document.createElement('td'); td.colSpan = cols; td.className = 'muted'; td.textContent = text; tr.append(td); return tr; }
-  function salesChart(days) {
+  function salesChart(days, metric = salesMetric) {
     const NS = 'http://www.w3.org/2000/svg', W = 720, H = 150, svg = document.createElementNS(NS, 'svg');
-    const values = days.map(d => d[salesMetric]), max = Math.max(1, ...values), bw = W / Math.max(days.length, 1);
+    const values = days.map(d => d[metric]), max = Math.max(1, ...values), bw = W / Math.max(days.length, 1);
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + (H + 22)); svg.setAttribute('class', 'sales-svg'); svg.setAttribute('aria-hidden', 'true');
     const base = document.createElementNS(NS, 'line'); [['x1', 0], ['x2', W], ['y1', H], ['y2', H], ['stroke', '#d9d4c9']].forEach(([k, v]) => base.setAttribute(k, v)); svg.append(base);
     days.forEach((d, i) => {
@@ -684,7 +684,73 @@
       $('#sales-top').replaceChildren(...(s.top.length ? s.top.map(x => { const tr = document.createElement('tr'); [x.name, x.units, x.orders].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); }); return tr; }) : [emptyRow(3, 'Todavía no hay pedidos en este período.')]));
       $('#sales-origins').replaceChildren(...(s.origins.length ? s.origins.map(x => { const tr = document.createElement('tr'); [x.name, x.accounts, x.buyers, x.orders].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); }); return tr; }) : [emptyRow(4, 'Todavía no hay cuentas de clientes.')]));
     } catch (err) { $('#sales-kpis').textContent = 'No se pudo calcular el resumen: ' + err.message; }
+    renderMonth();
   }
+  // --- Ventas por mes: elegir un mes y ver sus cifras, perfumes, pedidos y ganancia (cálculos en sales.js) ---
+  let monthSelected = null;
+  const orderDate = o => { const d = new Date(o.created_at); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('es-DO', { hour: 'numeric', minute: '2-digit' }); };
+  const orderPerfumes = o => { const saved = orderLines && orderLines.get(String(o.id)); return (saved ? saved.map(l => l.qty + 'x ' + l.name) : String(o.items || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean)).join(', '); };
+  function monthProfit() {
+    const params = F && F.validParams(pricingParams);
+    if (!F || !costRows.size || !params) return null;
+    const byName = F.productIndex(products), byId = new Map(products.map(p => [Number(p.id), p])), costs = new Map([...costRows].map(([id]) => [id, costsOf(id)]));
+    return o => F.orderProfit(o, byName, costs, params, orderLines, byId);
+  }
+  function monthFilter(o) { const v = $('#month-status').value, st = String(o.status || 'nuevo'); return v === 'all' || (v === 'sold' ? window.EliteSales.SOLD.includes(st) : st === v); }
+  function renderMonth() {
+    const Sales = window.EliteSales, select = $('#month-select'); if (!Sales || !select) return;
+    try {
+      const keys = Sales.monthOptions(orders);
+      if (!monthSelected || !keys.includes(monthSelected)) monthSelected = keys[0];
+      select.replaceChildren(...keys.map(k => { const o = document.createElement('option'); o.value = k; o.textContent = Sales.monthLabel(k); o.selected = k === monthSelected; return o; }));
+      const i = keys.indexOf(monthSelected); $('#month-prev').disabled = i >= keys.length - 1; $('#month-next').disabled = i <= 0;
+      const m = Sales.monthSummary(orders, monthSelected, { lines: orderLines, products }), t = m.totals, p = m.previous;
+      const prevName = Sales.monthLabel(Sales.monthKey(m.range.prevStart)).split(' de ')[0].toLowerCase();
+      const vs = (now, before) => { const c = Sales.change(now, before); return c === null ? '' : (c > 0 ? '+' : '') + c + '% frente a ' + prevName; };
+      const profitOf = monthProfit(), sold = m.orders.filter(o => Sales.SOLD.includes(String(o.status || 'nuevo')));
+      const results = profitOf ? sold.map(profitOf) : [], known = results.filter(r => r.known), gain = known.reduce((sum, r) => sum + r.profit, 0), gainSales = known.reduce((sum, r) => sum + r.sale, 0);
+      const boxes = [
+        kpi('Ventas confirmadas', rd(t.sales), vs(t.sales, p.sales) || t.soldCount + ' pedido(s)'),
+        kpi('Pedidos vendidos', String(t.soldCount), vs(t.soldCount, p.soldCount) || 'de ' + t.received + ' recibido(s)'),
+        kpi('Ticket promedio', t.soldCount ? rd(t.average) : '—', 'por pedido vendido'),
+        kpi('Perfumes vendidos', String(m.units), 'unidades'),
+      ];
+      if (profitOf) boxes.push(kpi('Ganancia estimada', known.length ? rd(gain) : '—', known.length ? (gainSales ? Math.round(gain / gainSales * 100) + '% de margen · ' : '') + known.length + ' de ' + sold.length + ' pedido(s) con costo' : 'Faltan costos de estos perfumes'));
+      if (paymentsReady && F) boxes.push(kpi('Cobrado en el mes', rd(F.collected(payments, m.range.start, m.range.end)), 'abonos recibidos'));
+      boxes.push(kpi('Por confirmar', rd(t.pendingAmount), t.pendingCount + ' pedido(s) nuevo(s)', t.pendingCount ? 'warn' : ''), kpi('Cancelados', String(t.cancelled), ''));
+      $('#month-kpis').replaceChildren(...boxes);
+      $('#month-chart').replaceChildren(salesChart(m.days, 'sales'));
+      $('#month-products').replaceChildren(...(m.products.length ? m.products.map(x => { const tr = document.createElement('tr'); tr.append(cell(x.name), cell(String(x.units)), cell(String(x.orders))); return tr; }) : [emptyRow(3, 'No hubo ventas confirmadas en ' + m.label.toLowerCase() + '.')]));
+      $('#month-table').replaceChildren(...Sales.monthsTable(orders, Math.min(12, keys.length)).map(r => {
+        const tr = document.createElement('tr'), name = document.createElement('td'), b = document.createElement('button');
+        b.type = 'button'; b.className = 'link-button'; b.textContent = r.label; b.addEventListener('click', () => { monthSelected = r.month; renderMonth(); $('#month-card').scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+        if (r.month === monthSelected) tr.className = 'is-current';
+        name.append(b); tr.append(name, cell(String(r.soldCount)), cell(rd(r.sales), 'num'), cell(r.soldCount ? rd(r.average) : '—', 'num')); return tr;
+      }));
+      const list = m.orders.filter(monthFilter);
+      $('#month-orders').replaceChildren(...(list.length ? list.map(o => {
+        const tr = document.createElement('tr'), r = profitOf && Sales.SOLD.includes(String(o.status || 'nuevo')) ? profitOf(o) : null;
+        tr.append(cell(orderDate(o)), cell('#' + o.id), cell(o.customer_name || '—'), cell(orderPerfumes(o) || '—'), cell(Sales.amountOf(o) ? rd(Sales.amountOf(o)) : (o.amount || '—'), 'num'), cell(Sales.statusName(o)), cell(r && r.known ? rd(r.profit) : '—', 'num'));
+        return tr;
+      }) : [emptyRow(7, 'No hay pedidos de este tipo en ' + m.label.toLowerCase() + '.')]));
+      $('#month-note').textContent = profitOf ? 'La ganancia usa tus costos privados (sección «Costos y precios») y la logística por unidad; «—» = algún perfume del pedido no tiene costo.' : 'Para ver la ganancia del mes, carga tus costos y la fórmula en «Costos y precios».';
+    } catch (err) { $('#month-kpis').textContent = 'No se pudo calcular el mes: ' + err.message; }
+  }
+  $('#month-select')?.addEventListener('change', e => { monthSelected = e.target.value; renderMonth(); });
+  $('#month-status')?.addEventListener('change', renderMonth);
+  $('#month-prev')?.addEventListener('click', () => { const keys = window.EliteSales.monthOptions(orders), i = keys.indexOf(monthSelected); if (i < keys.length - 1) { monthSelected = keys[i + 1]; renderMonth(); } });
+  $('#month-next')?.addEventListener('click', () => { const keys = window.EliteSales.monthOptions(orders), i = keys.indexOf(monthSelected); if (i > 0) { monthSelected = keys[i - 1]; renderMonth(); } });
+  $('#month-csv')?.addEventListener('click', () => {
+    const Sales = window.EliteSales; if (!Sales || !F || !monthSelected) return;
+    const m = Sales.monthSummary(orders, monthSelected, { lines: orderLines, products }), profitOf = monthProfit(), list = m.orders.filter(monthFilter);
+    const rows = [['Fecha', 'Pedido', 'Cliente', 'Teléfono', 'Perfumes', 'Total (RD$)', 'Estado', 'Costo (RD$)', 'Ganancia (RD$)']];
+    for (const o of list) {
+      const r = profitOf && Sales.SOLD.includes(String(o.status || 'nuevo')) ? profitOf(o) : null;
+      rows.push([orderDate(o), o.id, o.customer_name || '', o.phone || '', orderPerfumes(o), Sales.amountOf(o) || '', Sales.statusName(o), r && r.known ? r.cost : '', r && r.known ? r.profit : '']);
+    }
+    rows.push([], ['Ventas confirmadas del mes', '', '', '', '', m.totals.sales], ['Pedidos vendidos', m.totals.soldCount], ['Perfumes vendidos (unidades)', m.units]);
+    download('ventas-' + monthSelected + '-elite-scents.csv', F.toCsv(rows), 'text/csv;charset=utf-8');
+  });
   // --- Cupones de descuento (tablas coupons y coupon_redemptions; solo administradores con verificación en dos pasos) ---
   let coupons = [], couponUse = new Map();
   function couponState(c) {
@@ -1603,6 +1669,7 @@
 
   // ---------------- Ganancia por mes (resumen de ventas)
   function renderProfit() {
+    renderMonth();
     if (!F || !$('#profit-body')) return;
     const params = F.validParams(pricingParams);
     if (!costRows.size || !params) { $('#profit-body').replaceChildren(emptyRow(7, costsReady === false ? 'Para calcular la ganancia ' + MIGRATION_NOTE : 'Carga tus costos y la fórmula (sección «Costos y precios») para ver la ganancia real.')); return; }
