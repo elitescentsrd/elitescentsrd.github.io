@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es" class="guarded">
+<html lang="es" class="guarded panel-oculto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -15,8 +15,19 @@
   <link rel="stylesheet" href="/tienda.css">
   <link rel="stylesheet" href="/admin.css">
   <script src="/frame-guard.js"></script>
+  <script src="/panel-entrada.js"></script>
 </head>
 <body class="admin-light">
+  <section id="panel-404" aria-hidden="true">
+    <header class="header"><a class="brand" href="/"><img src="/logo-oficial.webp" width="48" height="48" alt="Logotipo de Elite Scents RD"><span>ELITE <em>SCENTS</em><small>REPÚBLICA DOMINICANA</small></span></a><a href="/">← Volver a la tienda</a></header>
+    <main class="collection error-page">
+      <p class="error-num" aria-hidden="true">404</p>
+      <p class="eyebrow">ERROR 404</p>
+      <h1 class="error-title">No encontramos esta página</h1>
+      <p>Puede que el enlace esté mal escrito o que ese perfume ya no esté en la tienda. Mira la lista completa o escríbenos.</p>
+      <p class="error-links"><a href="/#coleccion">Buscar en la tienda</a><a href="/perfumes/">Todos los perfumes de la A a la Z</a><a href="https://wa.me/18094333348?text=Hola%20Elite%20Scents%20RD%2C%20busco%20un%20perfume" target="_blank" rel="noopener noreferrer">Preguntar por WhatsApp ↗</a></p>
+    </main>
+  </section>
   <header class="topbar"><a href="/" class="brand"><img src="/logo-oficial.webp" alt="Logo de Elite Scents RD" width="42" height="42"><span>Elite Scents RD</span></a></header>
   <main class="admin-shell">
     <div class="admin-head"><div><p class="eyebrow">Panel de administración</p><h1 id="admin-title">Catálogo y pedidos</h1></div><div class="admin-actions"><button type="button" class="btn btn-secondary" data-install-app="el panel" hidden>Instalar como app</button><a class="btn btn-secondary" href="/">Ver tienda</a><button id="logout" class="btn hidden" type="button">Cerrar sesión</button></div></div>
@@ -26,6 +37,7 @@
       <form method="post" id="login-form" class="admin-form">
         <label class="span-2">Correo<input name="email" type="email" autocomplete="username" required></label>
         <label class="span-2">Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+        <label class="span-4 admin-check"><input type="checkbox" id="login-remember" name="remember"> Mantener la sesión en este dispositivo (úsalo solo en tu teléfono o computadora personal).</label>
         <div class="span-4 admin-actions"><button class="btn" type="submit">Entrar</button><span id="login-status" aria-live="polite"></span></div>
         <p class="span-4 muted">El acceso pide después un código de verificación en dos pasos. Si olvidaste tu contraseña, usa "¿Olvidaste tu contraseña?" en <a href="/checkout.html">la página de cuenta</a>.</p>
       </form>

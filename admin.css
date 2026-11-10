@@ -268,3 +268,11 @@ body.admin-light .btn.btn-secondary:hover{background:#fffdf8}
 .money-split{margin:6px 0 18px;padding:14px 16px;border:1px solid var(--line,#ded8cc);border-radius:12px}
 .money-split .sales-kpis{margin:10px 0 6px}
 .repurchase-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;white-space:nowrap}
+/* Disfraz del panel: se ve como un 404 hasta que hay sesión o se entra con la palabra secreta (panel-entrada.js). */
+#panel-404{display:none}
+html.panel-oculto:not(.panel-abierto) .topbar,
+html.panel-oculto:not(.panel-abierto) .admin-shell{display:none!important}
+html.panel-oculto:not(.panel-abierto) #panel-404{display:block}
+/* Casilla «Mantener la sesión» en el login */
+.admin-check{display:flex;gap:9px;align-items:flex-start;text-transform:none;font-weight:400;font-size:.9rem;color:var(--muted,#6b6257);cursor:pointer;line-height:1.35}
+.admin-check input{margin-top:2px;flex:none;width:17px;height:17px;accent-color:var(--gold,#b49252)}
