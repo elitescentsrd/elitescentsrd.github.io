@@ -1,0 +1,476 @@
+{
+ "descripcion": "Precios que cambian con el segundo catálogo de La Grada de noviembre de 2026 (fórmula de ganancia y estrategia de cada perfume). Solo precios públicos: no incluye costos. Los aplica supabase/migrations/20261110120000_precios_la_grada_noviembre.sql.",
+ "aplicar_con": "supabase/migrations/20261110120000_precios_la_grada_noviembre.sql",
+ "precios": {
+  "1": {
+   "nombre": "212 Sexy EDT Men",
+   "antes": "RD$5,150",
+   "ahora": "RD$5,250"
+  },
+  "10": {
+   "nombre": "9 AM Dive Blue EDP Men Afnan",
+   "antes": "RD$2,750",
+   "ahora": "RD$2,850"
+  },
+  "11": {
+   "nombre": "9 PM EDP Men Afnan",
+   "antes": "RD$2,750",
+   "ahora": "RD$2,950"
+  },
+  "12": {
+   "nombre": "9 PM Elixir Men Afnan",
+   "antes": "RD$3,600",
+   "ahora": "RD$4,150"
+  },
+  "13": {
+   "nombre": "9 PM Rebel Men Afnan",
+   "antes": "RD$3,350",
+   "ahora": "RD$3,550"
+  },
+  "16": {
+   "nombre": "Acqua di Giò Profondo EDP Men",
+   "antes": "RD$6,950",
+   "ahora": "RD$8,050"
+  },
+  "33": {
+   "nombre": "Ana Abiyedh Coral EDP Spray",
+   "antes": "RD$2,650",
+   "ahora": "RD$2,750"
+  },
+  "34": {
+   "nombre": "Ariana Grande Thank U Next",
+   "antes": "RD$4,350",
+   "ahora": "RD$5,150"
+  },
+  "43": {
+   "nombre": "Armaf Club de Nuit Précieux I",
+   "antes": "RD$4,550",
+   "ahora": "RD$4,750"
+  },
+  "46": {
+   "nombre": "Armaf Club de Nuit Précieux IV",
+   "antes": "RD$4,550",
+   "ahora": "RD$4,750"
+  },
+  "50": {
+   "nombre": "Armaf Club de Nuit Intense Men",
+   "antes": "RD$2,750",
+   "ahora": "RD$2,950"
+  },
+  "57": {
+   "nombre": "Armaf Island Bliss Delights",
+   "antes": "RD$3,900",
+   "ahora": "RD$4,450"
+  },
+  "58": {
+   "nombre": "Armaf Yum Yum",
+   "antes": "RD$3,900",
+   "ahora": "RD$4,450"
+  },
+  "59": {
+   "nombre": "Armaf Island Bon Bon Delights",
+   "antes": "RD$3,900",
+   "ahora": "RD$4,450"
+  },
+  "60": {
+   "nombre": "Armaf Island Breeze Delights",
+   "antes": "RD$3,900",
+   "ahora": "RD$4,450"
+  },
+  "62": {
+   "nombre": "Armaf Odyssey Mandarin Elixir",
+   "antes": "RD$3,050",
+   "ahora": "RD$3,350"
+  },
+  "63": {
+   "nombre": "Armaf Odyssey Aoud Edition",
+   "antes": "RD$2,850",
+   "ahora": "RD$3,050"
+  },
+  "65": {
+   "nombre": "Armaf Odyssey Artisto",
+   "antes": "RD$3,300",
+   "ahora": "RD$3,450"
+  },
+  "66": {
+   "nombre": "Armaf Odyssey Bahamas",
+   "antes": "RD$3,400",
+   "ahora": "RD$3,450"
+  },
+  "67": {
+   "nombre": "Armaf Odyssey Black Forest",
+   "antes": "RD$3,400",
+   "ahora": "RD$3,950"
+  },
+  "71": {
+   "nombre": "Armaf Odyssey Homme White",
+   "antes": "RD$2,850 / RD$3,650",
+   "ahora": "RD$3,050 / RD$3,650"
+  },
+  "73": {
+   "nombre": "Armaf Odyssey Mandarin Sky",
+   "antes": "RD$2,750",
+   "ahora": "RD$2,950"
+  },
+  "78": {
+   "nombre": "Armaf Odyssey Toffee Coffee",
+   "antes": "RD$3,400",
+   "ahora": "RD$3,950"
+  },
+  "89": {
+   "nombre": "Lattafa Atlas",
+   "antes": "RD$3,250",
+   "ahora": "RD$3,350"
+  },
+  "90": {
+   "nombre": "Azzaro Most Wanted Toilette",
+   "antes": "RD$5,150",
+   "ahora": "RD$5,250"
+  },
+  "97": {
+   "nombre": "Lattafa Bade'e Al Oud Noble Blush",
+   "antes": "RD$2,850",
+   "ahora": "RD$3,050"
+  },
+  "103": {
+   "nombre": "Bharara Rome Paradox",
+   "antes": "RD$3,000",
+   "ahora": "RD$3,350"
+  },
+  "105": {
+   "nombre": "Bharara Rome Imagine",
+   "antes": "RD$3,000",
+   "ahora": "RD$3,350"
+  },
+  "118": {
+   "nombre": "Carolina Herrera La Bomba",
+   "antes": "RD$10,350",
+   "ahora": "RD$10,250"
+  },
+  "122": {
+   "nombre": "Diesel Plus Plus Man",
+   "antes": "RD$2,150",
+   "ahora": "RD$1,650"
+  },
+  "123": {
+   "nombre": "Diesel Plus Plus Women",
+   "antes": "RD$2,150",
+   "ahora": "RD$1,650"
+  },
+  "153": {
+   "nombre": "French Avenue Atlantis Extrait",
+   "antes": "RD$3,950",
+   "ahora": "RD$4,350"
+  },
+  "183": {
+   "nombre": "Hayaati Black",
+   "antes": "RD$2,450",
+   "ahora": "RD$2,750"
+  },
+  "184": {
+   "nombre": "Hayaati Florence",
+   "antes": "RD$2,450",
+   "ahora": "RD$2,750"
+  },
+  "185": {
+   "nombre": "Hayaati Al Maleky",
+   "antes": "RD$2,450",
+   "ahora": "RD$2,750"
+  },
+  "186": {
+   "nombre": "Her Confession",
+   "antes": "RD$3,550",
+   "ahora": "RD$3,750"
+  },
+  "187": {
+   "nombre": "His Confession",
+   "antes": "RD$3,550",
+   "ahora": "RD$3,750"
+  },
+  "191": {
+   "nombre": "Ishq Al Shuyukh Silver",
+   "antes": "RD$3,050",
+   "ahora": "RD$3,250"
+  },
+  "192": {
+   "nombre": "Ishq Al Shuyukh Gold",
+   "antes": "RD$3,050",
+   "ahora": "RD$3,250"
+  },
+  "196": {
+   "nombre": "Issey Miyake Sport",
+   "antes": "RD$3,350",
+   "ahora": "RD$4,550"
+  },
+  "206": {
+   "nombre": "JPG Le Male Le Parfum 2.5 EDP Men",
+   "antes": "RD$7,750",
+   "ahora": "RD$7,850"
+  },
+  "210": {
+   "nombre": "Joop Homme EDT 4.2 EDT Men",
+   "antes": "RD$2,950",
+   "ahora": "RD$3,050"
+  },
+  "211": {
+   "nombre": "Lattafa Khamrah",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "212": {
+   "nombre": "Lattafa Khamrah Dukhan",
+   "antes": "RD$3,250",
+   "ahora": "RD$3,550"
+  },
+  "220": {
+   "nombre": "Maison Alhambra Delilah",
+   "antes": "RD$2,550",
+   "ahora": "RD$2,750"
+  },
+  "238": {
+   "nombre": "Lattafa Haya",
+   "antes": "RD$2,700",
+   "ahora": "RD$2,850"
+  },
+  "239": {
+   "nombre": "Lattafa Hayaati Gold",
+   "antes": "RD$2,450",
+   "ahora": "RD$2,750"
+  },
+  "244": {
+   "nombre": "Lattafa Mayar Women",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "245": {
+   "nombre": "Lattafa Mayar Cherry Intense",
+   "antes": "RD$2,850",
+   "ahora": "RD$3,050"
+  },
+  "246": {
+   "nombre": "Lattafa Mayar Natural Intense",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "247": {
+   "nombre": "Lattafa Musamam White Intense",
+   "antes": "RD$3,350",
+   "ahora": "RD$3,650"
+  },
+  "251": {
+   "nombre": "Lattafa Pride Art Of Nature II",
+   "antes": "RD$3,350",
+   "ahora": "RD$3,650"
+  },
+  "256": {
+   "nombre": "Lattafa The Kingdom Men",
+   "antes": "RD$2,850",
+   "ahora": "RD$3,050"
+  },
+  "257": {
+   "nombre": "Lattafa Pride Art Of Universe",
+   "antes": "RD$3,550",
+   "ahora": "RD$3,850"
+  },
+  "259": {
+   "nombre": "Lattafa The Kingdom Women",
+   "antes": "RD$2,850",
+   "ahora": "RD$3,050"
+  },
+  "260": {
+   "nombre": "Lattafa Pride Nebras",
+   "antes": "RD$3,000",
+   "ahora": "RD$3,250"
+  },
+  "262": {
+   "nombre": "Lattafa Pride Vintage Radio",
+   "antes": "RD$2,850",
+   "ahora": "RD$3,050"
+  },
+  "263": {
+   "nombre": "Lattafa Qaed Al Fursan",
+   "antes": "RD$2,450",
+   "ahora": "RD$2,550"
+  },
+  "264": {
+   "nombre": "Lattafa Qaed Al Fursan Unlimited",
+   "antes": "RD$2,550",
+   "ahora": "RD$2,750"
+  },
+  "269": {
+   "nombre": "Lattafa Rave Now Black",
+   "antes": "RD$2,550",
+   "ahora": "RD$2,650"
+  },
+  "270": {
+   "nombre": "Lattafa Rave Now",
+   "antes": "RD$2,550",
+   "ahora": "RD$2,650"
+  },
+  "271": {
+   "nombre": "Zimaya Fatima Pink",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "277": {
+   "nombre": "Maison Alhambra Jean Lowe Inmortal",
+   "antes": "RD$2,750",
+   "ahora": "RD$3,050"
+  },
+  "280": {
+   "nombre": "Maison Alhambra La Voie",
+   "antes": "RD$2,550",
+   "ahora": "RD$2,750"
+  },
+  "281": {
+   "nombre": "Maison Alhambra Salvo",
+   "antes": "RD$2,550",
+   "ahora": "RD$2,750"
+  },
+  "284": {
+   "nombre": "Mont Blanc Explorer Platinum",
+   "antes": "RD$3,750",
+   "ahora": "RD$4,350"
+  },
+  "288": {
+   "nombre": "Givenchy Pi Men",
+   "antes": "RD$4,350",
+   "ahora": "RD$4,550"
+  },
+  "292": {
+   "nombre": "Moschino Toy 2",
+   "antes": "RD$4,450",
+   "ahora": "RD$4,550"
+  },
+  "293": {
+   "nombre": "Moschino Toy 2 Bubble Gum",
+   "antes": "RD$4,450",
+   "ahora": "RD$4,550"
+  },
+  "295": {
+   "nombre": "Moschino Toy Boy",
+   "antes": "RD$4,450",
+   "ahora": "RD$4,550"
+  },
+  "298": {
+   "nombre": "Nautica Voyage",
+   "antes": "RD$2,250",
+   "ahora": "RD$2,350"
+  },
+  "299": {
+   "nombre": "Nitro Red Intensely",
+   "antes": "RD$3,650",
+   "ahora": "RD$4,150"
+  },
+  "317": {
+   "nombre": "Rasasi Hawas Ice",
+   "antes": "RD$3,850",
+   "ahora": "RD$4,050"
+  },
+  "321": {
+   "nombre": "Rasasi Hawas Malibu",
+   "antes": "RD$3,750",
+   "ahora": "RD$3,950"
+  },
+  "326": {
+   "nombre": "Rasasi Hawas Tropical",
+   "antes": "RD$3,950",
+   "ahora": "RD$4,150"
+  },
+  "385": {
+   "nombre": "Valentino Born In Roma Coral Fantasy",
+   "antes": "RD$8,950",
+   "ahora": "RD$9,150"
+  },
+  "388": {
+   "nombre": "Valentino Born In Roma Intense Women",
+   "antes": "RD$10,450",
+   "ahora": "RD$10,350"
+  },
+  "394": {
+   "nombre": "Versace Dylan Blue EDT",
+   "antes": "RD$5,150",
+   "ahora": "RD$6,150"
+  },
+  "395": {
+   "nombre": "Versace Eros EDT Men",
+   "antes": "RD$4,650",
+   "ahora": "RD$5,250"
+  },
+  "396": {
+   "nombre": "Versace Eros Eu De Parfum Men",
+   "antes": "RD$5,950",
+   "ahora": "RD$6,150"
+  },
+  "397": {
+   "nombre": "Versace Eros Parfum Men",
+   "antes": "RD$6,150",
+   "ahora": "RD$6,450"
+  },
+  "405": {
+   "nombre": "Yara Elixir EDP",
+   "antes": "RD$3,550",
+   "ahora": "RD$3,950"
+  },
+  "420": {
+   "nombre": "9PM Out Night",
+   "antes": "RD$4,150",
+   "ahora": "RD$4,350"
+  },
+  "426": {
+   "nombre": "Dumont Nitro Elixir Men",
+   "antes": "RD$3,950",
+   "ahora": "RD$4,150"
+  },
+  "427": {
+   "nombre": "Dumont Nitro Gold",
+   "antes": "RD$3,950",
+   "ahora": "RD$4,150"
+  },
+  "436": {
+   "nombre": "Lattafa Al Noble Ameer",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "437": {
+   "nombre": "Lattafa Al Noble Safeer",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "438": {
+   "nombre": "Lattafa Al Noble Wazeer",
+   "antes": "RD$2,850",
+   "ahora": "RD$2,950"
+  },
+  "459": {
+   "nombre": "Bharara Mast Rome Ivory pour Femme",
+   "antes": "RD$3,050",
+   "ahora": "RD$3,350"
+  },
+  "460": {
+   "nombre": "Bharara Mast Rome Lucky",
+   "antes": "RD$3,550",
+   "ahora": "RD$3,350"
+  },
+  "496": {
+   "nombre": "Set Versace Eros Flame 3PCS",
+   "antes": "RD$5,950",
+   "ahora": "RD$6,450"
+  },
+  "511": {
+   "nombre": "Rabanne 1 Million Black EDP Men",
+   "antes": "RD$7,750",
+   "ahora": "RD$9,350"
+  },
+  "513": {
+   "nombre": "Paco One Million Lucky EDT Men",
+   "antes": "RD$7,450",
+   "ahora": "RD$7,750"
+  },
+  "519": {
+   "nombre": "Armaf Club de Nuit Oud",
+   "antes": "RD$3,250",
+   "ahora": "RD$3,650"
+  }
+ }
+}
