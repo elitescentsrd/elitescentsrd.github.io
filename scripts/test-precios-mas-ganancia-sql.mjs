@@ -1,10 +1,10 @@
-// Prueba de 20261110120000_precios_la_grada_noviembre.sql con PostgreSQL embebido (PGlite): NO toca Supabase ni necesita
-// claves. Sobre la tienda de prueba con los scripts del 30 de septiembre y de octubre ya aplicados comprueba: los precios
-// que cambian (los de RD$7,000 o más quedan «Solo por encargo»), que un precio cambiado a mano o una oferta puesta en el
-// panel no se tocan y se avisa, repetir sin duplicar, deshacer (devuelve precio y disponibilidad), la falta del script
-// de octubre y un pegado incompleto.
+// Prueba de 20261110180000_precios_mas_ganancia.sql con PostgreSQL embebido (PGlite): NO toca Supabase ni necesita
+// claves. Sobre la tienda de prueba con los scripts del 30 de septiembre y de octubre ya aplicados, tanto sin como con el
+// script de precios de noviembre (que este reemplaza), comprueba: los precios que cambian (los de RD$7,000 o más quedan
+// «Solo por encargo»), que un precio cambiado a mano o una oferta puesta en el panel no se tocan y se avisa, repetir sin
+// duplicar, deshacer (devuelve precio y disponibilidad), la falta del script de octubre y un pegado incompleto.
 //   npm install --no-save @electric-sql/pglite
-//   node scripts/test-precios-noviembre-sql.mjs
+//   node scripts/test-precios-mas-ganancia-sql.mjs
 let PGlite;
 try { ({ PGlite } = await import('@electric-sql/pglite')); } catch { console.error('Falta el banco de pruebas de base de datos. Instálalo con: npm install --no-save @electric-sql/pglite'); process.exit(2); }
 import { readFile } from 'node:fs/promises';
@@ -21,7 +21,7 @@ const max = price => Math.max(...price.match(/[0-9][0-9,]*/g).map(v => Number(v.
 // ---------------------------------------------------------------- El archivo (público: nunca costos ni la fórmula)
 {
   const code = script.replace(/--[^\n]*/g, '');
-  assert(/^-- PRECIOS DE LA GRADA DE NOVIEMBRE/.test(script) && /-- FIN\s*$/.test(script), 'Empieza y termina con las marcas para comprobar el pegado');
+  assert(/^-- PRECIOS NUEVOS CON MÁS GANANCIA/.test(script) && /-- FIN\s*$/.test(script), 'Empieza y termina con las marcas para comprobar el pegado');
   assert(/create temp table modo on commit drop as select false as deshacer;/.test(script), 'Queda en modo aplicar');
   assert(!/^\s*(begin|commit|rollback)\s*;/im.test(code), 'Sin BEGIN/COMMIT propios (se puede correr desde GitHub)');
   assert(!/product_costs|pricing|costo/i.test(code), 'No trae costos ni la fórmula de precios');
@@ -29,8 +29,8 @@ const max = price => Math.max(...price.match(/[0-9][0-9,]*/g).map(v => Number(v.
   assert(turno > 0 && turno < code.indexOf('update public.products'), 'Aparta los perfumes antes del primer cambio');
   assert(/exception when lock_not_available then\s+perform pg_sleep/.test(code), 'Si están ocupados, suelta todo y reintenta');
   assert(!/costo|margen|ganancia|"cost|estrategia|strategy|competid/i.test(JSON.stringify(datos.precios)), 'El archivo público de datos no tiene costos');
-  assert(cambios.length > 0 && cambios.every(c => /^RD\$[0-9,]+( \/ RD\$[0-9,]+)*$/.test(c.ahora) && /^RD\$[0-9,]+( \/ RD\$[0-9,]+)*$/.test(c.antes) && c.antes !== c.ahora), 'Precios bien escritos y distintos');
-  for (const c of cambios) assert(script.includes(`(${c.id}, '${c.nombre.replace(/'/g, "''")}', '${c.antes}', '${c.ahora}')`), 'El script trae el cambio de ' + c.nombre);
+  assert(cambios.length > 0 && cambios.every(c => [c.ahora, c.antes, c.antes_nov ?? c.antes].every(v => /^RD\$[0-9,]+( \/ RD\$[0-9,]+)*$/.test(v)) && c.antes !== c.ahora && c.antes_nov !== c.ahora), 'Precios bien escritos y distintos');
+  for (const c of cambios) assert(script.includes(`(${c.id}, '${c.nombre.replace(/'/g, "''")}', '${c.antes}', ${c.antes_nov ? `'${c.antes_nov}'` : 'null'}, '${c.ahora}')`), 'El script trae el cambio de ' + c.nombre);
   assert.equal((script.match(/^\s*\(\d+, '/gm) || []).length, cambios.length, 'Ni más ni menos cambios que en el archivo de datos');
 }
 
@@ -41,23 +41,27 @@ const avisos = rows => rows.filter(r => r.cambio.startsWith('No se tocó'));
 const throws = async (fn, pattern, label) => { try { await fn(); } catch (e) { assert.match(String(e.message), pattern, label); return; } assert.fail('Debía fallar: ' + label); };
 const DESHACER = script.replace('select false as deshacer;', 'select true as deshacer;');
 
-// La tienda como está hoy: septiembre y octubre aplicados y los perfumes que cambian con su nombre y su precio de hoy.
-async function base() {
+// La tienda como está hoy: septiembre y octubre aplicados y los perfumes que cambian con su nombre y su precio de hoy
+// (conNoviembre: con el precio que puso el script de noviembre, para quien ya lo aplicó).
+const hoy = (c, conNoviembre) => conNoviembre ? c.antes_nov ?? c.antes : c.antes;
+async function base(conNoviembre = false) {
   const db = await nuevaBase(PGlite);
   await db.exec(sep30); await db.exec(oct16);
   for (const c of cambios) {
     await db.query(`update public.products set name = $2, price = $3, original_price = null, offer_label = null, offer_ends_at = null,
-      availability = case when $4 then 'encargo' else 'disponible' end where id = $1`, [c.id, c.nombre, c.antes, max(c.antes) >= 7000]);
+      availability = case when $4 then 'encargo' else 'disponible' end where id = $1`, [c.id, c.nombre, hoy(c, conNoviembre), max(hoy(c, conNoviembre)) >= 7000]);
   }
   return db;
 }
 const estado = async (db, id) => one(db, 'select name, price, original_price, offer_label, offer_ends_at, availability from public.products where id = $1', [id]);
 
-// ---------------------------------------------------------------- Aplicar y repetir
-const db = await base();
+// ---------------------------------------------------------------- Aplicar y repetir (sin y con el script de noviembre)
+let res;
+for (const conNoviembre of [false, true]) {
+const db = await base(conNoviembre);
 const antes = Object.fromEntries(await Promise.all(cambios.map(async c => [c.id, await estado(db, c.id)])));
 const totalAntes = (await one(db, 'select count(*)::int as n from public.products')).n;
-let res = await aplicar(db);
+res = await aplicar(db);
 assert.equal(Number(fila(res, 'Precios cambiados').hechos_ahora), cambios.length, 'Se cambian los precios');
 assert.deepEqual(avisos(res), [], 'Sin avisos cuando la tienda está como se esperaba');
 assert.equal((await one(db, 'select count(*)::int as n from public.products')).n, totalAntes, 'No agrega ni quita perfumes');
@@ -66,16 +70,16 @@ for (const c of cambios) {
   assert.equal(p.price, c.ahora, 'Precio nuevo de ' + c.nombre); assert.equal(p.original_price, null);
   assert.equal(p.availability, max(c.ahora) >= 7000 ? 'encargo' : 'disponible', 'Disponibilidad de ' + c.nombre);
 }
-assert(cambios.some(c => max(c.antes) < 7000 && max(c.ahora) >= 7000), 'Hay perfumes que pasan a «Solo por encargo»');
-assert(cambios.some(c => max(c.ahora) < max(c.antes)) && cambios.some(c => max(c.ahora) > max(c.antes)), 'Hay precios que suben y que bajan');
+assert(cambios.some(c => max(c.ahora) >= 7000 && max(c.antes) < max(c.ahora)), 'Hay perfumes de RD$7,000 o más que suben');
+assert(cambios.some(c => c.antes_nov) && cambios.every(c => max(c.ahora) > max(c.antes_nov ?? c.antes)), 'Con la fórmula nueva solo suben (respecto a noviembre)');
 await db.exec('set role anon');
-await throws(() => db.query('select * from private.precios_antes_20261110'), /permission denied/i, 'Un visitante no ve la copia de los precios');
+await throws(() => db.query('select * from private.precios_antes_margen_20261110'), /permission denied/i, 'Un visitante no ve la copia de los precios');
 await db.exec('reset role');
 
 res = await aplicar(db);
 assert.equal(Number(fila(res, 'Precios cambiados').hechos_ahora), 0, 'Repetirlo no cambia nada'); assert.equal(Number(fila(res, 'Precios cambiados').ya_estaban), cambios.length);
 assert.deepEqual(avisos(res), []);
-console.log('precios del catálogo de noviembre: aplicar y repetir OK');
+console.log('precios con más ganancia' + (conNoviembre ? ' (con noviembre ya aplicado)' : '') + ': aplicar y repetir OK');
 
 // ---------------------------------------------------------------- Deshacer y volver a aplicar
 res = await aplicar(db, DESHACER);
@@ -89,6 +93,7 @@ res = await aplicar(db);
 assert.equal(Number(fila(res, 'Precios cambiados').hechos_ahora), cambios.length, 'Se puede volver a aplicar');
 await db.close();
 console.log('deshacer y volver a aplicar OK');
+}
 
 // ---------------------------------------------------------------- Lo cambiado a mano en el panel se respeta
 {
@@ -147,4 +152,4 @@ console.log('falta del script de octubre y pegado incompleto: no cambian nada OK
   await otra.close();
 }
 console.log('con publicación automática, líneas de pedido y reseñas: OK (una sola publicación)');
-console.log('PRECIOS DE LA GRADA DE NOVIEMBRE: TODO OK');
+console.log('PRECIOS NUEVOS CON MÁS GANANCIA: TODO OK');
