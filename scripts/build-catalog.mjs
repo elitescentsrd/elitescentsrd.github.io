@@ -1,5 +1,5 @@
 import { readFile, writeFile, readdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 import { SITE_URL, productPath, productUrl, absoluteUrl, brandSchemaScript, ratingOf, ratingText, reviewCardHtml, reviewSummaryHtml, MEDICION, cspWithMeasurement } from './lib/seo.mjs';
@@ -46,12 +46,15 @@ async function bestSellers() {
     return Array.isArray(rows) ? rows.map(row => Number(row.product_id)).filter(Number.isFinite) : [];
   } catch { return []; }
 }
+// Al público se le muestra el precio de contado (pagos.js, el mismo código que la tienda); price_2p guarda el de dos
+// pagos para la lista de clientes que la tienda conoce.
+const PAGOS = (() => { const ctx = {}; new Function('self', readFileSync(new URL('../pagos.js', import.meta.url), 'utf8'))(ctx); return ctx.ElitePagos; })();
 const products = databaseProducts.map(({ page, slot, ...rest }) => {
   // stock_left («¡Quedan…!») solo cuando hay cantidad baja: así el archivo no crece con un null por perfume.
   const product = Object.fromEntries(PUBLIC_FIELDS.filter(k => rest[k] !== undefined && !(k === 'stock_left' && rest[k] === null)).map(k => [k, rest[k]]));
   positions[product.id] = { page, slot };
   const extra = enrichment[String(product.id)];
-  return extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product;
+  return PAGOS.publico(extra ? { ...product, notes_top: extra.notes_top, notes_heart: extra.notes_heart, notes_base: extra.notes_base } : product);
 });
 await writeFile('data/product-positions.json', JSON.stringify(positions, null, 1) + '\n');
 const visibleIds = new Set(products.map(p => Number(p.id)));

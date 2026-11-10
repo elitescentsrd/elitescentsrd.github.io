@@ -892,26 +892,36 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(/prefers-reduced-motion/.test(ficha) && /Escape|close\(\)/.test(ficha) && ficha.includes("showModal()"), 'Visor: respeta menos movimiento y se cierra');
   console.log('Ficha: pirámide de notas, bloque de confianza y zoom de fotos correctos.');
 }
-// ---------------------------------------------------------------- Dos precios: contado y a dos pagos (pagos.js)
+// ---------------------------------------------------------------- Precio de contado al público y lista para clientes (pagos.js)
 {
   const P = await runUmd('pagos.js'), tienda = await read('tienda.js'), customer = await read('customer.js'), checkout = await read('checkout.html');
-  const buildSite = await read('scripts/build-site-artifact.mjs'), migration = await read('supabase/migrations/20261110200000_dos_precios.sql');
+  const buildSite = await read('scripts/build-site-artifact.mjs'), buildCatalog = await read('scripts/build-catalog.mjs');
   assert(buildSite.includes("'pagos.js'"), 'pagos.js se publica');
   for (const [name, html, after] of [['plantilla', template, '/tienda.js'], ['portada', indexHtml, '/tienda.js'], ['carrito', checkout, '/customer.js']]) {
     const at = html.indexOf('src="/pagos.js"');
     assert(at > 0 && at < html.indexOf('src="' + after + '"'), 'pagos.js se carga antes de ' + after + ' en la ' + name);
   }
-  for (const html of [template, indexHtml]) assert(html.includes('<small id="dialogPricePlans" class="price-plans" hidden></small>'), 'La ficha tiene la línea de formas de pago');
-  assert(tienda.includes('plansLine(p)') && tienda.includes("$('#dialogPricePlans')") && tienda.includes('offer:Boolean(p.original_price)'), 'Tarjeta, ficha y carrito usan las formas de pago');
-  assert(/name="payPlan" value="dos_pagos" checked/.test(checkout) && /name="payPlan" value="contado"/.test(checkout), 'El carrito deja elegir: a dos pagos (marcado) o contado');
-  assert(customer.includes("'/rest/v1/rpc/place_customer_order_pago'") && /PGRST202\|could not find the function/.test(customer), 'El pedido usa la forma de pago y, sin la función, la de siempre');
-  assert(customer.includes('NO_COUPON_CASH'), 'Cupón y contado no se combinan');
-  assert(/round\(\(p_amount \* 0\.9 - 50\) \/ 100\) \* 100 \+ 50/.test(migration) && P.DESCUENTO_CONTADO === 0.10, 'La base y la página usan el mismo 10% de contado');
-  assert.equal(P.planes({ price: 'RD$4,450' }), '2 pagos de RD$2,225 · Contado RD$4,050');
-  assert.equal(P.planes({ price: 'RD$2,990', original_price: 'RD$3,450' }), '', 'En oferta, un solo precio');
-  const page = renderProductPage({ id: 324, name: 'Rasasi Hawas Fire Men', brand: 'Rasasi', price: 'RD$4,450', size: '100 ML', gender: 'hombre', availability: 'disponible', notes_top: [], notes_heart: [], notes_base: [] });
-  assert(page.includes('<small class="price-plans">2 pagos de RD$2,225 · Contado RD$4,050</small>'), 'La página del perfume muestra las dos formas de pago');
-  console.log('Dos precios (contado y a dos pagos): tarjeta, ficha, página del perfume y carrito correctos.');
+  // Al público: precio de contado (la base guarda el de dos pagos). En oferta: el de oferta, con «Antes» de contado.
+  const pub = JSON.parse(JSON.stringify(P.publico({ price: 'RD$4,450' })));
+  assert.deepEqual(pub, { price: 'RD$4,050', price_2p: 'RD$4,450' });
+  assert.deepEqual(JSON.parse(JSON.stringify(P.publico({ price: 'RD$2,990', original_price: 'RD$3,450' }))), { price: 'RD$2,990', original_price: 'RD$3,150', price_2p: null });
+  assert.deepEqual(JSON.parse(JSON.stringify(P.publico(pub))), pub, 'Convertir dos veces no descuenta dos veces');
+  assert.equal(P.planes(pub), 'Precio de contado · pagas al recibir'); assert.equal(P.dosPagosTexto(pub), '2 pagos de RD$2,225');
+  assert(buildCatalog.includes('return PAGOS.publico(') && tienda.includes('raw.map(publicPrice)') && tienda.includes('products=list.map(publicPrice)'), 'Publicación, catálogo y precios en vivo muestran el de contado');
+  for (const html of [template, indexHtml]) assert(html.includes('<small id="dialogPricePlans" class="price-plans" hidden></small>') && !/lista-clientes/.test(html), 'La ficha dice «precio de contado» y la tienda no enlaza la lista de clientes');
+  assert(!/payPlan|dos pagos/i.test(checkout) && checkout.includes('<span id="cartTotalLabel">Total de contado</span>'), 'El carrito no ofrece dos pagos: total de contado');
+  assert(!/dos pagos|2 pagos/i.test(P.planes(pub)) && !/unitFor\(item\)<selectedPrice/.test(customer), 'La tienda no anuncia los dos pagos');
+  assert(customer.includes("p_plan:'contado'") && /PGRST202\|could not find the function/.test(customer) && /dos pagos\/i\.test/.test(customer), 'Pedido de contado (con cupón); sin la función nueva, la de siempre');
+  assert(tienda.includes('elite-scents-cart-v4') && customer.includes('elite-scents-cart-v4'), 'Carrito nuevo: los precios guardados son los de contado');
+  const page = renderProductPage({ id: 324, name: 'Rasasi Hawas Fire Men', brand: 'Rasasi', ...pub, size: '100 ML', gender: 'hombre', availability: 'disponible', notes_top: [], notes_heart: [], notes_base: [] });
+  assert(page.includes('<strong>RD$4,050</strong><small class="price-plans">Precio de contado · pagas al recibir</small>') && !page.includes('4,450'), 'La página del perfume muestra solo el precio de contado');
+  const { renderPriceList } = await import('./lib/lista-precios.mjs');
+  const item = { id: 324, name: 'Rasasi Hawas Fire Men', brand: 'Rasasi', size: '100 ML', gender: 'hombre', availability: 'disponible', ...pub };
+  const publica = renderPriceList([item]), clientes = renderPriceList([item], new Date(), { clientes: true });
+  assert(publica.includes('<strong>RD$4,050</strong>') && !/2 pagos|4,450/.test(publica), 'La lista pública: solo contado');
+  assert(clientes.includes('<strong>RD$4,050</strong><span class="plan">Contado</span><span class="dos-pagos">2 pagos de RD$2,225</span>') && clientes.includes('content="noindex,nofollow"'), 'La lista de clientes: contado y dos pagos, fuera de Google');
+  assert(buildSite.includes("'/lista-clientes.html', renderPriceList(products, new Date(), { clientes: true })") && !/lista-clientes/.test(await read('scripts/build-catalog.mjs')), 'Se publica la lista de clientes y no entra al mapa del sitio');
+  console.log('Precio de contado al público (página, fichas, Google y lista) y lista para clientes con dos pagos: correctos.');
 }
 // ---------------------------------------------------------------- Dinero del mes y clientes para volver a comprar
 {

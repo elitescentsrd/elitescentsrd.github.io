@@ -83,9 +83,9 @@ const orden = async (db, id) => { await db.exec('reset role'); const o = await o
     assert.equal(r.c, PAGOS.contado(v), 'Contado de RD$' + v);
   }
   assert.equal(PAGOS.contado(4450), 4050); assert.equal(PAGOS.contado(3050), 2750); assert.equal(PAGOS.cuota(4450), 2225);
-  assert.equal(PAGOS.planes({ price: 'RD$4,450' }), '2 pagos de RD$2,225 · Contado RD$4,050');
-  assert.equal(PAGOS.planes({ price: 'RD$3,550 / RD$4,250' }), 'A dos pagos o Contado RD$3,150 / RD$3,850');
-  assert.equal(PAGOS.planes({ price: 'RD$2,990', original_price: 'RD$3,450' }), '', 'En oferta no hay precio de contado aparte');
+  assert.deepEqual({ ...PAGOS.publico({ price: 'RD$4,450' }) }, { price: 'RD$4,050', price_2p: 'RD$4,450' }, 'Al público: precio de contado');
+  assert.equal(PAGOS.publico({ price: 'RD$3,550 / RD$4,250' }).price, 'RD$3,150 / RD$3,850');
+  assert.equal(PAGOS.publico({ price: 'RD$2,990', original_price: 'RD$3,450' }).price, 'RD$2,990', 'En oferta, el precio de oferta (y «Antes» de contado)');
   assert.equal(PAGOS.totalCarrito([{ unit_price: 4450, qty: 2 }, { unit_price: 2990, qty: 1, offer: true }], 'contado'), 4050 * 2 + 2990);
   assert.equal(PAGOS.totalCarrito([{ unit_price: 4450, qty: 2 }], 'dos_pagos'), 8900);
   await db.close();

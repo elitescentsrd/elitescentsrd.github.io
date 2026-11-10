@@ -51,6 +51,7 @@ const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 
 // Formas de pago (pagos.js, el mismo código que usan la tienda y el carrito): «2 pagos de … · Contado …».
 const PAGOS = (() => { const ctx = {}; new Function('self', readFileSync(new URL('../../pagos.js', import.meta.url), 'utf8'))(ctx); return ctx.ElitePagos; })();
 export const plansText = p => PAGOS.planes(p);
+export const dosPagosText = p => PAGOS.dosPagosTexto(p);
 const AROMA = (() => { const ctx = {}; new Function('self', readFileSync(new URL('../../aroma.js', import.meta.url), 'utf8'))(ctx); return ctx.EliteAroma; })();
 const noteIcon = family => '<svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + AROMA.ICONS[family || 'otra'] + '</svg>';
 // Los mismos iconos como «sprite» para la portada: tienda.js los usa con <use> (sin armar HTML con texto).

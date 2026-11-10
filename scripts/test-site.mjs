@@ -94,7 +94,7 @@ assert(template.includes('id="dialogAddCart"'));
 const checkout=await readFile('checkout.html','utf8'),customer=await readFile('customer.js','utf8');
 assert(checkout.includes('id="placeOrder"'));
 assert(customer.includes('/rest/v1/rpc/place_customer_order'));
-assert(customer.includes("CART_KEY='elite-scents-cart-v3'"));
+assert(customer.includes("CART_KEY='elite-scents-cart-v4'"));
 assert.equal(Object.keys(enrichment).length, TOTAL - notasPendientes.size, 'Cada producto debe tener una ficha de notas con su fuente (menos los nuevos con notas pendientes)');
 assert(!Object.keys(enrichment).some(id => notasPendientes.has(Number(id))), 'Un perfume con notas pendientes no tiene ficha');
 assert.equal(products.filter(product => product.notes_top?.length && product.notes_heart?.length && product.notes_base?.length).length, products.filter(p => !notasPendientes.has(Number(p.id))).length, 'Todos los productos deben tener salida, corazón y fondo (menos los nuevos con notas pendientes)');

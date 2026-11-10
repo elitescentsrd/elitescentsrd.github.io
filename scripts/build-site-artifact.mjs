@@ -137,6 +137,8 @@ async function listAll(base, prefix = '') {
   // Lista de precios imprimible (PDF), siempre al día con el catálogo publicado.
   await writeFile(OUT + '/lista-de-precios.html', renderPriceList(products));
   console.log('Lista de precios imprimible: /lista-de-precios.html (' + products.length + ' perfumes).');
+  // La de clientes que la tienda conoce (contado y dos pagos): no se enlaza en la tienda ni entra al mapa del sitio.
+  await writeFile(OUT + '/lista-clientes.html', renderPriceList(products, new Date(), { clientes: true }));
 }
 
 const shipped = await listAll(OUT);

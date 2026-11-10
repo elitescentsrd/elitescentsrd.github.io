@@ -216,7 +216,7 @@
   function repurchaseText(c) {
     const first = String(c.name || '').trim().split(/\s+/)[0], perfume = (c.perfumes || [])[0];
     return 'Hola' + (first ? ' ' + first : '') + ', te escribe Elite Scents RD 😊 ¿Cómo te ha ido con ' + (perfume ? 'tu ' + perfume : 'tu perfume') +
-      '? Si ya se te está acabando, te lo separo otra vez (a dos pagos o de contado). Y si quieres probar algo nuevo, te recomiendo uno parecido. ¡Avísame!';
+      '? Si ya se te está acabando, te lo separo otra vez. Y si quieres probar algo nuevo, te recomiendo uno parecido. ¡Avísame!';
   }
 
   return { SOLD, amountOf, periodRange, totals, parseItems, topProducts, byDay, originName, origins, summarize, change, monthKey, monthRange, monthLabel, monthOptions, monthDays, monthSummary, monthsTable, statusName, repurchase, repurchaseText };
