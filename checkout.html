@@ -31,6 +31,12 @@
         <div class="cart-total"><span>Total estimado</span><span id="cartTotal">RD$0</span></div>
         <div class="cart-total hidden" id="couponRow"><span id="couponRowLabel">Cupón</span><span id="couponRowValue"></span></div>
         <div class="cart-total hidden" id="finalRow"><strong>Total con cupón</strong><strong id="finalTotal"></strong></div>
+        <fieldset id="payPlanBox" class="pay-plan">
+          <legend>Forma de pago</legend>
+          <label><input type="radio" name="payPlan" value="dos_pagos" checked><span><strong>A dos pagos</strong> La mitad al recibir y la otra mitad en 15 días.</span></label>
+          <label><input type="radio" name="payPlan" value="contado"><span><strong>Contado</strong> Pagas todo al recibir y te sale más barato.</span></label>
+          <p id="planDetail" class="plan-detail" aria-live="polite"></p>
+        </fieldset>
         <div class="admin-actions mt-md">
           <a id="cartWhatsapp" class="button gold" target="_blank" rel="noopener noreferrer">Enviar carrito por WhatsApp ↗</a>
           <button id="clearCart" class="button outline" type="button">Vaciar carrito</button>
@@ -142,6 +148,7 @@
 
   <script src="/cookies.js"></script>
   <script src="/supabase-config.js"></script>
+  <script src="/pagos.js"></script>
   <script src="/customer.js"></script>
 </body>
 </html>

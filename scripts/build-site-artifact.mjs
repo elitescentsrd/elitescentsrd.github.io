@@ -38,6 +38,7 @@ const FILES = [
   'medicion.js',
   'frame-guard.js',
   'aroma.js',
+  'pagos.js',
   'sales.js',
   'finanzas.js',
   'lista-precios.js',
