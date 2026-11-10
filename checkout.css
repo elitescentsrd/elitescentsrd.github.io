@@ -37,3 +37,10 @@
 
 .link-button{background:none;border:0;padding:0;color:var(--gold-text,#7c5d24);text-decoration:underline;cursor:pointer;font-size:.86rem;justify-self:start}
 .coupon-box{display:grid;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line,#ded8cc)}.coupon-box input{text-transform:uppercase}.coupon-box .order-status.error{color:#a12c2c}
+/* Forma de pago del carrito: a dos pagos (precio del catálogo) o contado (pagos.js). */
+.pay-plan{display:grid;gap:10px;margin:18px 0 0;padding:14px 16px;border:1px solid var(--line,#ded8cc);border-radius:12px}
+.pay-plan legend{padding:0 6px;font-weight:700}
+.pay-plan label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;line-height:1.35}
+.pay-plan input{margin-top:3px;flex:none;width:18px;height:18px;accent-color:var(--gold,#b49252)}
+.pay-plan strong{display:block}
+.plan-detail{margin:2px 0 0;font-weight:600;color:var(--gold-text,#7c5d24)}

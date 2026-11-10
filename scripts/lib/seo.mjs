@@ -48,6 +48,9 @@ const statusLabel = { disponible: 'Disponible', agotado: 'Agotado', encargo: 'So
 export const stockText = p => { const n = Number(p.stock_left); return p.availability === 'disponible' && Number.isInteger(n) && n >= 1 && n <= 3 ? (n === 1 ? '¡Queda 1!' : '¡Quedan ' + n + '!') : ''; };
 const schemaAvailability = { disponible: 'https://schema.org/InStock', agotado: 'https://schema.org/OutOfStock', encargo: 'https://schema.org/PreOrder' };
 // Familias de aroma (aroma.js, el mismo código que usa la tienda): cada nota de la pirámide lleva el icono de su familia.
+// Formas de pago (pagos.js, el mismo código que usan la tienda y el carrito): «2 pagos de … · Contado …».
+const PAGOS = (() => { const ctx = {}; new Function('self', readFileSync(new URL('../../pagos.js', import.meta.url), 'utf8'))(ctx); return ctx.ElitePagos; })();
+export const plansText = p => PAGOS.planes(p);
 const AROMA = (() => { const ctx = {}; new Function('self', readFileSync(new URL('../../aroma.js', import.meta.url), 'utf8'))(ctx); return ctx.EliteAroma; })();
 const noteIcon = family => '<svg class="note-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + AROMA.ICONS[family || 'otra'] + '</svg>';
 // Los mismos iconos como «sprite» para la portada: tienda.js los usa con <use> (sin armar HTML con texto).
@@ -173,7 +176,7 @@ export function renderProductPage(p, related = [], reviews = []) {
     '<p class="eyebrow">' + esc(p.brand || BRAND) + '</p><h1 class="detail-title">' + esc(p.name) + '</h1>' +
     (reviews.length ? '<a class="detail-rating" href="#opiniones">' + starsHtml(ratingOf(reviews), true) + '<span>' + ratingText(ratingOf(reviews)) + ' de 5 · ' + reviews.length + (reviews.length === 1 ? ' opinión' : ' opiniones') + '</span></a>' : '') +
     (onOffer ? '<span class="offer-badge detail-offer">OFERTA' + (p.offer_label ? ' · ' + esc(p.offer_label) : '') + '</span>' : '') +
-    '<p class="detail-price' + (onOffer ? ' price-offer' : '') + '">' + (onOffer ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small> ' : '') + '<strong>' + (onOffer ? 'Ahora ' : '') + esc(price) + '</strong></p>' +
+    '<p class="detail-price' + (onOffer ? ' price-offer' : '') + '">' + (onOffer ? '<small class="price-was">Antes <s>' + esc(p.original_price) + '</s></small> ' : '') + '<strong>' + (onOffer ? 'Ahora ' : '') + esc(price) + '</strong>' + (plansText(p) ? '<small class="price-plans">' + esc(plansText(p)) + '</small>' : '') + '</p>' +
     '<dl class="product-facts"><div><dt>Tamaño</dt><dd>' + esc(p.size || 'Por confirmar') + '</dd></div><div><dt>Para</dt><dd>' + esc(genderLabel[p.gender] || 'Unisex') + '</dd></div><div><dt>Disponibilidad</dt><dd>' + statusLabel[availability] + (stockText(p) ? ' · <strong class="stock-low-text">' + stockText(p) + '</strong>' : '') + '</dd></div>' +
     (p.inspired_by ? '<div class="inspired-fact"><dt>Inspirado en</dt><dd>' + esc(p.inspired_by) + '</dd></div>' : '') + '</dl>' +
     (p.inspired_by ? '<p class="inspired-note">Referencia de estilo del aroma: no es el perfume original. Las marcas mencionadas pertenecen a sus dueños.</p>' : '') +

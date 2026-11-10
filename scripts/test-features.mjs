@@ -892,4 +892,25 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   assert(/prefers-reduced-motion/.test(ficha) && /Escape|close\(\)/.test(ficha) && ficha.includes("showModal()"), 'Visor: respeta menos movimiento y se cierra');
   console.log('Ficha: pirámide de notas, bloque de confianza y zoom de fotos correctos.');
 }
+// ---------------------------------------------------------------- Dos precios: contado y a dos pagos (pagos.js)
+{
+  const P = await runUmd('pagos.js'), tienda = await read('tienda.js'), customer = await read('customer.js'), checkout = await read('checkout.html');
+  const buildSite = await read('scripts/build-site-artifact.mjs'), migration = await read('supabase/migrations/20261110200000_dos_precios.sql');
+  assert(buildSite.includes("'pagos.js'"), 'pagos.js se publica');
+  for (const [name, html, after] of [['plantilla', template, '/tienda.js'], ['portada', indexHtml, '/tienda.js'], ['carrito', checkout, '/customer.js']]) {
+    const at = html.indexOf('src="/pagos.js"');
+    assert(at > 0 && at < html.indexOf('src="' + after + '"'), 'pagos.js se carga antes de ' + after + ' en la ' + name);
+  }
+  for (const html of [template, indexHtml]) assert(html.includes('<small id="dialogPricePlans" class="price-plans" hidden></small>'), 'La ficha tiene la línea de formas de pago');
+  assert(tienda.includes('plansLine(p)') && tienda.includes("$('#dialogPricePlans')") && tienda.includes('offer:Boolean(p.original_price)'), 'Tarjeta, ficha y carrito usan las formas de pago');
+  assert(/name="payPlan" value="dos_pagos" checked/.test(checkout) && /name="payPlan" value="contado"/.test(checkout), 'El carrito deja elegir: a dos pagos (marcado) o contado');
+  assert(customer.includes("'/rest/v1/rpc/place_customer_order_pago'") && /PGRST202\|could not find the function/.test(customer), 'El pedido usa la forma de pago y, sin la función, la de siempre');
+  assert(customer.includes('NO_COUPON_CASH'), 'Cupón y contado no se combinan');
+  assert(/round\(\(p_amount \* 0\.9 - 50\) \/ 100\) \* 100 \+ 50/.test(migration) && P.DESCUENTO_CONTADO === 0.10, 'La base y la página usan el mismo 10% de contado');
+  assert.equal(P.planes({ price: 'RD$4,450' }), '2 pagos de RD$2,225 · Contado RD$4,050');
+  assert.equal(P.planes({ price: 'RD$2,990', original_price: 'RD$3,450' }), '', 'En oferta, un solo precio');
+  const page = renderProductPage({ id: 324, name: 'Rasasi Hawas Fire Men', brand: 'Rasasi', price: 'RD$4,450', size: '100 ML', gender: 'hombre', availability: 'disponible', notes_top: [], notes_heart: [], notes_base: [] });
+  assert(page.includes('<small class="price-plans">2 pagos de RD$2,225 · Contado RD$4,050</small>'), 'La página del perfume muestra las dos formas de pago');
+  console.log('Dos precios (contado y a dos pagos): tarjeta, ficha, página del perfume y carrito correctos.');
+}
 console.log('Pruebas de funciones nuevas superadas.');

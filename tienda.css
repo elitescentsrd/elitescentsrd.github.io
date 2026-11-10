@@ -437,3 +437,7 @@ html.zoom-open{overflow:hidden}
 .zoom-hint .hint-in,.zoom-viewer.is-zoomed .zoom-hint .hint-out{display:none}.zoom-viewer.is-zoomed .zoom-hint .hint-in{display:inline}
 @media (prefers-reduced-motion:reduce){.dialog-main-image img,.zoomable img,.zoom-stage img,.zoom-open-button,.zoom-close,.zoom-nav{transition:none}.zoom-viewer[open]{animation:none}}
 .icon-sprite{position:absolute;width:0;height:0;overflow:hidden}
+/* Formas de pago: «2 pagos de RD$2,225 · Contado RD$4,050» debajo del precio (pagos.js). */
+.price .price-plans,.product-facts .price-plans,.detail-price .price-plans{display:block;color:var(--gold-text);font-size:12px;font-weight:600;line-height:1.35}
+.detail-price .price-plans{flex-basis:100%;font-size:14px}
+.price-plans[hidden]{display:none}

@@ -11,6 +11,7 @@ await mkdir(TMP + '/scripts', { recursive: true }); await mkdir(TMP + '/src', { 
 await cp(REPO + '/src', TMP + '/src', { recursive: true }); await cp(REPO + '/data', TMP + '/data', { recursive: true });
 await cp(REPO + '/supabase-config.js', TMP + '/supabase-config.js'); await cp(REPO + '/cookies.js', TMP + '/cookies.js'); // cookies.js: números de la medición
 await cp(REPO + '/aroma.js', TMP + '/aroma.js'); // aroma.js: familias e iconos de la pirámide de notas
+await cp(REPO + '/pagos.js', TMP + '/pagos.js'); // pagos.js: precio de contado y a dos pagos
 await cp(REPO + '/scripts/lib', TMP + '/scripts/lib', { recursive: true });
 const cfg = await readFile(REPO + '/supabase-config.js', 'utf8');
 const base = cfg.match(/url:\s*'([^']+)'/)[1], key = cfg.match(/publishableKey:\s*'([^']+)'/)[1];
