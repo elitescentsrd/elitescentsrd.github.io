@@ -685,6 +685,7 @@
       $('#sales-origins').replaceChildren(...(s.origins.length ? s.origins.map(x => { const tr = document.createElement('tr'); [x.name, x.accounts, x.buyers, x.orders].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.append(td); }); return tr; }) : [emptyRow(4, 'Todavía no hay cuentas de clientes.')]));
     } catch (err) { $('#sales-kpis').textContent = 'No se pudo calcular el resumen: ' + err.message; }
     renderMonth();
+    renderRepurchase();
   }
   // --- Ventas por mes: elegir un mes y ver sus cifras, perfumes, pedidos y ganancia (cálculos en sales.js) ---
   let monthSelected = null;
@@ -719,6 +720,7 @@
       if (paymentsReady && F) boxes.push(kpi('Cobrado en el mes', rd(F.collected(payments, m.range.start, m.range.end)), 'abonos recibidos'));
       boxes.push(kpi('Por confirmar', rd(t.pendingAmount), t.pendingCount + ' pedido(s) nuevo(s)', t.pendingCount ? 'warn' : ''), kpi('Cancelados', String(t.cancelled), ''));
       $('#month-kpis').replaceChildren(...boxes);
+      renderSplit(profitOf ? results : null);
       $('#month-chart').replaceChildren(salesChart(m.days, 'sales'));
       $('#month-products').replaceChildren(...(m.products.length ? m.products.map(x => { const tr = document.createElement('tr'); tr.append(cell(x.name), cell(String(x.units)), cell(String(x.orders))); return tr; }) : [emptyRow(3, 'No hubo ventas confirmadas en ' + m.label.toLowerCase() + '.')]));
       $('#month-table').replaceChildren(...Sales.monthsTable(orders, Math.min(12, keys.length)).map(r => {
@@ -751,6 +753,52 @@
     rows.push([], ['Ventas confirmadas del mes', '', '', '', '', m.totals.sales], ['Pedidos vendidos', m.totals.soldCount], ['Perfumes vendidos (unidades)', m.units]);
     download('ventas-' + monthSelected + '-elite-scents.csv', F.toCsv(rows), 'text/csv;charset=utf-8');
   });
+  // --- Qué hacer con el dinero del mes: lo que costó lo vendido vuelve a la mercancía; la ganancia se reparte (finanzas.js) ---
+  const REINVEST_KEY = 'elite-admin-reinvest-v1';
+  function reinvestPct() { try { const v = Number(localStorage.getItem(REINVEST_KEY)); return v >= 0 && v <= 100 && v ? v : 70; } catch { return 70; } }
+  function renderSplit(results) {
+    const box = $('#month-split'); if (!box) return;
+    if (!F || !F.moneySplit || !results || !results.some(r => r.known)) { box.hidden = true; return; }
+    const pct = reinvestPct(), s = F.moneySplit(results, pct);
+    box.hidden = false; $('#month-reinvest').value = String(pct);
+    $('#month-split-kpis').replaceChildren(
+      kpi('Reponer mercancía', rd(s.reponer), 'lo que costó lo vendido (La Grada + envío)'),
+      kpi('Ganancia', rd(s.ganancia), s.pedidos + ' pedido(s) con costo'),
+      kpi('Reinvertir', rd(s.reinvertir), pct + '% de la ganancia: más perfumes'),
+      kpi('Para ti', rd(s.paraTi), (100 - pct) + '% de la ganancia'));
+    $('#month-split-note').textContent = 'El dinero de «Reponer mercancía» no es ganancia: es lo que vuelve a La Grada para comprar lo mismo que vendiste. Sepáralo apenas cobres. ' +
+      'En los pedidos a dos pagos, cuenta cuando termines de cobrar.' + (s.sinCosto ? ' ' + s.sinCosto + ' pedido(s) sin costo no están incluidos.' : '');
+  }
+  $('#month-reinvest')?.addEventListener('change', e => { try { localStorage.setItem(REINVEST_KEY, e.target.value); } catch { /* sin almacenamiento: solo esta vez */ } renderMonth(); });
+
+  // --- Clientes para volver a comprar: última compra hace un tiempo y mensaje de WhatsApp listo (sales.js) ---
+  // «Ya le escribí» se guarda en este navegador por número de pedido (no se guardan teléfonos): si vuelve a comprar, sale
+  // otra vez cuando le toque.
+  const REPURCHASE_KEY = 'elite-admin-recompra-v1';
+  function repurchaseDone() { try { const v = JSON.parse(localStorage.getItem(REPURCHASE_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } }
+  function renderRepurchase() {
+    const Sales = window.EliteSales, body = $('#repurchase-body'); if (!Sales || !Sales.repurchase || !body) return;
+    try {
+      const [from, to] = String($('#repurchase-window').value || '45-120').split('-').map(Number), done = repurchaseDone(), now = Date.now();
+      const perfumesOf = o => { const saved = orderLines && orderLines.get(String(o.id)); return saved ? saved.map(l => l.name) : Sales.parseItems(o.items).map(l => l.name); };
+      const list = Sales.repurchase(orders, new Date(), { from, to, perfumesOf });
+      const show = list.filter(c => !(done[c.orderId] && now - done[c.orderId] < 30 * 864e5));
+      $('#repurchase-summary').textContent = show.length ? show.length + ' cliente(s) para escribirles.' + (list.length > show.length ? ' Ya les escribiste a ' + (list.length - show.length) + '.' : '') : '';
+      body.replaceChildren(...(show.length ? show.map(c => {
+        const tr = document.createElement('tr'), act = document.createElement('td'), text = Sales.repurchaseText(c);
+        const wa = document.createElement('a'); wa.className = 'btn btn-secondary'; wa.target = '_blank'; wa.rel = 'noopener noreferrer'; wa.textContent = 'WhatsApp ↗';
+        wa.href = F ? F.waLink(c.phone, text) : 'https://wa.me/?text=' + encodeURIComponent(text);
+        const mark = document.createElement('button'); mark.type = 'button'; mark.className = 'link-button'; mark.textContent = 'Ya le escribí';
+        mark.addEventListener('click', () => { const d = repurchaseDone(); d[c.orderId] = Date.now(); try { localStorage.setItem(REPURCHASE_KEY, JSON.stringify(d)); } catch { /* sin almacenamiento */ } renderRepurchase(); });
+        act.className = 'repurchase-actions'; act.append(wa, mark);
+        tr.append(cell((c.name || 'Cliente') + ' · ' + (c.phone || '')), cell(new Date(c.lastDate).toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' · hace ' + c.days + ' días'),
+          cell(c.perfumes.join(', ') || '—'), cell(String(c.count)), act);
+        return tr;
+      }) : [emptyRow(5, list.length ? 'Ya les escribiste a todos los de este rango.' : 'Nadie tiene su última compra en ese rango de días.')]));
+    } catch (err) { $('#repurchase-summary').textContent = 'No se pudo calcular la lista: ' + err.message; }
+  }
+  $('#repurchase-window')?.addEventListener('change', renderRepurchase);
+
   // --- Cupones de descuento (tablas coupons y coupon_redemptions; solo administradores con verificación en dos pasos) ---
   let coupons = [], couponUse = new Map();
   function couponState(c) {

@@ -103,6 +103,11 @@
           <div class="admin-head"><div><p class="eyebrow">Consulta</p><h2>Ventas por mes</h2><p class="muted">Elige un mes y mira cuánto vendiste, qué perfumes salieron y cada pedido. Cuentan como venta los pedidos confirmados, en preparación, enviados y entregados.</p></div>
             <div class="month-picker"><button type="button" class="btn btn-secondary" id="month-prev" aria-label="Mes anterior">‹</button><label class="sales-period-label">Mes<select id="month-select"></select></label><button type="button" class="btn btn-secondary" id="month-next" aria-label="Mes siguiente">›</button></div></div>
           <div class="sales-kpis" id="month-kpis"></div>
+          <div class="money-split" id="month-split" hidden>
+            <div class="admin-actions sales-chart-head"><strong>¿Qué hago con el dinero del mes?</strong><label class="sales-period-label">Reinvertir de la ganancia<select id="month-reinvest"><option value="50">50%</option><option value="60">60%</option><option value="70" selected>70%</option><option value="80">80%</option><option value="90">90%</option></select></label></div>
+            <div class="sales-kpis" id="month-split-kpis"></div>
+            <p class="muted" id="month-split-note"></p>
+          </div>
           <div class="admin-actions sales-chart-head"><strong id="month-chart-title">Ventas confirmadas por día (RD$)</strong></div>
           <div id="month-chart" class="sales-chart" role="img" aria-label="Gráfico: ventas confirmadas por día del mes"></div>
           <div class="sales-columns">
@@ -299,12 +304,18 @@
           </form>
           <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Código</th><th>Descuento</th><th>Reglas</th><th>Vigencia</th><th>Usos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="coupons-body"></tbody></table></div>
         </section>
-        <section class="admin-card" id="customers-card" data-view="clientes">
+        <section class="admin-card" id="customers-card" data-view="clientes" data-tab="cuentas" data-tab-label="Cuentas">
           <div class="admin-head"><div><p class="eyebrow">Cuentas Clientes</p><h2>Cuentas de clientes</h2><p class="muted">Clientes que crearon una cuenta en la tienda y desde dónde llegaron. Las contraseñas están cifradas por Supabase y nadie puede verlas ni recuperarlas; solo se pueden restablecer.</p></div><button id="customers-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>
           <p id="customers-notice" class="muted hidden">Para ver las cuentas falta aplicar la migración "cuentas_clientes" en Supabase (SQL Editor).</p>
           <input id="customers-search" type="search" placeholder="Buscar por correo, nombre o teléfono" autocomplete="off" class="admin-search-input">
           <p id="customers-summary" class="muted"></p>
           <div class="admin-table-wrap"><table class="admin-table admin-table-wide"><thead><tr><th>Correo</th><th>Nombre</th><th>Teléfono</th><th>Creada</th><th>Último acceso</th><th>Correo confirmado</th><th>MFA</th><th>Pedidos</th><th>Origen del registro</th></tr></thead><tbody id="customers-body"></tbody></table></div>
+        </section>
+        <section class="admin-card" id="repurchase-card" data-view="clientes" data-tab="recompra" data-tab-label="Volver a comprar">
+          <div class="admin-head"><div><p class="eyebrow">Clientes</p><h2>Para volver a comprar</h2><p class="muted">Un frasco dura unos meses. Aquí salen los clientes cuya última compra fue hace un tiempo, con lo que compraron y un mensaje de WhatsApp listo para escribirles. Al escribirle, márcalo y no vuelve a salir en 30 días.</p></div>
+            <label class="sales-period-label">Compraron hace<select id="repurchase-window"><option value="30-60">30 a 60 días</option><option value="45-120" selected>45 a 120 días</option><option value="90-180">90 a 180 días</option><option value="30-365">30 días a 1 año</option></select></label></div>
+          <p id="repurchase-summary" class="muted"></p>
+          <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Cliente</th><th>Última compra</th><th>Compró</th><th>Compras</th><th>Escribir</th></tr></thead><tbody id="repurchase-body"></tbody></table></div>
         </section>
         <section class="admin-card" id="messages-card" data-view="mensajes">
           <div class="admin-head"><div><p class="eyebrow">Página «Contacto»</p><h2>Mensajes</h2><p class="muted">Lo que te escriben desde la página de contacto de la tienda. «Responder por WhatsApp» abre el chat con el saludo listo; cuando termines, márcalo como atendido.</p><p id="messages-summary" class="pending-count" aria-live="polite"></p></div><button id="messages-refresh" class="btn btn-secondary" type="button">Actualizar</button></div>

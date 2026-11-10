@@ -701,7 +701,7 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   // Inicio solo con lo importante («Hoy»); lo que comparte sección va en pestañas (una cosa por pantalla).
   assert.deepEqual(views.filter(v => v.view === 'inicio').map(v => v.id), ['today-card'], 'Inicio muestra solo «Hoy»');
   const tabs = [...adminHtml.matchAll(/id="([a-z-]+)" data-view="([a-z]+)" data-tab="([a-z]+)" data-tab-label="([^"]+)"/g)].map(m => m[2] + '/' + m[3]);
-  assert.deepEqual(tabs, ['ventas/resumen', 'ventas/mes', 'pedidos/lista', 'pedidos/nuevo', 'perfumes/buscar', 'perfumes/editar', 'perfumes/fotos'], 'Pestañas en Ventas, Pedidos y Perfumes');
+  assert.deepEqual(tabs, ['ventas/resumen', 'ventas/mes', 'pedidos/lista', 'pedidos/nuevo', 'perfumes/buscar', 'perfumes/editar', 'perfumes/fotos', 'clientes/cuentas', 'clientes/recompra'], 'Pestañas en Ventas, Pedidos, Perfumes y Clientes');
   for (const view of new Set(views.map(v => v.view))) {
     const cards = views.filter(v => v.view === view), tabbed = tabs.filter(t => t.startsWith(view + '/')).length;
     assert(cards.length === 1 || cards.length === tabbed, 'La sección «' + view + '» muestra una sola tarjeta a la vez');
@@ -912,5 +912,26 @@ const idsUsed = (source, pattern) => [...new Set([...source.matchAll(pattern)].m
   const page = renderProductPage({ id: 324, name: 'Rasasi Hawas Fire Men', brand: 'Rasasi', price: 'RD$4,450', size: '100 ML', gender: 'hombre', availability: 'disponible', notes_top: [], notes_heart: [], notes_base: [] });
   assert(page.includes('<small class="price-plans">2 pagos de RD$2,225 · Contado RD$4,050</small>'), 'La página del perfume muestra las dos formas de pago');
   console.log('Dos precios (contado y a dos pagos): tarjeta, ficha, página del perfume y carrito correctos.');
+}
+// ---------------------------------------------------------------- Dinero del mes y clientes para volver a comprar
+{
+  const F = await runUmd('finanzas.js'), Sales = await runUmd('sales.js'), admin = await read('admin.js');
+  const s = F.moneySplit([{ known: true, cost: 2850, profit: 1600 }, { known: true, cost: 2150, profit: 900 }, { known: false, cost: 0, profit: null }], 70);
+  assert.deepEqual({ ...s }, { pedidos: 2, sinCosto: 1, reponer: 5000, ganancia: 2500, reinvertir: 1750, paraTi: 750 }, 'Reponer, ganancia y reparto 70/30');
+  assert.equal(F.moneySplit([{ known: true, cost: 3000, profit: -200 }], 70).reinvertir, 0, 'Con pérdida no hay nada que repartir');
+  const now = new Date('2026-11-10T12:00:00-04:00'), ago = d => new Date(now.getTime() - d * 864e5).toISOString();
+  const orders = [
+    { id: 1, customer_name: 'Ana Pérez', phone: '809-555-0001', items: '1x Rasasi Hawas Fire Men (100 ML)', amount: 'RD$4,450', status: 'entregado', created_at: ago(70) },
+    { id: 2, customer_name: 'Ana Pérez', phone: '18095550001', items: '1x Lattafa Asad', amount: 'RD$2,950', status: 'entregado', created_at: ago(100) },
+    { id: 3, customer_name: 'Luis Gómez', phone: '8295550002', items: '1x 9PM Out Night', amount: 'RD$4,950', status: 'entregado', created_at: ago(10) },
+    { id: 4, customer_name: 'Rosa Díaz', phone: '8495550003', items: '1x Yara Moi', amount: 'RD$2,850', status: 'cancelado', created_at: ago(80) },
+    { id: 5, customer_name: 'Pedro Cruz', phone: '8095550004', items: '2x Game of Spades Royale', amount: 'RD$11,300', status: 'confirmado', created_at: ago(50) },
+  ];
+  const list = Sales.repurchase(orders, now, { from: 45, to: 120 });
+  assert.deepEqual(JSON.parse(JSON.stringify(list.map(c => [c.name, c.days, c.count, c.orderId, c.perfumes[0]]))), [['Pedro Cruz', 50, 1, 5, 'Game of Spades Royale'], ['Ana Pérez', 70, 2, 1, 'Rasasi Hawas Fire Men']],
+    'Por teléfono, con su última compra; sin los recientes ni los cancelados');
+  assert.match(Sales.repurchaseText(list[1]), /^Hola Ana, .*tu Rasasi Hawas Fire Men\?/);
+  assert(admin.includes('renderSplit(profitOf ? results : null)') && admin.includes('renderRepurchase()') && !/REPURCHASE_KEY[^\n]*phone/.test(admin), 'El panel muestra el reparto y la lista (sin guardar teléfonos en el navegador)');
+  console.log('Dinero del mes (reponer, reinvertir, para ti) y clientes para volver a comprar: correctos.');
 }
 console.log('Pruebas de funciones nuevas superadas.');
