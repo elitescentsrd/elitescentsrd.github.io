@@ -32,6 +32,7 @@
 .doc-updated{color:var(--muted);font-size:12px;margin-top:34px}
 .link-underline{text-decoration:underline}
 .error-title{font:400 54px Georgia,serif}
+.error-num{font:700 clamp(84px,20vw,160px) Georgia,serif;line-height:.9;color:var(--gold-display,#95712f);letter-spacing:-.02em;margin:0 0 -6px;opacity:.92}
 .error-page{min-height:80vh}
 .visual-pages-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px}
 

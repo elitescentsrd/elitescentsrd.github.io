@@ -53,7 +53,7 @@ for (const [name, html] of pages) {
 for (const file of ['admin.html', 'checkout.html']) {
   const html = await read(file);
   const head = html.slice(0, html.indexOf('</head>'));
-  assert(/<html [^>]*class="guarded"/.test(html), file + ': se oculta hasta confirmar que no está dentro de otra web');
+  assert(/<html [^>]*class="guarded(?:[ "])/.test(html), file + ': se oculta hasta confirmar que no está dentro de otra web');
   assert(head.includes('<script src="/frame-guard.js"></script>'), file + ': frame-guard.js en <head>, sin defer (se ejecuta antes de mostrar la página)');
   assert(head.indexOf('/frame-guard.js') > head.indexOf('rel="stylesheet"'), file + ': la hoja de estilos (que oculta la página) carga antes');
   const forms = [...html.matchAll(/<form\b[^>]*>/g)].map(m => m[0]);

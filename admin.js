@@ -4,6 +4,9 @@
   const base = String(cfg.url || '').replace(/\/$/, '');
   const key = cfg.publishableKey;
   const tokenKey = 'elite-admin-session-v1';
+  // «Mantener la sesión»: si está marcada, la sesión también se guarda en localStorage (sigue abierta aunque cierres el
+  // navegador); si no, solo en sessionStorage (se cierra al cerrar la pestaña). El disfraz de 404 y el login/MFA no cambian.
+  let remember = false;
   const $ = (s, root = document) => root.querySelector(s);
   const loginCard = $('#login-card'), content = $('#admin-content'), logout = $('#logout');
   const loginStatus = $('#login-status'), productStatus = $('#product-status');
@@ -48,8 +51,11 @@
   }
   function saveSession(data) {
     session = { access_token: data.access_token, refresh_token: data.refresh_token, user: data.user };
-    sessionStorage.setItem(tokenKey, JSON.stringify(session));
+    const txt = JSON.stringify(session);
+    try { sessionStorage.setItem(tokenKey, txt); sessionStorage.setItem('elite-panel-abierto-v1', '1'); } catch {}
+    try { if (remember) localStorage.setItem(tokenKey, txt); else localStorage.removeItem(tokenKey); } catch {}
   }
+  function forgetSession() { try { sessionStorage.removeItem(tokenKey); } catch {} try { localStorage.removeItem(tokenKey); } catch {} }
   async function isAdmin() {
     const rows = await api('/rest/v1/admin_users?select=user_id&user_id=eq.' + encodeURIComponent(session.user.id));
     return Array.isArray(rows) && rows.length === 1;
@@ -73,7 +79,7 @@
     return m;
   }
   function resetToLogin() {
-    sessionStorage.removeItem(tokenKey); session = null; mfaFactorId = null; mfaEnrollId = null;
+    forgetSession(); session = null; mfaFactorId = null; mfaEnrollId = null;
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden'); loginCard.classList.remove('hidden');
     $('#login-form').elements.password.value = '';
   }
@@ -112,10 +118,13 @@
   }
   async function restore() {
     try {
-      session = JSON.parse(sessionStorage.getItem(tokenKey));
+      const guardada = sessionStorage.getItem(tokenKey) || localStorage.getItem(tokenKey);
+      session = JSON.parse(guardada);
       if (!session?.access_token) return;
+      remember = Boolean(localStorage.getItem(tokenKey));
+      try { sessionStorage.setItem(tokenKey, guardada); } catch {}
       await gate();
-    } catch { sessionStorage.removeItem(tokenKey); session = null; }
+    } catch { forgetSession(); session = null; }
   }
   function showAdmin() {
     mfaCard.classList.add('hidden'); mfaSetupCard.classList.add('hidden');
@@ -242,7 +251,7 @@
   });
   $('#login-form').addEventListener('submit', async e => {
     e.preventDefault(); status(loginStatus, 'Verificando…');
-    const data = Object.fromEntries(new FormData(e.currentTarget));
+    const data = Object.fromEntries(new FormData(e.currentTarget)); remember = data.remember === 'on'; delete data.remember;
     try {
       const res = await fetch(base + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: key, 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const auth = await parse(res); saveSession(auth);
@@ -263,7 +272,7 @@
   $('#mfa-setup-cancel').addEventListener('click', resetToLogin);
   logout.addEventListener('click', async () => {
     try { await api('/auth/v1/logout', { method: 'POST' }); } catch {}
-    if(orderPoll){clearInterval(orderPoll);orderPoll=null;} sessionStorage.removeItem(tokenKey); location.reload();
+    if(orderPoll){clearInterval(orderPoll);orderPoll=null;} forgetSession(); try{sessionStorage.removeItem('elite-panel-abierto-v1');}catch{} location.reload();
   });
 
   async function loadAll() {

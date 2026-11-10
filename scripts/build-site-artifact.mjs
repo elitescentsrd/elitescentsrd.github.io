@@ -37,6 +37,7 @@ const FILES = [
   'analytics.js',
   'medicion.js',
   'frame-guard.js',
+  'panel-entrada.js',
   'aroma.js',
   'pagos.js',
   'sales.js',
