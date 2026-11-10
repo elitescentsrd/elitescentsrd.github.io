@@ -298,7 +298,19 @@
     return { rows, errors };
   }
 
+  // ---------------------------------------------------------------- Qué hacer con el dinero del mes
+  // results = orderProfit() de cada pedido vendido. Lo que costó lo vendido (La Grada + logística) vuelve a la mercancía:
+  // no es ganancia. La ganancia se reparte: «reinvertir» (pct, de 0 a 100) y «para ti» (el resto). Solo cuenta los
+  // pedidos con costo conocido.
+  function moneySplit(results, pct = 70) {
+    const known = (results || []).filter(r => r && r.known);
+    const share = Math.max(0, Math.min(100, Number(pct) || 0)) / 100;
+    const reponer = known.reduce((sum, r) => sum + (Number(r.cost) || 0), 0), ganancia = known.reduce((sum, r) => sum + (Number(r.profit) || 0), 0);
+    const reinvertir = ganancia > 0 ? Math.round(ganancia * share) : 0;
+    return { pedidos: known.length, sinCosto: (results || []).length - known.length, reponer, ganancia, reinvertir, paraTi: ganancia > 0 ? ganancia - reinvertir : 0 };
+  }
+
   return { SOLD, PENDING, norm, amounts, amountOf, money, balances, collected, waNumber, waLink, reminderText, restockText, validParams, marginAt,
     suggestPrice, suggestText, reviewPrice, currentProfit, parseLines, productIndex, groupLines, sizeIndex, orderProfit, profitSummary, purchaseList, purchaseText,
-    csvCell, toCsv, splitCsvLine, costsCsv, parseCostsCsv };
+    csvCell, toCsv, splitCsvLine, costsCsv, parseCostsCsv, moneySplit };
 });

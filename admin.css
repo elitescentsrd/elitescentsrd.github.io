@@ -264,3 +264,7 @@ body.admin-light .btn.btn-secondary:hover{background:#fffdf8}
 .month-orders-head .admin-actions{margin:0;align-items:flex-end}
 .link-button{border:0;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
 .admin-table tr.is-current td{background:#fbf5e7;font-weight:700}
+/* Qué hacer con el dinero del mes y clientes para volver a comprar */
+.money-split{margin:6px 0 18px;padding:14px 16px;border:1px solid var(--line,#ded8cc);border-radius:12px}
+.money-split .sales-kpis{margin:10px 0 6px}
+.repurchase-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;white-space:nowrap}

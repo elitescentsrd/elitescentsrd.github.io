@@ -1,8 +1,9 @@
 'use strict';
-// Formas de pago de la tienda: «a dos pagos» (el precio del catálogo: la mitad al recibir y la otra mitad en 15 días)
-// y «de contado» (10% menos). Código puro, sin pantalla: lo usan la tienda (tienda.js), el carrito (customer.js) y las
-// páginas de cada perfume (scripts/lib/seo.mjs). La base de datos calcula el mismo precio de contado al registrar el
-// pedido (private.precio_contado en supabase/migrations/20261110200000_dos_precios.sql); una prueba comprueba que coinciden.
+// Precios de la tienda. En la base se guarda el precio a dos pagos (la mitad al recibir y la otra mitad en 15 días), que
+// la tienda solo da a clientes que conoce. Al público se le muestra el precio de contado (10% menos, terminado en 50):
+// en la página, las fichas, Google y la lista de precios. Código puro, sin pantalla: lo usan la tienda (tienda.js), el
+// carrito (customer.js) y la publicación (scripts/build-catalog.mjs y scripts/lib). La base de datos calcula el mismo
+// precio de contado al registrar el pedido (private.precio_contado); una prueba comprueba que coinciden.
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api; else root.ElitePagos = api;
@@ -21,11 +22,24 @@
     const list = amounts(product.price);
     return list.length ? list.map(v => money(contado(v))).join(' / ') : '';
   }
-  // Texto corto para la tarjeta y la ficha: «2 pagos de RD$2,225 · Contado RD$4,050».
+  // Lo que ve el público: el precio de contado. El precio guardado en la base es el de dos pagos (lo usan el panel de
+  // costos y la lista para clientes que la tienda conoce); en la página se muestra el de contado, y en oferta el precio de
+  // oferta con «Antes» también de contado. price_2p guarda el de dos pagos para la lista de clientes.
+  const cashOf = text => { const list = amounts(text); return list.length ? list.map(v => money(contado(v))).join(' / ') : text; };
+  function publico(product) {
+    if (!product || product.price_2p !== undefined) return product;
+    if (product.original_price) return { ...product, original_price: cashOf(product.original_price), price_2p: null };
+    if (!amounts(product.price).length) return { ...product, price_2p: null };
+    return { ...product, price: cashOf(product.price), price_2p: product.price };
+  }
+  // Línea bajo el precio en la tarjeta y la ficha (el precio ya es el de contado).
   function planes(product) {
-    const cash = contadoTexto(product), list = amounts(product && product.price);
-    if (!cash) return '';
-    return (list.length === 1 ? '2 pagos de ' + money(cuota(list[0])) + ' · ' : 'A dos pagos o ') + 'Contado ' + cash;
+    return product && !product.original_price && amounts(product.price).length ? 'Precio de contado · pagas al recibir' : '';
+  }
+  // Para la lista de clientes: «2 pagos de RD$2,225» (cada presentación) a partir del precio de dos pagos.
+  function dosPagosTexto(product) {
+    const list = amounts(product && product.price_2p);
+    return list.length ? list.map(v => '2 pagos de ' + money(cuota(v))).join(' / ') : '';
   }
   // Total del carrito según la forma de pago. Las líneas en oferta (offer: true) no llevan el 10% de contado.
   function totalCarrito(items, plan) {
@@ -34,5 +48,5 @@
       return sum + (plan === 'contado' && !item.offer ? contado(unit) : unit) * qty;
     }, 0);
   }
-  return { DESCUENTO_CONTADO, DIAS_SEGUNDO_PAGO, amounts, money, contado, cuota, contadoTexto, planes, totalCarrito };
+  return { DESCUENTO_CONTADO, DIAS_SEGUNDO_PAGO, amounts, money, contado, cuota, contadoTexto, cashOf, publico, planes, dosPagosTexto, totalCarrito };
 });

@@ -58,12 +58,12 @@ assert(!/"page":|"slot":/.test(fullHtml + JSON.stringify(publicProducts)), 'page
 // Oferta: precio anterior tachado, precio de oferta, etiqueta del evento y validez en JSON-LD (el resto no muestra oferta).
 {
   const offerCard = html.match(new RegExp('<article class="perfume" id="producto-' + offerId + '"[\\s\\S]*?<\\/article>'))[0];
-  assert(offerCard.includes('<small class="price-was">Antes <s>RD$4,500</s></small>') && offerCard.includes('<strong>Ahora RD$4,000</strong>'), 'La tarjeta debe mostrar Antes (tachado) y Ahora');
+  assert(offerCard.includes('<small class="price-was">Antes <s>RD$4,050</s></small>') && offerCard.includes('<strong>Ahora RD$4,000</strong>'), 'La tarjeta debe mostrar Antes (tachado, de contado) y Ahora');
   assert(offerCard.includes('OFERTA · Evento de prueba'), 'La tarjeta debe mostrar la etiqueta del evento');
   assert.equal((html.match(/class="offer-badge"/g) || []).length, 1, 'Solo el producto en oferta debe tener etiqueta');
   const offerSchema = schemas.find(s => s.name === withPhoto.find(x => Number(x.id) === offerId).name);
   assert.equal(offerSchema.offers.price, '4000'); assert.equal(offerSchema.offers.priceValidUntil, '2030-01-01');
-  const pOffer = publicProducts.find(p => Number(p.id) === offerId); assert.equal(pOffer.original_price, 'RD$4,500'); assert.equal(pOffer.price, 'RD$4,000');
+  const pOffer = publicProducts.find(p => Number(p.id) === offerId); assert.equal(pOffer.original_price, 'RD$4,050', '«Antes» también a precio de contado'); assert.equal(pOffer.price, 'RD$4,000');
   assert(publicProducts.every(p => !('created_at' in p) && !('updated_at' in p) && !('active' in p) && !('page' in p)), 'El JSON público solo debe llevar los campos previstos');
   assert(lowId !== null, 'Hay un perfume disponible entre las primeras tarjetas para probar «¡Quedan…!»');
   {

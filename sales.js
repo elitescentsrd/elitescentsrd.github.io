@@ -188,5 +188,36 @@
   // Variación porcentual respecto al período anterior; null si no hay con qué comparar.
   const change = (now, before) => (before > 0 ? Math.round(((now - before) / before) * 100) : null);
 
-  return { SOLD, amountOf, periodRange, totals, parseItems, topProducts, byDay, originName, origins, summarize, change, monthKey, monthRange, monthLabel, monthOptions, monthDays, monthSummary, monthsTable, statusName };
+  // ---------------------------------------------------------------- Clientes para volver a comprar
+  // Un frasco dura unos meses: clientes cuya última compra (pedido vendido) fue hace entre «from» y «to» días. Se agrupan
+  // por teléfono (los últimos 10 dígitos). perfumesOf(order) da los nombres de los perfumes del pedido (por defecto, el
+  // texto del pedido). skip(phoneKey) = true para no mostrar a quien ya se le escribió.
+  function repurchase(orders, now = new Date(), options = {}) {
+    const from = options.from ?? 45, to = options.to ?? 120, day = 86400000, today = now.getTime();
+    const perfumesOf = options.perfumesOf || (o => parseItems(o.items).map(l => l.name));
+    const byPhone = new Map();
+    for (const o of orders || []) {
+      if (!SOLD.includes(statusOf(o))) continue;
+      const key = String(o.phone || '').replace(/\D/g, '').slice(-10), time = Date.parse(o.created_at);
+      if (key.length < 7 || Number.isNaN(time)) continue;
+      const c = byPhone.get(key) || { key, phone: o.phone, name: '', count: 0, total: 0, last: null };
+      c.count += 1; c.total += amountOf(o);
+      if (!c.last || time > Date.parse(c.last.created_at)) { c.last = o; c.name = String(o.customer_name || '').trim(); c.phone = o.phone; }
+      byPhone.set(key, c);
+    }
+    const list = [];
+    for (const c of byPhone.values()) {
+      const days = Math.floor((today - Date.parse(c.last.created_at)) / day);
+      if (days < from || days > to || (options.skip && options.skip(c.key))) continue;
+      list.push({ key: c.key, name: c.name, phone: c.phone, count: c.count, total: c.total, days, lastDate: c.last.created_at, orderId: c.last.id, perfumes: perfumesOf(c.last) });
+    }
+    return list.sort((a, b) => a.days - b.days || b.count - a.count);
+  }
+  function repurchaseText(c) {
+    const first = String(c.name || '').trim().split(/\s+/)[0], perfume = (c.perfumes || [])[0];
+    return 'Hola' + (first ? ' ' + first : '') + ', te escribe Elite Scents RD 😊 ¿Cómo te ha ido con ' + (perfume ? 'tu ' + perfume : 'tu perfume') +
+      '? Si ya se te está acabando, te lo separo otra vez. Y si quieres probar algo nuevo, te recomiendo uno parecido. ¡Avísame!';
+  }
+
+  return { SOLD, amountOf, periodRange, totals, parseItems, topProducts, byDay, originName, origins, summarize, change, monthKey, monthRange, monthLabel, monthOptions, monthDays, monthSummary, monthsTable, statusName, repurchase, repurchaseText };
 });

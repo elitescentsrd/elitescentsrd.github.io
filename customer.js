@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
 const cfg=window.ELITE_SUPABASE||{},base=String(cfg.url||'').replace(/\/$/,''),key=cfg.publishableKey||'';
-const WA='18094333348',CART_KEY='elite-scents-cart-v3',SESSION_KEY='elite-customer-session-v1';
+const WA='18094333348',CART_KEY='elite-scents-cart-v4',SESSION_KEY='elite-customer-session-v1';
 const $=(s)=>document.querySelector(s);
 let mode='login',session=readSession(),mfaEnrollment=null;
 
@@ -15,25 +15,23 @@ async function json(res){const text=await res.text();let data=null;try{data=text
 async function authFetch(path,options={}){if(!session?.access_token)throw new Error('Inicia sesión.');const res=await fetch(base+path,{...options,headers:{apikey:key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json',...(options.headers||{})}});if(res.status===401&&session?.refresh_token){await refreshSession();return authFetch(path,options)}return json(res)}
 async function refreshSession(){const res=await fetch(base+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:session.refresh_token})});const data=await json(res);saveSession({...data,user:data.user||session.user});return session}
 function selectedPrice(item){return Number(item.unit_price)||parsePrices(item.price)[0]||0}
-function listTotal(items=readCart()){return items.reduce((sum,item)=>sum+selectedPrice(item)*(Number(item.qty)||1),0)}
-// Formas de pago (pagos.js): «a dos pagos» es el precio del catálogo; «contado» lleva el descuento (no en perfumes en oferta).
+// Precios (pagos.js): la página muestra y cobra el precio de contado (pago todo al recibir); el cupón se descuenta de
+// ese precio. Los dos pagos no se ofrecen en la web: la tienda los da por WhatsApp a clientes que conoce.
 const PAGOS=window.ElitePagos||null;
-function payPlan(){return PAGOS&&document.querySelector('input[name="payPlan"]:checked')?.value==='contado'?'contado':'dos_pagos'}
-function unitFor(item,plan=payPlan()){const unit=selectedPrice(item);return plan==='contado'&&PAGOS&&!item.offer?PAGOS.contado(unit):unit}
-function cartTotal(plan=payPlan()){return readCart().reduce((sum,item)=>sum+unitFor(item,plan)*(Number(item.qty)||1),0)}
-function planLine(total,plan=payPlan()){if(plan==='contado')return 'Forma de pago: contado (todo al recibir). Total: '+money(total);const first=Math.ceil(total/2);return 'Forma de pago: a dos pagos. '+money(first)+' al recibir y '+money(total-first)+' en '+(PAGOS?.DIAS_SEGUNDO_PAGO||15)+' días. Total: '+money(total)}
+function unitFor(item){return selectedPrice(item)}
+function cartTotal(){return readCart().reduce((sum,item)=>sum+unitFor(item)*(Number(item.qty)||1),0)}
+function planLine(total){return 'Precio de contado (pago todo al recibir)'+(coupon?' con el cupón '+coupon.code:'')+'. Total: '+money(total)}
 function renderPlan(){
- const box=$('#planDetail');if(!box)return;const items=readCart(),plan=payPlan(),total=cartTotal(plan),list=listTotal(items);
- if(!items.length){box.textContent='';return}
- box.textContent=plan==='contado'?(list>total?'Pagando de contado ahorras '+money(list-total)+'.':'Los perfumes en oferta ya tienen su mejor precio.'):'Pagas '+money(Math.ceil(total/2))+' al recibir y '+money(total-Math.ceil(total/2))+' en '+(PAGOS?.DIAS_SEGUNDO_PAGO||15)+' días.';
+ const box=$('#planDetail');if(!box)return;
+ box.textContent=readCart().length?'Precio de contado: pagas todo al recibir.'+(coupon?' El cupón se descuenta de este precio.':''):'';
 }
-function renderCart(){
+function renderCart(skipCoupon){
  const root=$('#cartItems'),items=readCart();root.replaceChildren();
  $('#cartEmpty').hidden=items.length>0;$('#cartTotal').textContent=money(cartTotal());
  for(const item of items){
    const row=document.createElement('div');row.className='cart-row';
    const info=document.createElement('div'),h=document.createElement('h3'),p=document.createElement('p'),price=document.createElement('p');
-   h.textContent=item.name;p.textContent=[item.brand,item.size].filter(Boolean).join(' · ');price.textContent=money(unitFor(item))+' c/u'+(unitFor(item)<selectedPrice(item)?' de contado (a dos pagos '+money(selectedPrice(item))+')':'');
+   h.textContent=item.name;p.textContent=[item.brand,item.size].filter(Boolean).join(' · ');price.textContent=money(unitFor(item))+' c/u';
    info.append(h,p,price);
    const actions=document.createElement('div');actions.className='cart-row-actions';
    const qty=document.createElement('input');qty.className='qty';qty.type='number';qty.min='1';qty.max='10';qty.value=Number(item.qty)||1;qty.setAttribute('aria-label','Cantidad de '+item.name);
@@ -47,16 +45,16 @@ function renderCart(){
  $('#cartWhatsapp').href='https://wa.me/'+WA+'?text='+encodeURIComponent(msg);
  $('#cartWhatsapp').classList.toggle('hidden',!items.length);
  $('#clearCart').disabled=!items.length;
- if(coupon)recheckCoupon();
+ if(coupon&&!skipCoupon)recheckCoupon();
 }
 // --- Cupones de descuento: la base de datos valida el código y calcula el descuento (funciones preview_coupon y place_customer_order_con_cupon) ---
 let coupon=null;
-const NO_COUPON_CASH='Los cupones son para compras a dos pagos: el precio de contado ya trae su descuento.';
 function cartProductIds(){return [...new Set(readCart().map(i=>Number(i.product_id)).filter(Number.isFinite))]}
 function setCouponStatus(text,kind){const el=$('#couponStatus');el.textContent=text;el.classList.toggle('error',kind==='error')}
 function renderCouponTotals(){
  const on=Boolean(coupon);$('#couponRow').classList.toggle('hidden',!on);$('#finalRow').classList.toggle('hidden',!on);$('#removeCoupon').classList.toggle('hidden',!on);
  if(on){$('#couponRowLabel').textContent='Cupón '+coupon.code;$('#couponRowValue').textContent='−'+money(coupon.discount);$('#finalTotal').textContent=money(coupon.total)}
+ renderCart(true);
 }
 async function checkCoupon(code,silent){
  const subtotal=cartTotal();
@@ -69,7 +67,6 @@ async function checkCoupon(code,silent){
 }
 async function applyCoupon(){
  const code=$('#couponCode').value.trim().toUpperCase();if(!code){setCouponStatus('Escribe tu código de descuento.','error');return}
- if(payPlan()==='contado'){setCouponStatus(NO_COUPON_CASH,'error');return}
  setCouponStatus('Comprobando…');
  try{await checkCoupon(code,false)}catch(err){coupon=null;renderCouponTotals();setCouponStatus(/preview_coupon|schema cache|could not find/i.test(err.message)?'Los cupones todavía no están disponibles.':friendly(err.message),'error')}
 }
@@ -320,22 +317,23 @@ async function placeOrder(){
  const items=readCart();if(!items.length)throw new Error('Tu carrito está vacío.');
  $('#orderStatus').textContent='Registrando pedido…';
  const payload=items.map(i=>({product_id:Number(i.product_id),qty:Number(i.qty)||1,unit_price:selectedPrice(i),size:i.size||''}));
- const plan=payPlan(),code=plan==='contado'?'':(coupon?.code||'');let data,withPlan=true;
- // Con la forma de pago: place_customer_order_pago (la base de datos calcula el total de contado y anota la forma de
- // pago). Si esa función todavía no está en Supabase, se usa la de siempre y la forma de pago va en el mensaje de WhatsApp.
+ const code=coupon?.code||'';let data,withPlan=Boolean(PAGOS);
+ // place_customer_order_pago: la base de datos calcula el total de contado con el precio de cada perfume y le descuenta
+ // el cupón. Si esa función todavía no está en Supabase (o es la versión que no acepta cupón), se usa la de siempre.
+ const old=async()=>{withPlan=false;return code?await authFetch('/rest/v1/rpc/place_customer_order_con_cupon',{method:'POST',body:JSON.stringify({p_items:payload,p_coupon:code})}):await authFetch('/rest/v1/rpc/place_customer_order',{method:'POST',body:JSON.stringify({p_items:payload})})};
  try{
-  try{data=await authFetch('/rest/v1/rpc/place_customer_order_pago',{method:'POST',body:JSON.stringify({p_items:payload,p_coupon:code||null,p_plan:plan})})}
-  catch(err){if(!/place_customer_order_pago|PGRST202|could not find the function|schema cache/i.test(err.message))throw err;withPlan=false;
-   data=code?await authFetch('/rest/v1/rpc/place_customer_order_con_cupon',{method:'POST',body:JSON.stringify({p_items:payload,p_coupon:code})}):await authFetch('/rest/v1/rpc/place_customer_order',{method:'POST',body:JSON.stringify({p_items:payload})})}
+  if(withPlan){try{data=await authFetch('/rest/v1/rpc/place_customer_order_pago',{method:'POST',body:JSON.stringify({p_items:payload,p_coupon:code||null,p_plan:'contado'})});if(data&&data.ok===false&&/dos pagos/i.test(data.message||''))data=await old()}
+   catch(err){if(!/place_customer_order_pago|PGRST202|could not find the function|schema cache/i.test(err.message))throw err;data=await old()}}
+  else data=await old();
   if(data&&data.ok===false)throw new Error(data.message||'No se pudo registrar el pedido.');
  }catch(err){if(code){coupon=null;renderCouponTotals();setCouponStatus(friendly(err.message),'error')}throw err}
  const status=$('#orderStatus');
- const total=withPlan&&Number(data.total)>0?Number(data.total):(data.cupon?Number(data.total):cartTotal(plan));
- status.textContent='Pedido #'+data.order_id+' recibido'+(data.cupon?' con el cupón '+data.cupon+' (descuento de '+money(data.descuento)+')':'')+'. '+planLine(total,plan)+'. Te contactaremos por WhatsApp para confirmar disponibilidad y el tiempo estimado de entrega. Para avisarnos de inmediato, envíanos tu pedido por WhatsApp:';
+ const total=Number(data.total)>0?Number(data.total):cartTotal();
+ status.textContent='Pedido #'+data.order_id+' recibido'+(data.cupon?' con el cupón '+data.cupon+' (descuento de '+money(data.descuento)+')':'')+'. '+planLine(total)+'. Te contactaremos por WhatsApp para confirmar disponibilidad y el tiempo estimado de entrega. Para avisarnos de inmediato, envíanos tu pedido por WhatsApp:';
  // Aviso inmediato a la tienda: el cliente abre WhatsApp con el pedido ya escrito y solo pulsa enviar.
- const lines=items.map(i=>(Number(i.qty)||1)+'× '+i.name+(i.size?' · '+i.size:'')+' · '+money(unitFor(i,plan)));
+ const lines=items.map(i=>(Number(i.qty)||1)+'× '+i.name+(i.size?' · '+i.size:'')+' · '+money(unitFor(i)));
  const link=document.createElement('a');link.className='button gold';link.target='_blank';link.rel='noopener noreferrer';link.textContent='Enviar mi pedido #'+data.order_id+' por WhatsApp ↗';
- link.href='https://wa.me/'+WA+'?text='+encodeURIComponent('Hola Elite Scents RD, acabo de hacer el pedido #'+data.order_id+' en la web:\n\n'+lines.join('\n')+(data.cupon?'\n\nCupón '+data.cupon+': −'+money(data.descuento):'')+'\n\n'+planLine(total,plan)+'\nQuedo atento(a) a la confirmación.');
+ link.href='https://wa.me/'+WA+'?text='+encodeURIComponent('Hola Elite Scents RD, acabo de hacer el pedido #'+data.order_id+' en la web:\n\n'+lines.join('\n')+(data.cupon?'\n\nCupón '+data.cupon+': −'+money(data.descuento):'')+'\n\n'+planLine(total)+'\nQuedo atento(a) a la confirmación.');
  status.append(document.createElement('br'),link);
  removeCoupon();saveCart([]);await loadOrders();
 }
@@ -377,8 +375,6 @@ $('#recoverForm').addEventListener('submit',async e=>{
 });
 $('#resetForm').addEventListener('submit',async e=>{e.preventDefault();$('#resetStatus').textContent='Guardando…';try{await finishRecovery(new FormData(e.currentTarget))}catch(err){$('#resetStatus').textContent=friendly(err.message)}});
 $('#mfaLoginCancel').addEventListener('click',()=>{mfaPending=null;$('#mfaLoginForm').classList.add('hidden');$('#authForm').classList.remove('hidden');$('#authStatus').textContent='';$('#authForm').elements.password.value=''});
-document.querySelectorAll('input[name="payPlan"]').forEach(r=>r.addEventListener('change',()=>{if(payPlan()==='contado'&&coupon){removeCoupon();setCouponStatus(NO_COUPON_CASH,'error')}renderCart()}));
-if(!PAGOS)$('#payPlanBox')?.classList.add('hidden');
 $('#placeOrder').addEventListener('click',async()=>{
  const profile=$('#profileForm');
  if(!profile.reportValidity())return;

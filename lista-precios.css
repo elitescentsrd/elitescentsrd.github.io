@@ -45,3 +45,7 @@ main{padding:10px max(4vw,16px) 20px}
   .name{text-decoration:none}
   .sheet-foot{padding:6px 0 0}
 }
+/* Lista para clientes: contado y a dos pagos */
+.sheet-plan{font-weight:600}
+.price .plan{display:block;font-size:11px;letter-spacing:.04em;text-transform:uppercase;opacity:.75}
+.price .dos-pagos{display:block;font-size:13px;font-weight:600;color:#7c5d24;margin-top:2px}
