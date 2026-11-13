@@ -2,7 +2,7 @@
 --
 -- Qué hace (todo en una sola operación: si algo falla, no se cambia nada):
 --   1. Agrega UN perfume nuevo a la tienda: «Elivi Sectio 99 Extrait de Parfum» (número 539), 50 ML, unisex,
---      precio RD$10,550 (margen alto de siempre). Como pasa de RD$7,000, queda «Solo por encargo» (regla de siempre).
+--      precio RD$11,150 (margen alto de siempre). Como pasa de RD$7,000, queda «Solo por encargo» (regla de siempre).
 --      Sin notas todavía: sale sin notas hasta que las escribas en el panel (igual que los otros Elivi).
 --   2. La foto ya está en el repositorio (img/productos/0539-elivi-sectio-99.jpg): el sitio la toma sola por el número.
 --
@@ -51,7 +51,7 @@ create temp table nuevos (
   availability text not null, notes_top text[] not null, notes_heart text[] not null, notes_base text[] not null
 ) on commit drop;
 insert into nuevos (id, name, brand, price, size, gender, availability, notes_top, notes_heart, notes_base) values
-  (539, 'Elivi Sectio 99 Extrait de Parfum', 'Elivi', 'RD$10,550', '50 ML', 'unisex', 'encargo', array[]::text[], array[]::text[], array[]::text[]);
+  (539, 'Elivi Sectio 99 Extrait de Parfum', 'Elivi', 'RD$11,150', '50 ML', 'unisex', 'encargo', array[]::text[], array[]::text[], array[]::text[]);
 
 -- Si el número 539 ya está ocupado por otro perfume, se detiene sin cambiar nada.
 do $$
